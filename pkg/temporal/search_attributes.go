@@ -22,44 +22,45 @@ import (
 	"fmt"
 
 	"github.com/alexandrevilain/temporal-operator/api/v1beta1"
-	enumsv1 "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/operatorservice/v1"
 	"google.golang.org/grpc"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // searchAttributeTypes maps user-facing type names to Temporal IndexedValueType.
-var searchAttributeTypes = map[string]enumsv1.IndexedValueType{
-	"Text":        enumsv1.INDEXED_VALUE_TYPE_TEXT,
-	"Keyword":     enumsv1.INDEXED_VALUE_TYPE_KEYWORD,
-	"Int":         enumsv1.INDEXED_VALUE_TYPE_INT,
-	"Double":      enumsv1.INDEXED_VALUE_TYPE_DOUBLE,
-	"Bool":        enumsv1.INDEXED_VALUE_TYPE_BOOL,
-	"DateTime":    enumsv1.INDEXED_VALUE_TYPE_DATETIME,
-	"KeywordList": enumsv1.INDEXED_VALUE_TYPE_KEYWORD_LIST,
+var searchAttributeTypes = map[string]enums.IndexedValueType{
+	"Text":        enums.INDEXED_VALUE_TYPE_TEXT,
+	"Keyword":     enums.INDEXED_VALUE_TYPE_KEYWORD,
+	"Int":         enums.INDEXED_VALUE_TYPE_INT,
+	"Double":      enums.INDEXED_VALUE_TYPE_DOUBLE,
+	"Bool":        enums.INDEXED_VALUE_TYPE_BOOL,
+	"DateTime":    enums.INDEXED_VALUE_TYPE_DATETIME,
+	"KeywordList": enums.INDEXED_VALUE_TYPE_KEYWORD_LIST,
 }
 
 // searchAttributeTypeNames is the reverse mapping from IndexedValueType to string.
-var searchAttributeTypeNames map[enumsv1.IndexedValueType]string
-
-func init() {
-	searchAttributeTypeNames = make(map[enumsv1.IndexedValueType]string, len(searchAttributeTypes))
-	for name, val := range searchAttributeTypes {
-		searchAttributeTypeNames[val] = name
-	}
+var searchAttributeTypeNames = map[enums.IndexedValueType]string{
+	enums.INDEXED_VALUE_TYPE_TEXT:         "Text",
+	enums.INDEXED_VALUE_TYPE_KEYWORD:      "Keyword",
+	enums.INDEXED_VALUE_TYPE_INT:          "Int",
+	enums.INDEXED_VALUE_TYPE_DOUBLE:       "Double",
+	enums.INDEXED_VALUE_TYPE_BOOL:         "Bool",
+	enums.INDEXED_VALUE_TYPE_DATETIME:     "DateTime",
+	enums.INDEXED_VALUE_TYPE_KEYWORD_LIST: "KeywordList",
 }
 
 // SearchAttributeTypeFromString converts a user-facing type name to its IndexedValueType.
-func SearchAttributeTypeFromString(s string) (enumsv1.IndexedValueType, error) {
+func SearchAttributeTypeFromString(s string) (enums.IndexedValueType, error) {
 	t, ok := searchAttributeTypes[s]
 	if !ok {
-		return enumsv1.INDEXED_VALUE_TYPE_UNSPECIFIED, fmt.Errorf("invalid search attribute type %q: valid types are Text, Keyword, Int, Double, Bool, DateTime, KeywordList", s)
+		return enums.INDEXED_VALUE_TYPE_UNSPECIFIED, fmt.Errorf("invalid search attribute type %q: valid types are Text, Keyword, Int, Double, Bool, DateTime, KeywordList", s)
 	}
 	return t, nil
 }
 
 // SearchAttributeTypeToString converts an IndexedValueType to its user-facing name.
-func SearchAttributeTypeToString(t enumsv1.IndexedValueType) (string, error) {
+func SearchAttributeTypeToString(t enums.IndexedValueType) (string, error) {
 	name, ok := searchAttributeTypeNames[t]
 	if !ok {
 		return "", fmt.Errorf("unknown IndexedValueType: %v", t)
@@ -77,8 +78,8 @@ type OperatorServiceClient interface {
 }
 
 // parseDesiredAttributes converts the spec's string type map into typed IndexedValueType map.
-func parseDesiredAttributes(spec map[string]string) (map[string]enumsv1.IndexedValueType, error) {
-	desired := make(map[string]enumsv1.IndexedValueType, len(spec))
+func parseDesiredAttributes(spec map[string]string) (map[string]enums.IndexedValueType, error) {
+	desired := make(map[string]enums.IndexedValueType, len(spec))
 	for name, typeStr := range spec {
 		t, err := SearchAttributeTypeFromString(typeStr)
 		if err != nil {
@@ -91,8 +92,8 @@ func parseDesiredAttributes(spec map[string]string) (map[string]enumsv1.IndexedV
 
 // computeAttributesToAdd returns attributes present in desired but not in existing,
 // and returns an error if any existing attribute has a type mismatch.
-func computeAttributesToAdd(desired, existing map[string]enumsv1.IndexedValueType) (map[string]enumsv1.IndexedValueType, error) {
-	toAdd := make(map[string]enumsv1.IndexedValueType)
+func computeAttributesToAdd(desired, existing map[string]enums.IndexedValueType) (map[string]enums.IndexedValueType, error) {
+	toAdd := make(map[string]enums.IndexedValueType)
 	for name, desiredType := range desired {
 		existingType, exists := existing[name]
 		if !exists {
@@ -109,7 +110,7 @@ func computeAttributesToAdd(desired, existing map[string]enumsv1.IndexedValueTyp
 }
 
 // computeAttributesToRemove returns attribute names present in existing but not in desired.
-func computeAttributesToRemove(desired, existing map[string]enumsv1.IndexedValueType) []string {
+func computeAttributesToRemove(desired, existing map[string]enums.IndexedValueType) []string {
 	var toRemove []string
 	for name := range existing {
 		if _, inSpec := desired[name]; !inSpec {

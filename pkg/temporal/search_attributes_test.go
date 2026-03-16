@@ -25,7 +25,7 @@ import (
 	"github.com/alexandrevilain/temporal-operator/api/v1beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	enumsv1 "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/operatorservice/v1"
 	"google.golang.org/grpc"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -65,16 +65,16 @@ func (m *mockOperatorServiceClient) RemoveSearchAttributes(_ context.Context, re
 func TestSearchAttributeTypeFromString(t *testing.T) {
 	tests := map[string]struct {
 		input    string
-		expected enumsv1.IndexedValueType
+		expected enums.IndexedValueType
 		wantErr  bool
 	}{
-		"Text":        {input: "Text", expected: enumsv1.INDEXED_VALUE_TYPE_TEXT},
-		"Keyword":     {input: "Keyword", expected: enumsv1.INDEXED_VALUE_TYPE_KEYWORD},
-		"Int":         {input: "Int", expected: enumsv1.INDEXED_VALUE_TYPE_INT},
-		"Double":      {input: "Double", expected: enumsv1.INDEXED_VALUE_TYPE_DOUBLE},
-		"Bool":        {input: "Bool", expected: enumsv1.INDEXED_VALUE_TYPE_BOOL},
-		"DateTime":    {input: "DateTime", expected: enumsv1.INDEXED_VALUE_TYPE_DATETIME},
-		"KeywordList": {input: "KeywordList", expected: enumsv1.INDEXED_VALUE_TYPE_KEYWORD_LIST},
+		"Text":        {input: "Text", expected: enums.INDEXED_VALUE_TYPE_TEXT},
+		"Keyword":     {input: "Keyword", expected: enums.INDEXED_VALUE_TYPE_KEYWORD},
+		"Int":         {input: "Int", expected: enums.INDEXED_VALUE_TYPE_INT},
+		"Double":      {input: "Double", expected: enums.INDEXED_VALUE_TYPE_DOUBLE},
+		"Bool":        {input: "Bool", expected: enums.INDEXED_VALUE_TYPE_BOOL},
+		"DateTime":    {input: "DateTime", expected: enums.INDEXED_VALUE_TYPE_DATETIME},
+		"KeywordList": {input: "KeywordList", expected: enums.INDEXED_VALUE_TYPE_KEYWORD_LIST},
 		"invalid":     {input: "invalid", wantErr: true},
 		"empty":       {input: "", wantErr: true},
 		"lowercase":   {input: "text", wantErr: true},
@@ -95,18 +95,18 @@ func TestSearchAttributeTypeFromString(t *testing.T) {
 
 func TestSearchAttributeTypeToString(t *testing.T) {
 	tests := map[string]struct {
-		input    enumsv1.IndexedValueType
+		input    enums.IndexedValueType
 		expected string
 		wantErr  bool
 	}{
-		"Text":        {input: enumsv1.INDEXED_VALUE_TYPE_TEXT, expected: "Text"},
-		"Keyword":     {input: enumsv1.INDEXED_VALUE_TYPE_KEYWORD, expected: "Keyword"},
-		"Int":         {input: enumsv1.INDEXED_VALUE_TYPE_INT, expected: "Int"},
-		"Double":      {input: enumsv1.INDEXED_VALUE_TYPE_DOUBLE, expected: "Double"},
-		"Bool":        {input: enumsv1.INDEXED_VALUE_TYPE_BOOL, expected: "Bool"},
-		"DateTime":    {input: enumsv1.INDEXED_VALUE_TYPE_DATETIME, expected: "DateTime"},
-		"KeywordList": {input: enumsv1.INDEXED_VALUE_TYPE_KEYWORD_LIST, expected: "KeywordList"},
-		"unspecified": {input: enumsv1.INDEXED_VALUE_TYPE_UNSPECIFIED, wantErr: true},
+		"Text":        {input: enums.INDEXED_VALUE_TYPE_TEXT, expected: "Text"},
+		"Keyword":     {input: enums.INDEXED_VALUE_TYPE_KEYWORD, expected: "Keyword"},
+		"Int":         {input: enums.INDEXED_VALUE_TYPE_INT, expected: "Int"},
+		"Double":      {input: enums.INDEXED_VALUE_TYPE_DOUBLE, expected: "Double"},
+		"Bool":        {input: enums.INDEXED_VALUE_TYPE_BOOL, expected: "Bool"},
+		"DateTime":    {input: enums.INDEXED_VALUE_TYPE_DATETIME, expected: "DateTime"},
+		"KeywordList": {input: enums.INDEXED_VALUE_TYPE_KEYWORD_LIST, expected: "KeywordList"},
+		"unspecified": {input: enums.INDEXED_VALUE_TYPE_UNSPECIFIED, wantErr: true},
 	}
 
 	for name, tc := range tests {
@@ -138,7 +138,7 @@ func TestReconcileSearchAttributes(t *testing.T) {
 	t.Run("add new attributes", func(t *testing.T) {
 		mock := &mockOperatorServiceClient{
 			listResponse: &operatorservice.ListSearchAttributesResponse{
-				CustomAttributes: map[string]enumsv1.IndexedValueType{},
+				CustomAttributes: map[string]enums.IndexedValueType{},
 			},
 		}
 		ns := newNamespace(map[string]string{
@@ -150,9 +150,9 @@ func TestReconcileSearchAttributes(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, mock.addCalled)
 		assert.False(t, mock.removeCalled)
-		assert.Equal(t, map[string]enumsv1.IndexedValueType{
-			"CustomerId": enumsv1.INDEXED_VALUE_TYPE_KEYWORD,
-			"OrderTotal": enumsv1.INDEXED_VALUE_TYPE_DOUBLE,
+		assert.Equal(t, map[string]enums.IndexedValueType{
+			"CustomerId": enums.INDEXED_VALUE_TYPE_KEYWORD,
+			"OrderTotal": enums.INDEXED_VALUE_TYPE_DOUBLE,
 		}, mock.addRequest.SearchAttributes)
 		assert.Equal(t, testNamespace, mock.addRequest.Namespace)
 	})
@@ -160,8 +160,8 @@ func TestReconcileSearchAttributes(t *testing.T) {
 	t.Run("remove stale with flag on", func(t *testing.T) {
 		mock := &mockOperatorServiceClient{
 			listResponse: &operatorservice.ListSearchAttributesResponse{
-				CustomAttributes: map[string]enumsv1.IndexedValueType{
-					"OldAttr": enumsv1.INDEXED_VALUE_TYPE_TEXT,
+				CustomAttributes: map[string]enums.IndexedValueType{
+					"OldAttr": enums.INDEXED_VALUE_TYPE_TEXT,
 				},
 			},
 		}
@@ -177,8 +177,8 @@ func TestReconcileSearchAttributes(t *testing.T) {
 	t.Run("no removal with flag off", func(t *testing.T) {
 		mock := &mockOperatorServiceClient{
 			listResponse: &operatorservice.ListSearchAttributesResponse{
-				CustomAttributes: map[string]enumsv1.IndexedValueType{
-					"OldAttr": enumsv1.INDEXED_VALUE_TYPE_TEXT,
+				CustomAttributes: map[string]enums.IndexedValueType{
+					"OldAttr": enums.INDEXED_VALUE_TYPE_TEXT,
 				},
 			},
 		}
@@ -193,8 +193,8 @@ func TestReconcileSearchAttributes(t *testing.T) {
 	t.Run("no changes when spec matches server", func(t *testing.T) {
 		mock := &mockOperatorServiceClient{
 			listResponse: &operatorservice.ListSearchAttributesResponse{
-				CustomAttributes: map[string]enumsv1.IndexedValueType{
-					"CustomerId": enumsv1.INDEXED_VALUE_TYPE_KEYWORD,
+				CustomAttributes: map[string]enums.IndexedValueType{
+					"CustomerId": enums.INDEXED_VALUE_TYPE_KEYWORD,
 				},
 			},
 		}
@@ -211,9 +211,9 @@ func TestReconcileSearchAttributes(t *testing.T) {
 	t.Run("mixed add and remove", func(t *testing.T) {
 		mock := &mockOperatorServiceClient{
 			listResponse: &operatorservice.ListSearchAttributesResponse{
-				CustomAttributes: map[string]enumsv1.IndexedValueType{
-					"Existing": enumsv1.INDEXED_VALUE_TYPE_KEYWORD,
-					"OldAttr":  enumsv1.INDEXED_VALUE_TYPE_TEXT,
+				CustomAttributes: map[string]enums.IndexedValueType{
+					"Existing": enums.INDEXED_VALUE_TYPE_KEYWORD,
+					"OldAttr":  enums.INDEXED_VALUE_TYPE_TEXT,
 				},
 			},
 		}
@@ -226,8 +226,8 @@ func TestReconcileSearchAttributes(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, mock.addCalled)
 		assert.True(t, mock.removeCalled)
-		assert.Equal(t, map[string]enumsv1.IndexedValueType{
-			"NewAttr": enumsv1.INDEXED_VALUE_TYPE_BOOL,
+		assert.Equal(t, map[string]enums.IndexedValueType{
+			"NewAttr": enums.INDEXED_VALUE_TYPE_BOOL,
 		}, mock.addRequest.SearchAttributes)
 		assert.Equal(t, []string{"OldAttr"}, mock.removeRequest.SearchAttributes)
 	})
@@ -235,8 +235,8 @@ func TestReconcileSearchAttributes(t *testing.T) {
 	t.Run("type mismatch returns error", func(t *testing.T) {
 		mock := &mockOperatorServiceClient{
 			listResponse: &operatorservice.ListSearchAttributesResponse{
-				CustomAttributes: map[string]enumsv1.IndexedValueType{
-					"CustomerId": enumsv1.INDEXED_VALUE_TYPE_TEXT,
+				CustomAttributes: map[string]enums.IndexedValueType{
+					"CustomerId": enums.INDEXED_VALUE_TYPE_TEXT,
 				},
 			},
 		}
@@ -254,7 +254,7 @@ func TestReconcileSearchAttributes(t *testing.T) {
 	t.Run("invalid type string returns error", func(t *testing.T) {
 		mock := &mockOperatorServiceClient{
 			listResponse: &operatorservice.ListSearchAttributesResponse{
-				CustomAttributes: map[string]enumsv1.IndexedValueType{},
+				CustomAttributes: map[string]enums.IndexedValueType{},
 			},
 		}
 		ns := newNamespace(map[string]string{
@@ -283,7 +283,7 @@ func TestReconcileSearchAttributes(t *testing.T) {
 	t.Run("add error propagated", func(t *testing.T) {
 		mock := &mockOperatorServiceClient{
 			listResponse: &operatorservice.ListSearchAttributesResponse{
-				CustomAttributes: map[string]enumsv1.IndexedValueType{},
+				CustomAttributes: map[string]enums.IndexedValueType{},
 			},
 			addError: fmt.Errorf("server error"),
 		}
@@ -299,8 +299,8 @@ func TestReconcileSearchAttributes(t *testing.T) {
 	t.Run("remove error propagated", func(t *testing.T) {
 		mock := &mockOperatorServiceClient{
 			listResponse: &operatorservice.ListSearchAttributesResponse{
-				CustomAttributes: map[string]enumsv1.IndexedValueType{
-					"OldAttr": enumsv1.INDEXED_VALUE_TYPE_TEXT,
+				CustomAttributes: map[string]enums.IndexedValueType{
+					"OldAttr": enums.INDEXED_VALUE_TYPE_TEXT,
 				},
 			},
 			removeError: fmt.Errorf("removal failed"),
