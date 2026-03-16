@@ -25,6 +25,7 @@ import (
 	enumsv1 "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/operatorservice/v1"
 	"google.golang.org/grpc"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // searchAttributeTypes maps user-facing type names to Temporal IndexedValueType.
@@ -121,14 +122,18 @@ func computeAttributesToRemove(desired, existing map[string]enumsv1.IndexedValue
 // ReconcileSearchAttributes ensures the custom search attributes on the Temporal server
 // match the desired state declared in the TemporalNamespace spec.
 func ReconcileSearchAttributes(ctx context.Context, operatorSvc OperatorServiceClient, namespace *v1beta1.TemporalNamespace) error {
+	logger := log.FromContext(ctx)
+	nsName := namespace.GetName()
+
 	listResp, err := operatorSvc.ListSearchAttributes(ctx, &operatorservice.ListSearchAttributesRequest{
-		Namespace: namespace.GetName(),
+		Namespace: nsName,
 	})
 	if err != nil {
 		return fmt.Errorf("listing search attributes: %w", err)
 	}
 
 	existing := listResp.GetCustomAttributes()
+	logger.Info("Listed existing custom search attributes", "namespace", nsName, "count", len(existing))
 
 	desired, err := parseDesiredAttributes(namespace.Spec.CustomSearchAttributes)
 	if err != nil {
@@ -145,10 +150,16 @@ func ReconcileSearchAttributes(ctx context.Context, operatorSvc OperatorServiceC
 		toRemove = computeAttributesToRemove(desired, existing)
 	}
 
+	if len(toAdd) == 0 && len(toRemove) == 0 {
+		logger.Info("Search attributes are up to date", "namespace", nsName)
+		return nil
+	}
+
 	if len(toAdd) > 0 {
+		logger.Info("Adding search attributes", "namespace", nsName, "count", len(toAdd))
 		_, err := operatorSvc.AddSearchAttributes(ctx, &operatorservice.AddSearchAttributesRequest{
 			SearchAttributes: toAdd,
-			Namespace:        namespace.GetName(),
+			Namespace:        nsName,
 		})
 		if err != nil {
 			return fmt.Errorf("adding search attributes: %w", err)
@@ -156,9 +167,10 @@ func ReconcileSearchAttributes(ctx context.Context, operatorSvc OperatorServiceC
 	}
 
 	if len(toRemove) > 0 {
+		logger.Info("Removing search attributes", "namespace", nsName, "count", len(toRemove), "attributes", toRemove)
 		_, err := operatorSvc.RemoveSearchAttributes(ctx, &operatorservice.RemoveSearchAttributesRequest{
 			SearchAttributes: toRemove,
-			Namespace:        namespace.GetName(),
+			Namespace:        nsName,
 		})
 		if err != nil {
 			return fmt.Errorf("removing search attributes: %w", err)
