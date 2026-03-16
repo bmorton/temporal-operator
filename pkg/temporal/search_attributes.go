@@ -133,7 +133,7 @@ func ReconcileSearchAttributes(ctx context.Context, operatorSvc OperatorServiceC
 	}
 
 	existing := listResp.GetCustomAttributes()
-	logger.Info("Listed existing custom search attributes", "namespace", nsName, "count", len(existing))
+	logger.V(1).Info("Listed existing custom search attributes", "namespace", nsName, "count", len(existing))
 
 	desired, err := parseDesiredAttributes(namespace.Spec.CustomSearchAttributes)
 	if err != nil {
@@ -151,7 +151,7 @@ func ReconcileSearchAttributes(ctx context.Context, operatorSvc OperatorServiceC
 	}
 
 	if len(toAdd) == 0 && len(toRemove) == 0 {
-		logger.Info("Search attributes are up to date", "namespace", nsName)
+		logger.V(1).Info("Search attributes are up to date", "namespace", nsName)
 		return nil
 	}
 
