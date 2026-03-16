@@ -136,6 +136,21 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		}
 	}
 
+	// Reconcile custom search attributes if any are configured or deletion is allowed.
+	if len(namespace.Spec.CustomSearchAttributes) > 0 || namespace.Spec.AllowSearchAttributeDeletion {
+		clusterClient, err := temporal.GetClusterClient(ctx, r.Client, cluster)
+		if err != nil {
+			err = fmt.Errorf("can't create cluster client for search attributes: %w", err)
+			return r.handleError(namespace, v1beta1.ReconcileErrorReason, err)
+		}
+		defer clusterClient.Close()
+
+		if err := temporal.ReconcileSearchAttributes(ctx, clusterClient.OperatorService(), namespace); err != nil {
+			err = fmt.Errorf("can't reconcile search attributes for \"%s\" namespace: %w", namespace.GetName(), err)
+			return r.handleError(namespace, v1beta1.ReconcileErrorReason, err)
+		}
+	}
+
 	logger.Info("Successfully reconciled namespace", "namespace", namespace.GetName())
 
 	v1beta1.SetTemporalNamespaceReady(namespace, metav1.ConditionTrue, v1beta1.TemporalNamespaceCreatedReason, "Namespace successfully created")

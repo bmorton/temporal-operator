@@ -67,6 +67,14 @@ type TemporalNamespaceSpec struct {
 	// If not set, the default cluster configuration is used.
 	// +optional
 	Archival *TemporalNamespaceArchivalSpec `json:"archival,omitempty"`
+	// CustomSearchAttributes is an optional mapping of custom search attribute names to types.
+	// Supported types: Text, Keyword, Int, Double, Bool, DateTime, KeywordList.
+	// +optional
+	CustomSearchAttributes map[string]string `json:"customSearchAttributes,omitempty"`
+	// AllowSearchAttributeDeletion makes the controller remove custom search attributes
+	// from the Temporal server if they are not present in the spec.
+	// +optional
+	AllowSearchAttributeDeletion bool `json:"allowSearchAttributeDeletion,omitempty"`
 }
 
 // TemporalNamespaceStatus defines the observed state of Namespace.
