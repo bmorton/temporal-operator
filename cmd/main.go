@@ -204,6 +204,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalNamespace")
 		os.Exit(1)
 	}
+	if err := (&controller.TemporalSearchAttributeReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TemporalSearchAttribute")
+		os.Exit(1)
+	}
 	webhooksEnabled := os.Getenv("ENABLE_WEBHOOKS") != "false"
 	if webhooksEnabled {
 		if err := webhookv1alpha1.SetupTemporalClusterWebhookWithManager(mgr); err != nil {

@@ -1,0 +1,35 @@
+# Chainsaw test: register a custom search attribute against a running cluster.
+# Requires the CNPG operator.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: searchattribute
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - apply:
+            file: ../postgres/02-secrets.yaml
+    - name: cluster
+      try:
+        - apply:
+            file: ../postgres/lifecycle/01-temporalcluster.yaml
+        - assert:
+            file: ../postgres/lifecycle/01-assert.yaml
+    - name: register-search-attribute
+      try:
+        - apply:
+            file: 01-searchattribute.yaml
+        - assert:
+            file: 01-assert.yaml
+        - script:
+            content: |
+              kubectl run -n $NAMESPACE tctl-sa --rm -i --restart=Never \
+                --image=temporalio/admin-tools:1.31.2 -- \
+                temporal operator search-attribute list \
+                --address temporal-lifecycle-frontend:7233 --namespace default

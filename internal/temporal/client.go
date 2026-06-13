@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"time"
 
 	"google.golang.org/grpc"
@@ -32,6 +33,8 @@ import (
 	namespacepb "go.temporal.io/api/namespace/v1"
 	operatorservice "go.temporal.io/api/operatorservice/v1"
 	workflowservice "go.temporal.io/api/workflowservice/v1"
+
+	enumspb "go.temporal.io/api/enums/v1"
 )
 
 // ErrNamespaceNotFound is returned by Describe when the namespace does not exist.
@@ -141,4 +144,78 @@ func (c *grpcNamespaceClient) Delete(ctx context.Context, name string) error {
 
 func (c *grpcNamespaceClient) Close() error {
 	return c.conn.Close()
+}
+
+// SearchAttributeClient manages custom search attributes in a Temporal cluster.
+type SearchAttributeClient interface {
+	// List returns the custom search attributes for a namespace, keyed by name
+	// with the CR-style type string as the value.
+	List(ctx context.Context, namespace string) (map[string]string, error)
+	Add(ctx context.Context, namespace, name, attrType string) error
+	Remove(ctx context.Context, namespace, name string) error
+	Close() error
+}
+
+// SearchAttributeClientFactory builds a SearchAttributeClient.
+type SearchAttributeClientFactory func(ctx context.Context, address string, tlsConfig *tls.Config) (SearchAttributeClient, error)
+
+// searchAttributeTypes maps CR type strings to Temporal indexed value types.
+var searchAttributeTypes = map[string]enumspb.IndexedValueType{
+	"Text":        enumspb.INDEXED_VALUE_TYPE_TEXT,
+	"Keyword":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
+	"Int":         enumspb.INDEXED_VALUE_TYPE_INT,
+	"Double":      enumspb.INDEXED_VALUE_TYPE_DOUBLE,
+	"Bool":        enumspb.INDEXED_VALUE_TYPE_BOOL,
+	"Datetime":    enumspb.INDEXED_VALUE_TYPE_DATETIME,
+	"KeywordList": enumspb.INDEXED_VALUE_TYPE_KEYWORD_LIST,
+}
+
+func searchAttributeTypeName(t enumspb.IndexedValueType) string {
+	for name, v := range searchAttributeTypes {
+		if v == t {
+			return name
+		}
+	}
+	return ""
+}
+
+// NewSearchAttributeClient dials the frontend and returns a SearchAttributeClient.
+func NewSearchAttributeClient(ctx context.Context, address string, tlsConfig *tls.Config) (SearchAttributeClient, error) {
+	c, err := NewNamespaceClient(ctx, address, tlsConfig)
+	if err != nil {
+		return nil, err
+	}
+	return c.(*grpcNamespaceClient), nil
+}
+
+func (c *grpcNamespaceClient) List(ctx context.Context, namespace string) (map[string]string, error) {
+	resp, err := c.operator.ListSearchAttributes(ctx, &operatorservice.ListSearchAttributesRequest{Namespace: namespace})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for name, t := range resp.GetCustomAttributes() {
+		out[name] = searchAttributeTypeName(t)
+	}
+	return out, nil
+}
+
+func (c *grpcNamespaceClient) Add(ctx context.Context, namespace, name, attrType string) error {
+	t, ok := searchAttributeTypes[attrType]
+	if !ok {
+		return fmt.Errorf("unknown search attribute type %q", attrType)
+	}
+	_, err := c.operator.AddSearchAttributes(ctx, &operatorservice.AddSearchAttributesRequest{
+		Namespace:        namespace,
+		SearchAttributes: map[string]enumspb.IndexedValueType{name: t},
+	})
+	return err
+}
+
+func (c *grpcNamespaceClient) Remove(ctx context.Context, namespace, name string) error {
+	_, err := c.operator.RemoveSearchAttributes(ctx, &operatorservice.RemoveSearchAttributesRequest{
+		Namespace:        namespace,
+		SearchAttributes: []string{name},
+	})
+	return err
 }

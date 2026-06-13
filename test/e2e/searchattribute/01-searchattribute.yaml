@@ -1,0 +1,10 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalSearchAttribute
+metadata:
+  name: customer-id
+spec:
+  clusterRef:
+    name: temporal-lifecycle
+  namespace: default
+  name: CustomerId
+  type: Keyword

@@ -55,6 +55,11 @@ spec:
           spec:
             description: spec defines the desired state of TemporalSearchAttribute
             properties:
+              allowDeletion:
+                description: |-
+                  AllowDeletion permits the operator to remove the search attribute from the
+                  namespace when the CR is deleted.
+                type: boolean
               clusterRef:
                 description: ClusterRef references the TemporalCluster this search
                   attribute belongs to.
@@ -163,6 +168,10 @@ spec:
                 description: Registered indicates whether the attribute has been registered
                   with the cluster.
                 type: boolean
+              registeredAt:
+                description: RegisteredAt is when the attribute was registered.
+                format: date-time
+                type: string
             type: object
         required:
         - spec

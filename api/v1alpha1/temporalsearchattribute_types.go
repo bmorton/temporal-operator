@@ -35,6 +35,11 @@ type TemporalSearchAttributeSpec struct {
 	// Type is the search attribute type. Immutable once created.
 	// +kubebuilder:validation:Enum=Keyword;Text;Int;Double;Bool;Datetime;KeywordList
 	Type string `json:"type"`
+
+	// AllowDeletion permits the operator to remove the search attribute from the
+	// namespace when the CR is deleted.
+	// +optional
+	AllowDeletion bool `json:"allowDeletion,omitempty"`
 }
 
 // TemporalSearchAttributeStatus defines the observed state of TemporalSearchAttribute.
@@ -45,6 +50,10 @@ type TemporalSearchAttributeStatus struct {
 	// Registered indicates whether the attribute has been registered with the cluster.
 	// +optional
 	Registered bool `json:"registered,omitempty"`
+
+	// RegisteredAt is when the attribute was registered.
+	// +optional
+	RegisteredAt *metav1.Time `json:"registeredAt,omitempty"`
 
 	// +listType=map
 	// +listMapKey=type

@@ -64,7 +64,11 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   rolling restarts → post-upgrade), per-service version threading, Rollbackable
   flag, events, envtest, upgrade Chainsaw e2e, nightly upgrade-matrix workflow.
   _(commit `f81e7b1`)_
-- [ ] **Milestone 11 — `TemporalNamespace` reconciler** _(next up)_
+- [x] **Milestone 11 — `TemporalNamespace` reconciler.** Temporal gRPC
+  NamespaceClient (injectable factory), namespace controller (register/update/
+  drift/finalizer-delete gated on cluster Ready), API + status fields, envtest
+  with fake client, namespace Chainsaw e2e. _(commit `beac37f`)_
+- [ ] **Milestone 12 — `TemporalSearchAttribute` reconciler** _(next up)_
 
 ---
 
