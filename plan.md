@@ -77,7 +77,11 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   `helm lint` clean; `dist/install.yaml` via build-installer; OLM bundle scaffold
   (CSV, annotations, scorecard, bundle.Dockerfile); recovered dist/ tracking.
   _(commit `2018072`)_
-- [ ] **Milestone 14 — e2e in CI** _(next up)_
+- [x] **Milestone 14 — e2e in CI.** Kind-based e2e workflow (build/load image,
+  install cert-manager + CNPG, Helm install, Chainsaw suite) with PR single-combo
+  and nightly matrix, diagnostics upload, aggregated status check. namespace.so
+  runner deferred (no credentials); kind is the practical path. _(commit `c2b8ac5`)_
+- [ ] **Milestone 15 — Release engineering** _(next up)_
 
 ---
 
