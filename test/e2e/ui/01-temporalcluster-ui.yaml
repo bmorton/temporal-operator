@@ -1,0 +1,37 @@
+# A TemporalCluster with the UI enabled, backed by the CNPG Postgres fixtures.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-ui
+spec:
+  version: "1.31.2"
+  numHistoryShards: 512
+  ui:
+    enabled: true
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: temporal-pg-rw
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: temporal-pg-rw
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password

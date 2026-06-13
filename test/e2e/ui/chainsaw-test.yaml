@@ -1,0 +1,36 @@
+# Chainsaw UI test: deploy a cluster with the UI enabled and verify the UI
+# Deployment and Service are created. Requires the CNPG operator (and, for the
+# ServiceMonitor, kube-prometheus-stack) installed.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: ui
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+        - apply:
+            file: ../postgres/02-secrets.yaml
+    - name: deploy-ui
+      try:
+        - apply:
+            file: 01-temporalcluster-ui.yaml
+        - assert:
+            file: 01-assert.yaml
+      catch:
+        - describe:
+            apiVersion: apps/v1
+            kind: Deployment

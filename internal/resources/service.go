@@ -38,6 +38,7 @@ func BuildHeadlessService(cluster *temporalv1alpha1.TemporalCluster, svc Service
 	ports := []corev1.ServicePort{
 		{Name: "grpc", Port: svc.Ports.GRPCPort, TargetPort: intstrFromInt(svc.Ports.GRPCPort)},
 		{Name: "membership", Port: svc.Ports.MembershipPort, TargetPort: intstrFromInt(svc.Ports.MembershipPort)},
+		{Name: "metrics", Port: metricsPort, TargetPort: intstrFromInt(metricsPort)},
 	}
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},

@@ -46,7 +46,12 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   status rollup (Available/Ready, phase), ClusterReady event, owned-resource
   watches, lifecycle envtest + unit tests + Chainsaw lifecycle e2e. Config is
   stored in a Secret (embeds credentials). _(commit `922a21b`)_
-- [ ] **Milestone 7 — mTLS with cert-manager** _(next up)_
+- [x] **Milestone 7 — mTLS with cert-manager.** mTLS sub-reconciler (internode +
+  frontend Certificates, MTLSReady condition, cert mounts, cert-hash rotation),
+  Ready gated on MTLSReady, TemporalClusterClient controller (client credential
+  Secret), cert-manager scheme/CRDs in envtest, tests, Chainsaw mTLS e2e.
+  _(commit `b716f69`)_
+- [ ] **Milestone 8 — temporal-ui, monitoring, archival** _(next up)_
 
 ---
 

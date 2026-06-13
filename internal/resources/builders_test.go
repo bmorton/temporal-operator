@@ -173,3 +173,78 @@ func TestBuildClientCertificate(t *testing.T) {
 		t.Errorf("expected client auth usage, got %v", cert.Spec.Usages)
 	}
 }
+
+func TestBuildUI(t *testing.T) {
+	c := builderCluster()
+	c.Spec.UI = &temporalv1alpha1.UISpec{Enabled: true, Version: "2.34.0"}
+
+	dep := BuildUIDeployment(c)
+	if dep.Spec.Template.Spec.Containers[0].Image != "temporalio/ui:2.34.0" {
+		t.Errorf("unexpected UI image %q", dep.Spec.Template.Spec.Containers[0].Image)
+	}
+	var hasAddr bool
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == "TEMPORAL_ADDRESS" {
+			hasAddr = true
+		}
+	}
+	if !hasAddr {
+		t.Errorf("expected TEMPORAL_ADDRESS env")
+	}
+
+	svc := BuildUIService(c)
+	if svc.Spec.Ports[0].Port != 8080 {
+		t.Errorf("expected UI service port 8080")
+	}
+
+	if BuildUIIngress(c) != nil {
+		t.Errorf("expected no ingress when disabled")
+	}
+	c.Spec.UI.Ingress = &temporalv1alpha1.UIIngressSpec{Enabled: true, Host: "ui.example.com", IngressClassName: "nginx"}
+	ing := BuildUIIngress(c)
+	if ing == nil || ing.Spec.Rules[0].Host != "ui.example.com" {
+		t.Errorf("expected ingress with host")
+	}
+	if ing.Spec.IngressClassName == nil || *ing.Spec.IngressClassName != "nginx" {
+		t.Errorf("expected ingress class nginx")
+	}
+}
+
+func TestBuildUIWithMTLS(t *testing.T) {
+	c := builderCluster()
+	c.Spec.UI = &temporalv1alpha1.UISpec{Enabled: true, Version: "2.34.0"}
+	c.Spec.MTLS = &temporalv1alpha1.MTLSSpec{Provider: "cert-manager", IssuerRef: &temporalv1alpha1.IssuerReference{Name: "ca"}}
+
+	cert := BuildUIClientCertificate(c)
+	if cert.Spec.SecretName != "tc-ui-client" {
+		t.Errorf("unexpected ui client secret %q", cert.Spec.SecretName)
+	}
+	dep := BuildUIDeployment(c)
+	var hasVol bool
+	for _, v := range dep.Spec.Template.Spec.Volumes {
+		if v.Name == "ui-client-certs" {
+			hasVol = true
+		}
+	}
+	if !hasVol {
+		t.Errorf("expected ui-client-certs volume when mTLS enabled")
+	}
+}
+
+func TestBuildServiceMonitor(t *testing.T) {
+	c := builderCluster()
+	c.Spec.Metrics = &temporalv1alpha1.MetricsSpec{
+		Enabled:        true,
+		ServiceMonitor: &temporalv1alpha1.ServiceMonitorSpec{Enabled: true, Labels: map[string]string{"release": "kps"}},
+	}
+	sm := BuildServiceMonitor(c)
+	if sm.GetName() != "tc" || sm.GetNamespace() != "ns" {
+		t.Errorf("unexpected SM metadata %s/%s", sm.GetNamespace(), sm.GetName())
+	}
+	if sm.GetLabels()["release"] != "kps" {
+		t.Errorf("expected user label on ServiceMonitor")
+	}
+	if sm.GroupVersionKind() != ServiceMonitorGVK {
+		t.Errorf("unexpected GVK %v", sm.GroupVersionKind())
+	}
+}
