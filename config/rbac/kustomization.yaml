@@ -22,6 +22,15 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the temporal-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- temporalclusterclient_admin_role.yaml
+- temporalclusterclient_editor_role.yaml
+- temporalclusterclient_viewer_role.yaml
+- temporalsearchattribute_admin_role.yaml
+- temporalsearchattribute_editor_role.yaml
+- temporalsearchattribute_viewer_role.yaml
+- temporalnamespace_admin_role.yaml
+- temporalnamespace_editor_role.yaml
+- temporalnamespace_viewer_role.yaml
 - temporalcluster_admin_role.yaml
 - temporalcluster_editor_role.yaml
 - temporalcluster_viewer_role.yaml

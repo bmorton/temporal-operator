@@ -4,6 +4,28 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
 
 ---
 
+## Progress log
+
+> Concrete project parameters (locked in): module `github.com/bmorton/temporal-operator`,
+> CRD group `temporal.bmor10.com` (kubebuilder `--domain bmor10.com`), owner "Brian Morton",
+> Go `1.26.3`. Work happens directly in this repo (no PRs for now).
+>
+> Environment note: this devcontainer has no Docker daemon or kind, so the
+> `make docker-build` and `kind`-based acceptance checks are deferred/unverified
+> locally. `make build`, `make test` (envtest), and `make lint` are the local gates.
+
+- [x] **Milestone 0 — Repository bootstrap and governance.** Apache 2.0 LICENSE,
+  README, CoC (Contributor Covenant 2.1), CONTRIBUTING, GOVERNANCE, MAINTAINERS,
+  SECURITY, CODEOWNERS, issue/PR templates, dependabot, CI skeleton, commitlint,
+  DCO workflow. _(commit `bb1af86`)_
+- [x] **Milestone 1 — Operator scaffold + no-op reconciler.** Kubebuilder v4.10.1
+  scaffold (`42c4c0e`), minimal `TemporalCluster` type + `Ready=False/NotImplemented`
+  reconciler, envtest, tightened golangci-lint, consolidated `ci.yml`, Makefile
+  targets. `make build/test/lint` green. _(commit `8ec5ac0`)_
+- [ ] **Milestone 2 — CRD design v1alpha1** _(in progress)_
+
+---
+
 ## How to use this document
 
 This plan is written for an autonomous (or semi-autonomous) coding agent working in iterative passes against a Git repository. Each milestone is a coherent unit of work with explicit deliverables, acceptance criteria, and verification commands. Within a milestone, tasks are ordered by dependency. Do not skip ahead.

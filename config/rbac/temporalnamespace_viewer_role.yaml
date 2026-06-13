@@ -1,0 +1,29 @@
+# This rule is not used by the project temporal-operator itself.
+# It is provided to allow the cluster admin to help manage permissions for users.
+#
+# Grants read-only access to temporal.bmor10.com resources.
+# This role is intended for users who need visibility into these resources
+# without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: temporal-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: temporalnamespace-viewer-role
+rules:
+- apiGroups:
+  - temporal.bmor10.com
+  resources:
+  - temporalnamespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - temporal.bmor10.com
+  resources:
+  - temporalnamespaces/status
+  verbs:
+  - get

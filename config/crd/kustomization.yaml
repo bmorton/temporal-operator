@@ -3,6 +3,9 @@
 # It should be run by config/default
 resources:
 - bases/temporal.bmor10.com_temporalclusters.yaml
+- bases/temporal.bmor10.com_temporalnamespaces.yaml
+- bases/temporal.bmor10.com_temporalsearchattributes.yaml
+- bases/temporal.bmor10.com_temporalclusterclients.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

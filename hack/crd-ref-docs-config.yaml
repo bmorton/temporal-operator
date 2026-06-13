@@ -1,0 +1,8 @@
+processor:
+  ignoreTypes:
+    - "(Temporal\\w+)List$"
+  ignoreFields:
+    - "status$"
+    - "TypeMeta$"
+render:
+  kubernetesVersion: "1.34"

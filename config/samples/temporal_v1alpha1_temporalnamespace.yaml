@@ -1,0 +1,12 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  labels:
+    app.kubernetes.io/name: temporal-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: temporalnamespace-sample
+spec:
+  clusterRef:
+    name: temporalcluster-sample
+  retentionPeriod: "72h"
+  description: "Sample namespace"

@@ -1,4 +1,7 @@
 ## Append samples of your project ##
 resources:
 - temporal_v1alpha1_temporalcluster.yaml
+- temporal_v1alpha1_temporalnamespace.yaml
+- temporal_v1alpha1_temporalsearchattribute.yaml
+- temporal_v1alpha1_temporalclusterclient.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

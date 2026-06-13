@@ -7,3 +7,25 @@ metadata:
   name: temporalcluster-sample
 spec:
   version: "1.31.2"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: postgres.default.svc
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-default-store
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: postgres.default.svc
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-visibility-store
+          key: password

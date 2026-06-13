@@ -52,9 +52,7 @@ var _ = Describe("TemporalCluster Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					Spec: temporalv1alpha1.TemporalClusterSpec{
-						Version: "1.31.2",
-					},
+					Spec: validClusterSpec("1.31.2"),
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -93,5 +91,73 @@ var _ = Describe("TemporalCluster Controller", func() {
 				g.Expect(resource.Status.ObservedGeneration).To(Equal(resource.Generation))
 			}, 5*time.Second, 200*time.Millisecond).Should(Succeed())
 		})
+	})
+})
+
+// validClusterSpec returns a minimal valid TemporalClusterSpec backed by a
+// SQL (Postgres) default and visibility store.
+func validClusterSpec(version string) temporalv1alpha1.TemporalClusterSpec {
+	sql := func(db string) *temporalv1alpha1.SQLDatastoreSpec {
+		return &temporalv1alpha1.SQLDatastoreSpec{
+			PluginName: "postgres12",
+			Host:       "postgres.default.svc",
+			Port:       5432,
+			Database:   db,
+			User:       "temporal",
+			PasswordSecretRef: &temporalv1alpha1.SecretKeyReference{
+				Name: "temporal-store",
+				Key:  "password",
+			},
+		}
+	}
+	return temporalv1alpha1.TemporalClusterSpec{
+		Version:          version,
+		NumHistoryShards: 512,
+		Persistence: temporalv1alpha1.PersistenceSpec{
+			DefaultStore:    temporalv1alpha1.DatastoreSpec{SQL: sql("temporal")},
+			VisibilityStore: temporalv1alpha1.DatastoreSpec{SQL: sql("temporal_visibility")},
+		},
+	}
+}
+
+var _ = Describe("TemporalCluster CRD validation", func() {
+	ctx := context.Background()
+
+	It("rejects setting both sql and cassandra on a store (CEL)", func() {
+		resource := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cel-both-stores", Namespace: "default"},
+			Spec:       validClusterSpec("1.31.2"),
+		}
+		resource.Spec.Persistence.DefaultStore.Cassandra = &temporalv1alpha1.CassandraDatastoreSpec{
+			Hosts:    []string{"cassandra.default.svc"},
+			Port:     9042,
+			Keyspace: "temporal",
+		}
+		Expect(k8sClient.Create(ctx, resource)).NotTo(Succeed())
+	})
+
+	It("rejects an invalid version pattern", func() {
+		resource := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "bad-version", Namespace: "default"},
+			Spec:       validClusterSpec("not-a-version"),
+		}
+		Expect(k8sClient.Create(ctx, resource)).NotTo(Succeed())
+	})
+
+	It("rejects changing the immutable numHistoryShards (CEL transition rule)", func() {
+		name := "immutable-shards"
+		resource := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+			Spec:       validClusterSpec("1.31.2"),
+		}
+		Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+		DeferCleanup(func() {
+			_ = k8sClient.Delete(ctx, resource)
+		})
+
+		fetched := &temporalv1alpha1.TemporalCluster{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, fetched)).To(Succeed())
+		fetched.Spec.NumHistoryShards = 1024
+		Expect(k8sClient.Update(ctx, fetched)).NotTo(Succeed())
 	})
 })
