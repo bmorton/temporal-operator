@@ -41,7 +41,12 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   persistence sub-reconciler (probe → PersistenceReachable; setup/update Jobs →
   SchemaReady) with Job ownership/watches, envtest for all transitions, unit
   tests, and Chainsaw e2e smoke files (CNPG). _(commit pending)_
-- [ ] **Milestone 6 — Service deployment and rollout** _(next up)_
+- [x] **Milestone 6 — Service deployment and rollout.** Deployment/Service/PDB/
+  ConfigMap/Secret builders, service sub-reconciler (SSA, config-hash rollout),
+  status rollup (Available/Ready, phase), ClusterReady event, owned-resource
+  watches, lifecycle envtest + unit tests + Chainsaw lifecycle e2e. Config is
+  stored in a Secret (embeds credentials). _(commit `922a21b`)_
+- [ ] **Milestone 7 — mTLS with cert-manager** _(next up)_
 
 ---
 
