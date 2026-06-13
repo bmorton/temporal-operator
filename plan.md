@@ -81,7 +81,11 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   install cert-manager + CNPG, Helm install, Chainsaw suite) with PR single-combo
   and nightly matrix, diagnostics upload, aggregated status check. namespace.so
   runner deferred (no credentials); kind is the practical path. _(commit `c2b8ac5`)_
-- [ ] **Milestone 15 — Release engineering** _(next up)_
+- [x] **Milestone 15 — Release engineering.** GoReleaser v2 (multi-arch GHCR
+  images, source archive, Syft SBOMs, keyless Cosign signing), release workflow
+  with SLSA L3 provenance + Helm OCI push, release-please, and cosign/SLSA
+  verification docs. _(commit `ecfff4a`)_
+- [ ] **Milestone 16 — Documentation site and examples** _(next up)_
 
 ---
 

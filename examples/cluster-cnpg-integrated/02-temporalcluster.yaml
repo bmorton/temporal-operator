@@ -1,0 +1,30 @@
+# A full TemporalCluster backed by the CNPG Postgres provisioned by the parent
+# postgres suite. The operator should deploy all services and reach Ready=True.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-lifecycle
+spec:
+  version: "1.31.2"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: temporal-pg-rw
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: temporal-pg-rw
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password

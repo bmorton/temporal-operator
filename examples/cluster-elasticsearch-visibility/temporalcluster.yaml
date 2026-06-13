@@ -1,0 +1,24 @@
+# Postgres default store with Elasticsearch advanced visibility.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: es-visibility
+spec:
+  version: "1.31.2"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: postgres.default.svc
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef: { name: temporal-store, key: password }
+    visibilityStore:
+      elasticsearch:
+        url: https://elasticsearch-es-http:9200
+        version: v8
+        username: elastic
+        passwordSecretRef: { name: elasticsearch-es-elastic-user, key: elastic }
+        tls: { enabled: true }

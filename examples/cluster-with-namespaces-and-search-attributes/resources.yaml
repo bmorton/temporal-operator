@@ -1,0 +1,32 @@
+# A cluster plus a declarative namespace and custom search attribute.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: app
+spec:
+  version: "1.31.2"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql: { pluginName: postgres12, host: postgres.default.svc, port: 5432, database: temporal, user: temporal, passwordSecretRef: { name: temporal-store, key: password } }
+    visibilityStore:
+      sql: { pluginName: postgres12, host: postgres.default.svc, port: 5432, database: temporal_visibility, user: temporal, passwordSecretRef: { name: temporal-store, key: password } }
+---
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: orders
+spec:
+  clusterRef: { name: app }
+  retentionPeriod: "168h"
+  description: "Orders processing"
+---
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalSearchAttribute
+metadata:
+  name: customer-id
+spec:
+  clusterRef: { name: app }
+  namespace: orders
+  name: CustomerId
+  type: Keyword

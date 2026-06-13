@@ -1,0 +1,43 @@
+# Production-leaning Postgres cluster with per-service sizing, UI, and metrics.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: full
+spec:
+  version: "1.31.2"
+  numHistoryShards: 4096
+  services:
+    frontend: { replicas: 2, resources: { requests: { cpu: 250m, memory: 256Mi } } }
+    history:  { replicas: 5, resources: { requests: { cpu: 500m, memory: 512Mi } } }
+    matching: { replicas: 3 }
+    worker:   { replicas: 2 }
+  ui:
+    enabled: true
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      host: temporal.example.com
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      labels: { release: kube-prometheus-stack }
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: postgres-rw.default.svc
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef: { name: temporal-store, key: password }
+        tls: { enabled: true }
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: postgres-rw.default.svc
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef: { name: temporal-store, key: password }
+        tls: { enabled: true }

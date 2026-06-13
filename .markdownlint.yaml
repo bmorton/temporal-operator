@@ -1,0 +1,5 @@
+# markdownlint configuration: relax line length and inline HTML.
+default: true
+MD013: false   # line length
+MD033: false   # inline HTML
+MD041: false   # first line heading

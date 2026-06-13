@@ -1,0 +1,25 @@
+# Cassandra default + visibility store (single DC).
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: cassandra
+spec:
+  version: "1.31.2"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      cassandra:
+        hosts: ["cassandra-dc1-service"]
+        port: 9042
+        keyspace: temporal
+        user: temporal
+        datacenter: dc1
+        passwordSecretRef: { name: cassandra-superuser, key: password }
+    visibilityStore:
+      cassandra:
+        hosts: ["cassandra-dc1-service"]
+        port: 9042
+        keyspace: temporal_visibility
+        user: temporal
+        datacenter: dc1
+        passwordSecretRef: { name: cassandra-superuser, key: password }

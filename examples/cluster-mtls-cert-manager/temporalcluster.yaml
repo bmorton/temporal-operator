@@ -1,0 +1,35 @@
+# A TemporalCluster with cert-manager-driven mTLS, backed by the CNPG Postgres
+# from the postgres suite fixtures.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-mtls
+spec:
+  version: "1.31.2"
+  numHistoryShards: 512
+  mtls:
+    provider: cert-manager
+    issuerRef:
+      name: temporal-ca-issuer
+      kind: Issuer
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: temporal-pg-rw
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: temporal-pg-rw
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password

@@ -1,0 +1,26 @@
+# CloudNativePG (CNPG) Postgres cluster used as the Temporal datastore.
+#
+# Prerequisite: the CNPG operator must be installed in the cluster, e.g.:
+#   kubectl apply --server-side -f \
+#     https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml
+#
+# CNPG provisions a Secret named "<cluster>-app" containing the application
+# user's credentials (keys: username, password), referenced by the
+# TemporalCluster below.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: temporal-pg
+spec:
+  instances: 1
+  storage:
+    size: 1Gi
+  bootstrap:
+    initdb:
+      database: temporal
+      owner: temporal
+  managed:
+    roles:
+      - name: temporal
+        ensure: present
+        login: true

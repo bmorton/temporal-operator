@@ -1,0 +1,34 @@
+name: Docs
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["docs/**", "examples/**"]
+  pull_request:
+    branches: ["main"]
+    paths: ["docs/**", "examples/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@v17
+        with:
+          globs: |
+            docs/**/*.md
+            examples/**/*.md
+          config: ".markdownlint.yaml"
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md
+          fail: false
+
+  # NOTE: production deployment (e.g. Cloudflare Pages) requires repository
+  # secrets and a configured Hugo/Docsy site; wire it here when available.
