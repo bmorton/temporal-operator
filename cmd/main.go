@@ -37,6 +37,7 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/controller"
+	webhookv1alpha1 "github.com/bmorton/temporal-operator/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -52,6 +53,7 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
+//nolint:gocyclo
 func main() {
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
@@ -183,6 +185,25 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalCluster")
 		os.Exit(1)
+	}
+	webhooksEnabled := os.Getenv("ENABLE_WEBHOOKS") != "false"
+	if webhooksEnabled {
+		if err := webhookv1alpha1.SetupTemporalClusterWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "TemporalCluster")
+			os.Exit(1)
+		}
+	}
+	if webhooksEnabled {
+		if err := webhookv1alpha1.SetupTemporalNamespaceWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "TemporalNamespace")
+			os.Exit(1)
+		}
+	}
+	if webhooksEnabled {
+		if err := webhookv1alpha1.SetupTemporalSearchAttributeWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "TemporalSearchAttribute")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

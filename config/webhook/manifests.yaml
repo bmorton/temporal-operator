@@ -1,0 +1,93 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-temporal-bmor10-com-v1alpha1-temporalcluster
+  failurePolicy: Fail
+  name: mtemporalcluster-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - temporal.bmor10.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - temporalclusters
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-temporal-bmor10-com-v1alpha1-temporalcluster
+  failurePolicy: Fail
+  name: vtemporalcluster-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - temporal.bmor10.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - temporalclusters
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-temporal-bmor10-com-v1alpha1-temporalnamespace
+  failurePolicy: Fail
+  name: vtemporalnamespace-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - temporal.bmor10.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - temporalnamespaces
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-temporal-bmor10-com-v1alpha1-temporalsearchattribute
+  failurePolicy: Fail
+  name: vtemporalsearchattribute-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - temporal.bmor10.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - temporalsearchattributes
+  sideEffects: None

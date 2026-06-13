@@ -18,6 +18,10 @@ resources:
   kind: TemporalCluster
   path: github.com/bmorton/temporal-operator/api/v1alpha1
   version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
@@ -26,6 +30,9 @@ resources:
   kind: TemporalNamespace
   path: github.com/bmorton/temporal-operator/api/v1alpha1
   version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
@@ -34,6 +41,9 @@ resources:
   kind: TemporalSearchAttribute
   path: github.com/bmorton/temporal-operator/api/v1alpha1
   version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true

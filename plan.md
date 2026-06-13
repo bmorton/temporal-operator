@@ -22,7 +22,11 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   scaffold (`42c4c0e`), minimal `TemporalCluster` type + `Ready=False/NotImplemented`
   reconciler, envtest, tightened golangci-lint, consolidated `ci.yml`, Makefile
   targets. `make build/test/lint` green. _(commit `8ec5ac0`)_
-- [ ] **Milestone 2 — CRD design v1alpha1** _(in progress)_
+- [x] **Milestone 2 — CRD design v1alpha1.** Full `TemporalCluster` spec/status,
+  three satellite CRD stubs (resource-only), CEL validations (immutable shards,
+  exactly-one datastore), conditions enumeration, samples, `crd-ref-docs` +
+  `make api-docs`, envtest for CEL. _(commit `23af968`)_
+- [ ] **Milestone 3 — Webhooks** _(in progress)_
 
 ---
 
