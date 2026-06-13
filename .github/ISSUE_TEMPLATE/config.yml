@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/bmorton/temporal-operator/discussions
+    about: Please ask and answer questions in Discussions.
+  - name: Security vulnerability
+    url: https://github.com/bmorton/temporal-operator/security/advisories/new
+    about: Report security issues privately via a security advisory.

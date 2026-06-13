@@ -1,0 +1,21 @@
+# Binaries
+bin/
+dist/
+*.exe
+*.test
+*.out
+
+# Go
+vendor/
+cover.out
+coverage.*
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local env / kube
+kubeconfig
+*.local.yaml
