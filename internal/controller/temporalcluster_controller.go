@@ -84,7 +84,9 @@ func (r *TemporalClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileServices(ctx, &cluster); err != nil {
+	serviceVersions := r.reconcileUpgrade(ctx, &cluster)
+
+	if err := r.reconcileServices(ctx, &cluster, serviceVersions); err != nil {
 		return ctrl.Result{}, err
 	}
 

@@ -63,7 +63,7 @@ func TestSelectorLabelsStableAcrossVersion(t *testing.T) {
 func TestBuildDeployment(t *testing.T) {
 	c := builderCluster()
 	svc := EnabledServices(c)[0] // frontend
-	dep := BuildDeployment(c, svc, "abc123", nil)
+	dep := BuildDeployment(c, svc, "abc123", "", nil)
 
 	if dep.Name != "tc-frontend" {
 		t.Errorf("unexpected name %q", dep.Name)

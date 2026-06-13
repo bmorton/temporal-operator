@@ -6181,6 +6181,11 @@ spec:
                     type: string
                   phase:
                     type: string
+                  rollbackable:
+                    description: |-
+                      Rollbackable is true until schema migration begins, after which a
+                      rollback is no longer safe.
+                    type: boolean
                   startedAt:
                     format: date-time
                     type: string

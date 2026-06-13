@@ -235,6 +235,10 @@ type UpgradeStatus struct {
 	ToVersion string `json:"toVersion,omitempty"`
 	// +optional
 	Phase string `json:"phase,omitempty"`
+	// Rollbackable is true until schema migration begins, after which a
+	// rollback is no longer safe.
+	// +optional
+	Rollbackable bool `json:"rollbackable,omitempty"`
 	// +optional
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
 }

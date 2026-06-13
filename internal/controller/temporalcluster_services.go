@@ -38,7 +38,7 @@ const servicesFieldOwner = client.FieldOwner("temporal-operator/services")
 // reconcileServices renders configuration and applies the Deployments, Services,
 // ConfigMaps, and PodDisruptionBudgets for the cluster's Temporal services. It
 // only runs once the schema is ready.
-func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
+func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, serviceVersions map[string]string) error {
 	if !meta.IsStatusConditionTrue(cluster.Status.Conditions, temporalv1alpha1.ConditionSchemaReady) {
 		// Schema is not ready yet; defer service deployment.
 		return nil
@@ -62,7 +62,8 @@ func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, clust
 
 	services := resources.EnabledServices(cluster)
 	for _, svc := range services {
-		if err := r.apply(ctx, cluster, resources.BuildDeployment(cluster, svc, configHash, mtls)); err != nil {
+		version := serviceVersions[svc.Name]
+		if err := r.apply(ctx, cluster, resources.BuildDeployment(cluster, svc, configHash, version, mtls)); err != nil {
 			return err
 		}
 		if err := r.apply(ctx, cluster, resources.BuildHeadlessService(cluster, svc)); err != nil {
@@ -182,11 +183,14 @@ func (r *TemporalClusterReconciler) computeReadyAndPhase(cluster *temporalv1alph
 
 	ready := reachable && schemaReady && available && mtlsReady
 	wasReady := meta.IsStatusConditionTrue(conds, temporalv1alpha1.ConditionReady)
+	upgrading := upgradeInProgress(cluster)
 	switch {
 	case !reachable:
 		cluster.Status.Phase = "Pending"
 	case !schemaReady:
 		cluster.Status.Phase = "ProvisioningSchema"
+	case upgrading:
+		cluster.Status.Phase = "Upgrading"
 	case !available:
 		cluster.Status.Phase = "DeployingServices"
 	default:
@@ -200,7 +204,11 @@ func (r *TemporalClusterReconciler) computeReadyAndPhase(cluster *temporalv1alph
 		readyStatus = metav1.ConditionTrue
 		reason = temporalv1alpha1.ReasonAllServicesReady
 		message = "cluster is ready"
-		cluster.Status.Version = cluster.Spec.Version
+		// Only stamp the running version on a fresh install; during an upgrade
+		// the upgrade reconciler owns status.version until the rollout completes.
+		if !upgrading {
+			cluster.Status.Version = cluster.Spec.Version
+		}
 	}
 	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:               temporalv1alpha1.ConditionReady,

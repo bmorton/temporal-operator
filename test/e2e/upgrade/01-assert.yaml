@@ -1,0 +1,7 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-upgrade
+status:
+  version: "1.30.0"
+  (conditions[?type == 'Ready'].status | [0]): "True"

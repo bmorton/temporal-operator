@@ -1,0 +1,54 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade-matrix:
+    name: Upgrade ${{ matrix.from }} -> ${{ matrix.to }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - from: "1.27.0"
+            to: "1.28.0"
+          - from: "1.28.0"
+            to: "1.29.0"
+          - from: "1.29.0"
+            to: "1.30.0"
+          - from: "1.30.0"
+            to: "1.31.2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install tooling
+        run: make install-tools
+      - name: Create kind cluster
+        run: make kind-up
+      - name: Build and load operator image
+        run: |
+          make docker-build IMG=temporal-operator:nightly
+          make kind-load IMG=temporal-operator:nightly
+      - name: Install cert-manager and CNPG
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+          kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml
+          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+      - name: Run upgrade Chainsaw test
+        env:
+          UPGRADE_FROM: ${{ matrix.from }}
+          UPGRADE_TO: ${{ matrix.to }}
+        run: |
+          make deploy IMG=temporal-operator:nightly
+          ./bin/chainsaw test --test-dir test/e2e/upgrade --config .chainsaw.yaml
+      - name: Tear down kind cluster
+        if: always()
+        run: make kind-down

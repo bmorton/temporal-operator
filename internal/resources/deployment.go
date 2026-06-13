@@ -44,11 +44,14 @@ func int32OrDefault(p *int32, def int32) int32 {
 	return *p
 }
 
-func serverImage(cluster *temporalv1alpha1.TemporalCluster) string {
+func serverImage(cluster *temporalv1alpha1.TemporalCluster, version string) string {
 	if cluster.Spec.Image != "" {
 		return cluster.Spec.Image
 	}
-	return temporal.ServerImage(cluster.Spec.Version)
+	if version == "" {
+		version = cluster.Spec.Version
+	}
+	return temporal.ServerImage(version)
 }
 
 func grpcProbe(port int32) *corev1.Probe {
@@ -92,8 +95,10 @@ type MTLSMounts struct {
 	CertHash string
 }
 
-// BuildDeployment builds the Deployment for a single Temporal service.
-func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash string, mtls *MTLSMounts) *appsv1.Deployment {
+// BuildDeployment builds the Deployment for a single Temporal service. The
+// version overrides the server image tag (used for per-service rollout during
+// upgrades); when empty the cluster's spec version is used.
+func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash, version string, mtls *MTLSMounts) *appsv1.Deployment {
 	replicas := int32(1)
 	var resources corev1.ResourceRequirements
 	var nodeSelector map[string]string
@@ -113,6 +118,9 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 	}
 
 	podLabels := StandardLabels(cluster, svc.Name)
+	if version != "" {
+		podLabels[LabelVersion] = version
+	}
 	startup := grpcProbe(svc.Ports.GRPCPort)
 	startup.FailureThreshold = 30
 	startup.PeriodSeconds = 5
@@ -122,7 +130,7 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 
 	container := corev1.Container{
 		Name:  "temporal",
-		Image: serverImage(cluster),
+		Image: serverImage(cluster, version),
 		Command: []string{
 			"temporal-server",
 			"--root", "/etc/temporal",

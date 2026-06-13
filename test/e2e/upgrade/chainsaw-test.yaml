@@ -1,0 +1,41 @@
+# Chainsaw upgrade test: bring up a cluster at 1.30.0, upgrade to 1.31.2, and
+# assert the upgrade phase machine completes. Requires the CNPG operator.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: upgrade
+spec:
+  timeouts:
+    apply: 1m
+    assert: 10m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+        - apply:
+            file: ../postgres/02-secrets.yaml
+    - name: deploy-old-version
+      try:
+        - apply:
+            file: 01-temporalcluster-1.30.yaml
+        - assert:
+            file: 01-assert.yaml
+    - name: upgrade-to-new-version
+      try:
+        - apply:
+            file: 02-temporalcluster-1.31.yaml
+        - assert:
+            file: 02-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster
