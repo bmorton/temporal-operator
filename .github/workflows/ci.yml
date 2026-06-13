@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/go/pkg/mod
@@ -40,7 +40,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/go/pkg/mod
@@ -59,7 +59,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/go/pkg/mod
