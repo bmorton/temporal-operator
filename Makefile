@@ -200,7 +200,7 @@ CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 KUSTOMIZE_VERSION ?= v5.7.1
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
 KIND_VERSION ?= v0.27.0
-CHAINSAW_VERSION ?= v0.2.12
+CHAINSAW_VERSION ?= v0.2.15
 CRD_REF_DOCS_VERSION ?= v0.3.0
 
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
@@ -246,6 +246,10 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 chainsaw: $(CHAINSAW) ## Download chainsaw locally if necessary.
 $(CHAINSAW): $(LOCALBIN)
 	$(call go-install-tool,$(CHAINSAW),github.com/kyverno/chainsaw,$(CHAINSAW_VERSION))
+
+.PHONY: chainsaw-test
+chainsaw-test: chainsaw ## Run Chainsaw e2e tests against the current kube context.
+	"$(CHAINSAW)" test --test-dir test/e2e --config .chainsaw.yaml
 
 .PHONY: crd-ref-docs
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.

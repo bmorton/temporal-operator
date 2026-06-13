@@ -31,7 +31,17 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   satellite validating webhooks, seeded version matrix (`internal/temporal`),
   cert-manager webhook certs, tests. Conversion webhook deferred (single
   version). _(commit `6207411`)_
-- [ ] **Milestone 4 — Version matrix + config template engine** _(next up)_
+- [x] **Milestone 4 — Version matrix + config template engine.** Generated
+  version matrix (`hack/version-matrix.yaml` → `versions_gen.go`), text/template
+  + sprig config renderer with golden tests across Postgres/Cassandra/ES/mTLS/
+  archival/internal-frontend, dynamic-config renderer (removed-key rejection
+  wired into webhook), persistence `SecretResolver`. _(commit `6cb462e`)_
+- [x] **Milestone 5 — Persistence reconciliation (Postgres).** SQL prober +
+  schema inspector (pgx), schema version compare, admin-tools schema Job builder,
+  persistence sub-reconciler (probe → PersistenceReachable; setup/update Jobs →
+  SchemaReady) with Job ownership/watches, envtest for all transitions, unit
+  tests, and Chainsaw e2e smoke files (CNPG). _(commit pending)_
+- [ ] **Milestone 6 — Service deployment and rollout** _(next up)_
 
 ---
 

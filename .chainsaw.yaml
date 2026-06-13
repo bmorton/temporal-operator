@@ -1,0 +1,11 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Configuration
+metadata:
+  name: temporal-operator
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+    cleanup: 2m
+    delete: 2m
+    error: 1m

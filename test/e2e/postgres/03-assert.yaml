@@ -1,0 +1,11 @@
+# Assertion: the operator reports the persistence datastore as reachable and the
+# schema as ready.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-schemaonly
+status:
+  persistence:
+    reachable: true
+  (conditions[?type == 'PersistenceReachable'].status | [0]): "True"
+  (conditions[?type == 'SchemaReady'].status | [0]): "True"

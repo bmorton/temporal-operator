@@ -1,0 +1,49 @@
+# Chainsaw test: provision Postgres via CNPG and verify the operator brings the
+# TemporalCluster schema to SchemaReady=True.
+#
+# Run with: chainsaw test test/e2e/postgres (CNPG operator and the temporal
+# operator must already be installed in the target cluster).
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: postgres-schema
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: 01-fixtures-cnpg.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+    - name: create-visibility-db
+      try:
+        - apply:
+            file: 02-secrets.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: create-visibility-db
+              status:
+                succeeded: 1
+    - name: schema-ready
+      try:
+        - apply:
+            file: 03-temporalcluster-schemaonly.yaml
+        - assert:
+            file: 03-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster
+        - events: {}

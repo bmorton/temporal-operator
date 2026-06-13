@@ -226,3 +226,14 @@ func DefaultUIVersion(serverVersion string) string {
 	}
 	return info.DefaultUIVersion
 }
+
+// ServerImage returns the default Temporal server image for a version.
+func ServerImage(version string) string {
+	return "temporalio/server:" + version
+}
+
+// AdminToolsImage returns the Temporal admin-tools image for a version, used to
+// run schema setup and migrations.
+func AdminToolsImage(version string) string {
+	return "temporalio/admin-tools:" + version
+}
