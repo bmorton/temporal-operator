@@ -108,6 +108,27 @@ acceptance and the Chainsaw e2e suites require a container runtime / cluster not
 present in this environment; the Chainsaw definitions parse and discover
 cleanly.
 
+### CI hardening (post-build-out)
+
+Triaged failing GitHub Actions and fixed the root causes:
+
+- **Docker build was broken.** `.dockerignore` re-included only `*.go`/`go.mod`/
+  `go.sum`, dropping the `//go:embed templates/config_template.yaml` asset, so
+  `go build` failed inside the image. Re-included `internal/temporal/templates/**`.
+  Also bumped the builder image `golang:1.24 -> golang:1.26` to match `go.mod`.
+  Verified by building from a simulated build context (embed present, binary builds).
+- **Docs lint was failing.** `markdownlint` flagged the generated crd-ref-docs
+  output (`docs/api/**`, `docs/content/reference/**`). Excluded the generated dirs
+  from `markdownlint`/`lychee`, disabled the version-dependent `MD060`, and fixed
+  two hand-authored issues (fenced-block language, table delimiter). Re-run: 0 errors.
+- **Removed redundant scaffolded workflows** `test-chart.yml` and `test-e2e.yml`
+  (unmodified kubebuilder defaults that ran on every push and could not pass — the
+  Ginkgo suite deploys an image that is never built/loaded and no cert-manager).
+  Their coverage is provided by the curated `e2e.yml` (kind + build/load + cert-manager
+  + CNPG + helm install + Chainsaw).
+- `govulncheck` job uses `go-version: 1.26.x`, which resolves to `1.26.4` on hosted
+  runners (released), clearing the three stdlib advisories fixed in 1.26.4.
+
 ---
 
 ## How to use this document

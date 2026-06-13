@@ -23,11 +23,13 @@ jobs:
           globs: |
             docs/**/*.md
             examples/**/*.md
+            !docs/content/reference/**
+            !docs/api/**
           config: ".markdownlint.yaml"
       - name: Check links
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md
+          args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md --exclude-path docs/content/reference --exclude-path docs/api
           fail: false
 
   # NOTE: production deployment (e.g. Cloudflare Pages) requires repository

@@ -6,7 +6,7 @@ non-adjacent jumps with `UpgradePathInvalid`.
 
 The operator runs an ordered state machine, visible in `status.upgrade.phase`:
 
-```
+```text
 PreflightChecks -> SchemaMigrating -> RollingFrontend -> RollingHistory ->
 RollingMatching -> RollingInternalFrontend? -> RollingWorker -> PostUpgrade -> Complete
 ```

@@ -9,3 +9,8 @@
 # Re-include Go module files
 !go.mod
 !go.sum
+
+# Re-include embedded assets referenced by //go:embed directives.
+# These are not *.go files, so the rule above would otherwise drop them and
+# break the build (e.g. "pattern ...: no matching files found").
+!internal/temporal/templates/**

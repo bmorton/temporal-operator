@@ -5,7 +5,7 @@ Each example assumes the operator is installed and the referenced backing
 services/secrets exist.
 
 | Directory | Scenario |
-|---|---|
+| --- | --- |
 | [`cluster-postgres-minimal`](./cluster-postgres-minimal) | Smallest viable Postgres-backed cluster. |
 | [`cluster-postgres-full`](./cluster-postgres-full) | Production-leaning sizing, UI, ingress, metrics. |
 | [`cluster-cassandra`](./cluster-cassandra) | Cassandra default + visibility store. |
