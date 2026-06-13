@@ -72,7 +72,12 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   client ops (List/Add/Remove), controller (register + poll-visible +
   finalizer-remove), API fields, envtest, search-attribute Chainsaw e2e.
   _(commit `915e9f3`)_
-- [ ] **Milestone 13 — Helm chart, OLM bundle, kustomize distribution** _(next up)_
+- [x] **Milestone 13 — Helm chart, OLM bundle, kustomize distribution.** Helm
+  chart (kubebuilder helm/v2-alpha) with metadata/NOTES/README/Artifact Hub,
+  `helm lint` clean; `dist/install.yaml` via build-installer; OLM bundle scaffold
+  (CSV, annotations, scorecard, bundle.Dockerfile); recovered dist/ tracking.
+  _(commit `2018072`)_
+- [ ] **Milestone 14 — e2e in CI** _(next up)_
 
 ---
 

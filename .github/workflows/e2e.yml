@@ -1,0 +1,107 @@
+name: E2E
+
+on:
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  # Determine the test matrix: a single fast combo on PRs, the full matrix on
+  # the nightly schedule.
+  matrix:
+    name: Compute matrix
+    runs-on: ubuntu-latest
+    outputs:
+      combos: ${{ steps.set.outputs.combos }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo 'combos=[{"temporal":"1.31.2","persistence":"postgres","suite":"postgres/lifecycle"},{"temporal":"1.31.2","persistence":"mtls","suite":"mtls"},{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'combos=[{"temporal":"1.31.2","persistence":"postgres","suite":"postgres/lifecycle"}]' >> "$GITHUB_OUTPUT"
+          fi
+
+  e2e:
+    name: e2e (${{ matrix.combo.suite }})
+    needs: matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        combo: ${{ fromJSON(needs.matrix.outputs.combos) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install tooling
+        run: make install-tools
+
+      - name: Create kind cluster
+        run: make kind-up
+
+      - name: Build and load operator image
+        run: |
+          make docker-build IMG=temporal-operator:e2e
+          make kind-load IMG=temporal-operator:e2e
+
+      - name: Install cert-manager and CloudNativePG
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+          kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml
+          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+          kubectl -n cnpg-system rollout status deploy/cnpg-controller-manager --timeout=180s
+
+      - name: Install the operator via Helm
+        run: |
+          helm install temporal-operator dist/chart \
+            --namespace temporal-system --create-namespace \
+            --set manager.image.repository=temporal-operator \
+            --set manager.image.tag=e2e \
+            --set manager.image.pullPolicy=Never
+          kubectl -n temporal-system rollout status deploy/temporal-operator-controller-manager --timeout=180s
+
+      - name: Run Chainsaw suite
+        run: ./bin/chainsaw test --test-dir test/e2e/${{ matrix.combo.suite }} --config .chainsaw.yaml
+
+      - name: Collect diagnostics
+        if: failure()
+        run: |
+          mkdir -p artifacts
+          kubectl get all -A > artifacts/all.txt || true
+          kubectl get temporalcluster -A -o yaml > artifacts/temporalclusters.yaml || true
+          kubectl -n temporal-system logs deploy/temporal-operator-controller-manager --tail=2000 > artifacts/operator.log || true
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnostics-${{ strategy.job-index }}
+          path: artifacts/
+
+      - name: Tear down kind cluster
+        if: always()
+        run: make kind-down
+
+  # Single required status check that aggregates the matrix result.
+  e2e-result:
+    name: E2E result
+    if: always()
+    needs: e2e
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check matrix result
+        run: |
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "e2e matrix failed"
+            exit 1
+          fi
+          echo "e2e matrix passed"
