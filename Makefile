@@ -154,6 +154,29 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
 	"$(KUSTOMIZE)" build config/default > dist/install.yaml
 
+.PHONY: helm-chart
+helm-chart: ## (Re)generate the Helm chart under dist/chart from kustomize output.
+	kubebuilder edit --plugins=helm/v2-alpha
+
+.PHONY: helm-lint
+helm-lint: ## Lint the Helm chart (requires helm).
+	helm lint dist/chart
+
+.PHONY: bundle
+bundle: manifests ## Generate the OLM bundle (requires operator-sdk).
+	operator-sdk generate kustomize manifests -q
+	"$(KUSTOMIZE)" build config/default | operator-sdk generate bundle \
+		--version $(VERSION) --channels stable,alpha --default-channel stable
+	operator-sdk bundle validate ./bundle --select-optional name=operatorhub
+
+.PHONY: bundle-build
+bundle-build: ## Build the OLM bundle image.
+	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+VERSION ?= 0.1.0
+BUNDLE_IMG ?= ghcr.io/bmorton/temporal-operator-bundle:v$(VERSION)
+
+
 ##@ Deployment
 
 ifndef ignore-not-found

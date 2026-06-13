@@ -1,0 +1,180 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  name: temporal-operator.v0.1.0
+  namespace: placeholder
+  annotations:
+    capabilities: Basic Install
+    categories: Integration & Delivery
+    containerImage: ghcr.io/bmorton/temporal-operator:0.1.0
+    description: A Kubernetes operator for managing Temporal clusters, namespaces, search attributes, and client credentials.
+    repository: https://github.com/bmorton/temporal-operator
+    support: Brian Morton
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "temporal.bmor10.com/v1alpha1",
+          "kind": "TemporalCluster",
+          "metadata": {"name": "temporalcluster-sample"},
+          "spec": {
+            "version": "1.31.2",
+            "numHistoryShards": 512,
+            "persistence": {
+              "defaultStore": {"sql": {"pluginName": "postgres12", "host": "postgres.default.svc", "port": 5432, "database": "temporal", "user": "temporal", "passwordSecretRef": {"name": "temporal-default-store", "key": "password"}}},
+              "visibilityStore": {"sql": {"pluginName": "postgres12", "host": "postgres.default.svc", "port": 5432, "database": "temporal_visibility", "user": "temporal", "passwordSecretRef": {"name": "temporal-visibility-store", "key": "password"}}}
+            }
+          }
+        }
+      ]
+spec:
+  displayName: Temporal Operator
+  description: |
+    The Temporal Operator manages the full lifecycle of [Temporal](https://temporal.io)
+    clusters on Kubernetes: persistence and schema management, mTLS via
+    cert-manager, the temporal-ui, monitoring, controlled version upgrades, and
+    declarative management of namespaces, custom search attributes, and client
+    credentials.
+
+    ## Custom Resources
+
+    - **TemporalCluster** — a complete Temporal server deployment.
+    - **TemporalNamespace** — a namespace within a managed cluster.
+    - **TemporalSearchAttribute** — a custom search attribute registration.
+    - **TemporalClusterClient** — generated mTLS client credentials.
+  maturity: alpha
+  version: 0.1.0
+  minKubeVersion: 1.30.0
+  keywords:
+    - temporal
+    - workflow
+    - orchestration
+    - operator
+  maintainers:
+    - name: Brian Morton
+      email: bmorton@users.noreply.github.com
+  provider:
+    name: Brian Morton
+    url: https://github.com/bmorton
+  links:
+    - name: Source
+      url: https://github.com/bmorton/temporal-operator
+    - name: Documentation
+      url: https://github.com/bmorton/temporal-operator
+  icon:
+    - base64data: ""
+      mediatype: image/png
+  installModes:
+    - type: OwnNamespace
+      supported: true
+    - type: SingleNamespace
+      supported: true
+    - type: MultiNamespace
+      supported: false
+    - type: AllNamespaces
+      supported: true
+  customresourcedefinitions:
+    owned:
+      - name: temporalclusters.temporal.bmor10.com
+        version: v1alpha1
+        kind: TemporalCluster
+        displayName: Temporal Cluster
+        description: A complete Temporal server deployment.
+      - name: temporalnamespaces.temporal.bmor10.com
+        version: v1alpha1
+        kind: TemporalNamespace
+        displayName: Temporal Namespace
+        description: A namespace within a managed Temporal cluster.
+      - name: temporalsearchattributes.temporal.bmor10.com
+        version: v1alpha1
+        kind: TemporalSearchAttribute
+        displayName: Temporal Search Attribute
+        description: A custom search attribute registered with a cluster.
+      - name: temporalclusterclients.temporal.bmor10.com
+        version: v1alpha1
+        kind: TemporalClusterClient
+        displayName: Temporal Cluster Client
+        description: Generated mTLS client credentials for a cluster.
+  install:
+    strategy: deployment
+    spec:
+      permissions:
+        - serviceAccountName: temporal-operator-controller-manager
+          rules:
+            - apiGroups: ["coordination.k8s.io"]
+              resources: ["leases"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: [""]
+              resources: ["events"]
+              verbs: ["create", "patch"]
+      clusterPermissions:
+        - serviceAccountName: temporal-operator-controller-manager
+          rules:
+            - apiGroups: ["temporal.bmor10.com"]
+              resources:
+                - temporalclusters
+                - temporalnamespaces
+                - temporalsearchattributes
+                - temporalclusterclients
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: ["temporal.bmor10.com"]
+              resources:
+                - temporalclusters/status
+                - temporalnamespaces/status
+                - temporalsearchattributes/status
+                - temporalclusterclients/status
+              verbs: ["get", "update", "patch"]
+            - apiGroups: ["apps"]
+              resources: ["deployments"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: ["batch"]
+              resources: ["jobs"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: [""]
+              resources: ["services", "configmaps", "secrets"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: ["policy"]
+              resources: ["poddisruptionbudgets"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: ["networking.k8s.io"]
+              resources: ["ingresses"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: ["cert-manager.io"]
+              resources: ["certificates", "issuers"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: ["monitoring.coreos.com"]
+              resources: ["servicemonitors"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      deployments:
+        - name: temporal-operator-controller-manager
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                control-plane: controller-manager
+            template:
+              metadata:
+                labels:
+                  control-plane: controller-manager
+              spec:
+                serviceAccountName: temporal-operator-controller-manager
+                securityContext:
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: RuntimeDefault
+                containers:
+                  - name: manager
+                    image: ghcr.io/bmorton/temporal-operator:0.1.0
+                    command: ["/manager"]
+                    args: ["--leader-elect"]
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop: ["ALL"]
+                    resources:
+                      requests:
+                        cpu: 10m
+                        memory: 64Mi
+                      limits:
+                        cpu: 500m
+                        memory: 128Mi

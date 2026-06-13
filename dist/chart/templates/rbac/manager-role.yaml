@@ -1,0 +1,134 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    name: temporal-operator-manager-role
+rules:
+    - apiGroups:
+        - ""
+      resources:
+        - configmaps
+        - secrets
+        - services
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - ""
+      resources:
+        - events
+      verbs:
+        - create
+        - patch
+    - apiGroups:
+        - apps
+      resources:
+        - deployments
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - batch
+      resources:
+        - jobs
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - cert-manager.io
+      resources:
+        - certificates
+        - issuers
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - monitoring.coreos.com
+      resources:
+        - servicemonitors
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - networking.k8s.io
+      resources:
+        - ingresses
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - policy
+      resources:
+        - poddisruptionbudgets
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - temporal.bmor10.com
+      resources:
+        - temporalclusterclients
+        - temporalclusters
+        - temporalnamespaces
+        - temporalsearchattributes
+      verbs:
+        - create
+        - delete
+        - get
+        - list
+        - patch
+        - update
+        - watch
+    - apiGroups:
+        - temporal.bmor10.com
+      resources:
+        - temporalclusterclients/finalizers
+        - temporalclusters/finalizers
+        - temporalnamespaces/finalizers
+        - temporalsearchattributes/finalizers
+      verbs:
+        - update
+    - apiGroups:
+        - temporal.bmor10.com
+      resources:
+        - temporalclusterclients/status
+        - temporalclusters/status
+        - temporalnamespaces/status
+        - temporalsearchattributes/status
+      verbs:
+        - get
+        - patch
+        - update

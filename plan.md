@@ -68,7 +68,11 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   NamespaceClient (injectable factory), namespace controller (register/update/
   drift/finalizer-delete gated on cluster Ready), API + status fields, envtest
   with fake client, namespace Chainsaw e2e. _(commit `beac37f`)_
-- [ ] **Milestone 12 — `TemporalSearchAttribute` reconciler** _(next up)_
+- [x] **Milestone 12 — `TemporalSearchAttribute` reconciler.** Search-attribute
+  client ops (List/Add/Remove), controller (register + poll-visible +
+  finalizer-remove), API fields, envtest, search-attribute Chainsaw e2e.
+  _(commit `915e9f3`)_
+- [ ] **Milestone 13 — Helm chart, OLM bundle, kustomize distribution** _(next up)_
 
 ---
 

@@ -1,0 +1,25 @@
+version: 0.1.0
+name: temporal-operator
+displayName: Temporal Operator
+createdAt: "2026-06-13T00:00:00Z"
+description: A Kubernetes operator for managing Temporal clusters, namespaces, search attributes, and client credentials.
+logoURL: https://avatars.githubusercontent.com/u/56493103?s=200&v=4
+digest: ""
+license: Apache-2.0
+homeURL: https://github.com/bmorton/temporal-operator
+keywords:
+  - temporal
+  - workflow
+  - operator
+  - orchestration
+links:
+  - name: source
+    url: https://github.com/bmorton/temporal-operator
+maintainers:
+  - name: Brian Morton
+    email: bmorton@users.noreply.github.com
+provider:
+  name: Brian Morton
+containsSecurityUpdates: false
+prerelease: true
+operator: true

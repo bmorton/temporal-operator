@@ -1,0 +1,20 @@
+apiVersion: v2
+name: temporal-operator
+description: A Kubernetes operator for managing Temporal clusters, namespaces, search attributes, and client credentials.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+icon: https://avatars.githubusercontent.com/u/56493103?s=200&v=4
+home: https://github.com/bmorton/temporal-operator
+sources:
+  - https://github.com/bmorton/temporal-operator
+keywords:
+  - temporal
+  - workflow
+  - operator
+  - orchestration
+maintainers:
+  - name: Brian Morton
+    url: https://github.com/bmorton
+annotations:
+  category: Integration & Delivery

@@ -1,0 +1,24 @@
+{{ .Chart.Name }} {{ .Chart.AppVersion }} has been installed.
+
+The operator is running in namespace "{{ .Release.Namespace }}".
+
+Next steps:
+
+  1. Verify the controller is ready:
+
+       kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ .Release.Name }}-controller-manager
+
+  2. Create a TemporalCluster (see examples in the project repository):
+
+       kubectl apply -f https://raw.githubusercontent.com/bmorton/temporal-operator/main/config/samples/temporal_v1alpha1_temporalcluster.yaml
+
+  3. Watch it become ready:
+
+       kubectl get temporalcluster -w
+
+{{- if .Values.webhook.enable }}
+
+Webhooks are enabled. cert-manager must be installed in the cluster.
+{{- end }}
+
+Documentation: https://github.com/bmorton/temporal-operator

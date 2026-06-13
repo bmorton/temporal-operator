@@ -1,0 +1,18 @@
+{{- if .Values.certManager.enable }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+    labels:
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/name: temporal-operator
+    name: temporal-operator-serving-cert
+    namespace: {{ .Release.Namespace }}
+spec:
+    dnsNames:
+        - temporal-operator-webhook-service.{{ .Release.Namespace }}.svc
+        - temporal-operator-webhook-service.{{ .Release.Namespace }}.svc.cluster.local
+    issuerRef:
+        kind: Issuer
+        name: {{ include "chart.name" . }}-selfsigned-issuer
+    secretName: webhook-server-cert
+{{- end }}
