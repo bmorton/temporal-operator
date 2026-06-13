@@ -1,0 +1,131 @@
+/*
+Copyright 2026 Brian Morton.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package resources
+
+import (
+	"slices"
+	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+)
+
+func builderCluster() *temporalv1alpha1.TemporalCluster {
+	return &temporalv1alpha1.TemporalCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "tc", Namespace: "ns"},
+		Spec:       temporalv1alpha1.TemporalClusterSpec{Version: "1.31.2"},
+	}
+}
+
+func TestEnabledServices(t *testing.T) {
+	c := builderCluster()
+	svcs := EnabledServices(c)
+	if len(svcs) != 4 {
+		t.Fatalf("expected 4 core services, got %d", len(svcs))
+	}
+
+	c.Spec.Services.InternalFrontend = &temporalv1alpha1.InternalFrontendSpec{Enabled: true}
+	if len(EnabledServices(c)) != 5 {
+		t.Errorf("expected internal-frontend to be included when enabled")
+	}
+}
+
+func TestSelectorLabelsStableAcrossVersion(t *testing.T) {
+	c := builderCluster()
+	sel := SelectorLabels(c, "frontend")
+	if _, ok := sel[LabelVersion]; ok {
+		t.Errorf("selector labels must not include version")
+	}
+	full := StandardLabels(c, "frontend")
+	if full[LabelVersion] != "1.31.2" {
+		t.Errorf("standard labels must include version")
+	}
+	if full[LabelManagedBy] != managedByValue {
+		t.Errorf("standard labels must include managed-by")
+	}
+}
+
+func TestBuildDeployment(t *testing.T) {
+	c := builderCluster()
+	svc := EnabledServices(c)[0] // frontend
+	dep := BuildDeployment(c, svc, "abc123")
+
+	if dep.Name != "tc-frontend" {
+		t.Errorf("unexpected name %q", dep.Name)
+	}
+	ctr := dep.Spec.Template.Spec.Containers[0]
+	if ctr.Image != "temporalio/server:1.31.2" {
+		t.Errorf("unexpected image %q", ctr.Image)
+	}
+	if !slices.Contains(ctr.Command, "--service") || !slices.Contains(ctr.Command, "frontend") {
+		t.Errorf("expected --service frontend, got %v", ctr.Command)
+	}
+	if dep.Spec.Template.Annotations[ConfigHashAnnotation] != "abc123" {
+		t.Errorf("expected config-hash annotation")
+	}
+	if ctr.StartupProbe == nil || ctr.StartupProbe.GRPC == nil {
+		t.Errorf("expected gRPC startup probe")
+	}
+	if ctr.StartupProbe.FailureThreshold != 30 {
+		t.Errorf("expected startup failureThreshold 30")
+	}
+	// Default topology spread should be applied.
+	if len(dep.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
+		t.Errorf("expected default topology spread constraint")
+	}
+}
+
+func TestBuildServicesAndPDB(t *testing.T) {
+	c := builderCluster()
+	frontend := EnabledServices(c)[0]
+
+	headless := BuildHeadlessService(c, frontend)
+	if headless.Spec.ClusterIP != "None" {
+		t.Errorf("headless service must have ClusterIP None")
+	}
+
+	fe := BuildFrontendService(c, frontend)
+	if fe.Name != "tc-frontend" || len(fe.Spec.Ports) != 2 {
+		t.Errorf("unexpected frontend service: %s ports=%d", fe.Name, len(fe.Spec.Ports))
+	}
+
+	pdb := BuildPodDisruptionBudget(c, frontend)
+	if pdb.Spec.MaxUnavailable == nil || pdb.Spec.MaxUnavailable.IntValue() != 1 {
+		t.Errorf("expected maxUnavailable 1")
+	}
+}
+
+func TestConfigBuildersAndHash(t *testing.T) {
+	c := builderCluster()
+	secret := BuildConfigSecret(c, "rendered-config")
+	if string(secret.Data[ConfigFileName]) != "rendered-config" {
+		t.Errorf("config secret content mismatch")
+	}
+	cm := BuildDynamicConfigMap(c, "")
+	if cm.Data[DynamicConfigFileName] != "{}\n" {
+		t.Errorf("empty dynamic config should default to {}")
+	}
+	if ConfigHash("a") == ConfigHash("b") {
+		t.Errorf("different content should hash differently")
+	}
+	h1 := ConfigHash("stable")
+	h2 := ConfigHash("stable")
+	if h1 != h2 {
+		t.Errorf("hash must be stable")
+	}
+}

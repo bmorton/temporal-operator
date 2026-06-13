@@ -193,6 +193,19 @@ func defaultServices() map[string]ServicePort {
 	}
 }
 
+// DefaultServicePorts returns the default ports for each Temporal service keyed
+// by the service's component name (frontend, history, matching, worker,
+// internal-frontend).
+func DefaultServicePorts() map[string]ServicePort {
+	return map[string]ServicePort{
+		"frontend":          {GRPCPort: defaultFrontendGRPCPort, MembershipPort: defaultFrontendMembershipPort, HTTPPort: defaultFrontendHTTPPort},
+		"internal-frontend": {GRPCPort: defaultInternalFrontendGRPCPort, MembershipPort: defaultInternalFrontendMembershipPort, HTTPPort: defaultInternalFrontendHTTPPort},
+		"matching":          {GRPCPort: defaultMatchingGRPCPort, MembershipPort: defaultMatchingMembershipPort},
+		"history":           {GRPCPort: defaultHistoryGRPCPort, MembershipPort: defaultHistoryMembershipPort},
+		"worker":            {GRPCPort: defaultWorkerGRPCPort, MembershipPort: defaultWorkerMembershipPort},
+	}
+}
+
 func sqlConnLifetime(spec *temporalv1alpha1.SQLDatastoreSpec) string {
 	if spec.MaxConnLifetime != nil {
 		return spec.MaxConnLifetime.Duration.String()

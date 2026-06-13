@@ -19,14 +19,17 @@ package controller
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	"k8s.io/client-go/tools/record"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/persistence"
@@ -35,7 +38,8 @@ import (
 // TemporalClusterReconciler reconciles a TemporalCluster object.
 type TemporalClusterReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 
 	// Prober and SchemaInspector are injectable for testing; when nil the
 	// default Postgres SQL implementation is used.
@@ -47,7 +51,11 @@ type TemporalClusterReconciler struct {
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalclusters/finalizers,verbs=update
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // Reconcile drives the TemporalCluster toward its desired state. At this
 // milestone it reconciles persistence (reachability + schema) and reports the
@@ -68,13 +76,11 @@ func (r *TemporalClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             metav1.ConditionFalse,
-		Reason:             temporalv1alpha1.ReasonNotImplemented,
-		Message:            "service deployment not yet implemented",
-		ObservedGeneration: cluster.Generation,
-	})
+	if err := r.reconcileServices(ctx, &cluster); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	r.computeReadyAndPhase(&cluster)
 	cluster.Status.ObservedGeneration = cluster.Generation
 
 	if err := r.Status().Update(ctx, &cluster); err != nil {
@@ -92,6 +98,11 @@ func (r *TemporalClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&temporalv1alpha1.TemporalCluster{}).
 		Owns(&batchv1.Job{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
+		Owns(&corev1.Secret{}).
+		Owns(&corev1.ConfigMap{}).
+		Owns(&policyv1.PodDisruptionBudget{}).
 		Named("temporalcluster").
 		Complete(r)
 }

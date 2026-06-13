@@ -1,0 +1,23 @@
+# The cluster reports Ready=True and all four core service Deployments are
+# available.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-lifecycle
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"
+  phase: Ready
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-lifecycle-frontend
+status:
+  (readyReplicas > `0`): true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-lifecycle-history
+status:
+  (readyReplicas > `0`): true

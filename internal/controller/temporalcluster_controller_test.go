@@ -67,7 +67,7 @@ var _ = Describe("TemporalCluster Controller", func() {
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 
-		It("should set a Ready=False condition with reason NotImplemented", func() {
+		It("should set a Ready=False condition while persistence is unreachable", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &TemporalClusterReconciler{
 				Client: k8sClient,
@@ -87,7 +87,7 @@ var _ = Describe("TemporalCluster Controller", func() {
 				cond := meta.FindStatusCondition(resource.Status.Conditions, temporalv1alpha1.ConditionReady)
 				g.Expect(cond).NotTo(BeNil())
 				g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-				g.Expect(cond.Reason).To(Equal(temporalv1alpha1.ReasonNotImplemented))
+				g.Expect(resource.Status.Phase).To(Equal("Pending"))
 				g.Expect(resource.Status.ObservedGeneration).To(Equal(resource.Generation))
 			}, 5*time.Second, 200*time.Millisecond).Should(Succeed())
 		})

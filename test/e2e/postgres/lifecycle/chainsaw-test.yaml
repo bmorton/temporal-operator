@@ -1,0 +1,57 @@
+# Chainsaw lifecycle test: provision Postgres via CNPG, deploy a full
+# TemporalCluster, wait for Ready=True, and confirm the frontend is live.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: postgres-lifecycle
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: ../01-fixtures-cnpg.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+        - apply:
+            file: ../02-secrets.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: create-visibility-db
+              status:
+                succeeded: 1
+    - name: deploy-and-wait-ready
+      try:
+        - apply:
+            file: 01-temporalcluster.yaml
+        - assert:
+            file: 01-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster
+        - describe:
+            apiVersion: apps/v1
+            kind: Deployment
+        - podLogs:
+            selector: app.kubernetes.io/instance=temporal-lifecycle
+    - name: verify-frontend-health
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              kubectl run -n $NAMESPACE tctl-health --rm -i --restart=Never \
+                --image=temporalio/admin-tools:1.31.2 -- \
+                temporal operator cluster health \
+                --address temporal-lifecycle-frontend:7233
