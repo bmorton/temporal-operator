@@ -85,7 +85,28 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   images, source archive, Syft SBOMs, keyless Cosign signing), release workflow
   with SLSA L3 provenance + Helm OCI push, release-please, and cosign/SLSA
   verification docs. _(commit `ecfff4a`)_
-- [ ] **Milestone 16 — Documentation site and examples** _(next up)_
+- [x] **Milestone 16 — Documentation site and examples.** Eight example
+  scenarios under `examples/`, documentation pages (getting-started,
+  architecture, installation, operations, upgrades, troubleshooting, CRD
+  reference, contributing), docs-lint workflow, plus a govulncheck CI gate and
+  dependency vulnerability remediation. _(commit `27b1018`)_
+  Note: full Hugo/Docsy site + Cloudflare Pages deploy deferred (needs site
+  scaffolding/secrets); docs ship as Markdown.
+- [x] **Milestone 17 — Stretch goals.** Intentionally **not implemented** —
+  explicitly out of scope for v0.x per the plan (Nexus/WorkerDeployment/Schedule
+  CRDs, kubectl plugin, multi-cluster, v1beta1, hibernation, etc.). Code leaves
+  seams for them (e.g. `api/v1alpha1/conversion.go` storage-version groundwork).
+
+---
+
+### Build-out complete
+
+Milestones 0–16 are implemented, tested, and committed; Milestone 17 is a
+deferred stretch backlog. Local gates (`make build`, `make test` on envtest
+k8s 1.34, `make lint`, `helm lint`, `govulncheck`) are green. Docker/kind-based
+acceptance and the Chainsaw e2e suites require a container runtime / cluster not
+present in this environment; the Chainsaw definitions parse and discover
+cleanly.
 
 ---
 
