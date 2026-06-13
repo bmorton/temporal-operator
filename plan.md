@@ -55,7 +55,11 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   Ingress (+ auto UI client cert under mTLS), ServiceMonitor (unstructured,
   CRD-gated via RESTMapper), metrics port on headless Services, starter Grafana
   dashboard, archival rendered in config. Tests + UI Chainsaw e2e. _(commit `267a316`)_
-- [ ] **Milestone 9 — Cassandra and Elasticsearch backends** _(next up)_
+- [x] **Milestone 9 — Cassandra and Elasticsearch backends.** Datastore `Backend`
+  abstraction + injectable factory, gocql Cassandra backend, HTTP Elasticsearch
+  backend (inline index-template), `temporal-cassandra-tool` schema Jobs, tests,
+  K8ssandra/ECK Chainsaw e2e. _(commit `faf3a5f`)_
+- [ ] **Milestone 10 — Upgrades across Temporal versions** _(next up)_
 
 ---
 
