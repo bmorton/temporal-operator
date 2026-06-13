@@ -14,40 +14,46 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package temporal contains Temporal-version-aware helpers, including the
-// supported-version compatibility matrix used by webhooks and controllers.
+// Package temporal contains Temporal-version-aware helpers: the supported
+// version compatibility matrix and the server config-template renderer.
 //
-// This is an intentionally minimal seed of the matrix; Milestone 4 expands it
-// with config-template-affecting details (e.g. per-version visibility backend
-// support and default UI versions).
+// The matrix data lives in versions_gen.go, which is generated from
+// hack/version-matrix.yaml by `make gen-version-matrix`. Edit the YAML, not the
+// generated Go.
 package temporal
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
 
-// VersionInfo describes a single supported Temporal server version.
+// VersionInfo describes a single supported Temporal minor version.
 type VersionInfo struct {
-	// Version is the exact semantic version, e.g. "1.31.2".
+	// Version is the minor version, e.g. "1.31".
 	Version string
-	// DefaultUIVersion is the known-good temporal-ui version to pair with this
-	// server version.
+	// PatchVersions are the exact supported patch releases, e.g. "1.31.2".
+	PatchVersions []string
+	// MinSchemaSQL is the minimum SQL schema version required.
+	MinSchemaSQL string
+	// MinSchemaCassandra is the minimum Cassandra schema version required.
+	MinSchemaCassandra string
+	// MinSchemaES is the minimum Elasticsearch schema/index template version.
+	MinSchemaES string
+	// AllowedFromVersions are the minor versions a cluster may upgrade from.
+	AllowedFromVersions []string
+	// UISeries is the compatible temporal-ui minor series, e.g. "2.34".
+	UISeries string
+	// DefaultUIVersion is the known-good exact temporal-ui version to pair with.
 	DefaultUIVersion string
 	// CassandraVisibilitySupported reports whether Cassandra may be used as a
-	// visibility store on this server version.
+	// visibility store on this version.
 	CassandraVisibilitySupported bool
-}
-
-// supportedVersions is the compatibility matrix keyed by exact version.
-var supportedVersions = map[string]VersionInfo{
-	"1.27.0": {Version: "1.27.0", DefaultUIVersion: "2.31.2", CassandraVisibilitySupported: false},
-	"1.28.0": {Version: "1.28.0", DefaultUIVersion: "2.32.0", CassandraVisibilitySupported: false},
-	"1.29.0": {Version: "1.29.0", DefaultUIVersion: "2.33.1", CassandraVisibilitySupported: false},
-	"1.30.0": {Version: "1.30.0", DefaultUIVersion: "2.34.0", CassandraVisibilitySupported: false},
-	"1.31.0": {Version: "1.31.0", DefaultUIVersion: "2.34.0", CassandraVisibilitySupported: false},
-	"1.31.2": {Version: "1.31.2", DefaultUIVersion: "2.34.0", CassandraVisibilitySupported: false},
+	// RemovedDynamicConfig lists dynamic config keys removed in this version.
+	RemovedDynamicConfig []string
+	// AddedDynamicConfig lists dynamic config keys added in this version.
+	AddedDynamicConfig []string
 }
 
 // semver is a parsed major.minor.patch version.
@@ -71,30 +77,116 @@ func parseSemver(v string) (semver, error) {
 	return out, nil
 }
 
-// IsSupported reports whether the exact version is in the support matrix.
-func IsSupported(version string) bool {
-	_, ok := supportedVersions[version]
-	return ok
-}
-
-// Get returns the VersionInfo for an exact version.
-func Get(version string) (VersionInfo, bool) {
-	info, ok := supportedVersions[version]
-	return info, ok
-}
-
-// SupportedVersions returns the (unsorted) list of supported exact versions.
-func SupportedVersions() []string {
-	out := make([]string, 0, len(supportedVersions))
-	for v := range supportedVersions {
-		out = append(out, v)
+// minorOf returns the "major.minor" prefix of a version string. The input may
+// already be a minor ("1.31") or a full patch version ("1.31.2").
+func minorOf(version string) string {
+	parts := strings.Split(version, ".")
+	if len(parts) >= 2 {
+		return parts[0] + "." + parts[1]
 	}
+	return version
+}
+
+// LookupVersion returns the VersionInfo for a version, which may be a minor
+// ("1.31") or an exact patch ("1.31.2").
+func LookupVersion(version string) (*VersionInfo, error) {
+	minor := minorOf(version)
+	for i := range supportedVersions {
+		if supportedVersions[i].Version == minor {
+			return &supportedVersions[i], nil
+		}
+	}
+	return nil, fmt.Errorf("version %q is not supported", version)
+}
+
+// IsSupported reports whether the exact patch version is in the support matrix.
+func IsSupported(version string) bool {
+	minor := minorOf(version)
+	for i := range supportedVersions {
+		if supportedVersions[i].Version != minor {
+			continue
+		}
+		for _, p := range supportedVersions[i].PatchVersions {
+			if p == version {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Get returns the VersionInfo covering an exact patch version.
+func Get(version string) (VersionInfo, bool) {
+	if !IsSupported(version) {
+		return VersionInfo{}, false
+	}
+	info, err := LookupVersion(version)
+	if err != nil {
+		return VersionInfo{}, false
+	}
+	return *info, true
+}
+
+// SupportedVersions returns the sorted list of supported exact patch versions.
+func SupportedVersions() []string {
+	var out []string
+	for i := range supportedVersions {
+		out = append(out, supportedVersions[i].PatchVersions...)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, errA := parseSemver(out[i])
+		b, errB := parseSemver(out[j])
+		if errA != nil || errB != nil {
+			return out[i] < out[j]
+		}
+		if a.major != b.major {
+			return a.major < b.major
+		}
+		if a.minor != b.minor {
+			return a.minor < b.minor
+		}
+		return a.patch < b.patch
+	})
 	return out
 }
 
-// CanUpgrade reports whether a cluster may move from version `from` to version
-// `to`. Upgrades may only stay within the same minor (patch bump) or advance to
-// the immediately following minor; downgrades and minor skips are disallowed.
+// ResolveLatestPatch returns the highest supported patch version for a minor.
+func ResolveLatestPatch(minor string) (string, error) {
+	info, err := LookupVersion(minor)
+	if err != nil {
+		return "", err
+	}
+	if len(info.PatchVersions) == 0 {
+		return "", fmt.Errorf("no patch versions registered for %q", minor)
+	}
+	latest := info.PatchVersions[0]
+	latestVer, _ := parseSemver(latest)
+	for _, p := range info.PatchVersions[1:] {
+		v, err := parseSemver(p)
+		if err != nil {
+			continue
+		}
+		if v.patch > latestVer.patch {
+			latest, latestVer = p, v
+		}
+	}
+	return latest, nil
+}
+
+// ValidateUpgradePath returns nil if a cluster may move from version `from` to
+// version `to` (both may be minor or exact).
+func ValidateUpgradePath(from, to string) error {
+	ok, err := CanUpgrade(from, to)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("upgrade from %s to %s is not allowed", from, to)
+	}
+	return nil
+}
+
+// CanUpgrade reports whether a cluster may move from version `from` to version `to`.
 func CanUpgrade(from, to string) (bool, error) {
 	if !IsSupported(to) {
 		return false, fmt.Errorf("version %q is not supported", to)
@@ -107,24 +199,30 @@ func CanUpgrade(from, to string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if t.major != f.major {
-		return false, nil
-	}
-	switch t.minor {
-	case f.minor:
+	if t.major == f.major && t.minor == f.minor {
+		// Same minor: only forward (or equal) patch moves are allowed.
 		return t.patch >= f.patch, nil
-	case f.minor + 1:
-		return true, nil
-	default:
-		return false, nil
 	}
+	// Cross-minor: the target minor must explicitly allow the source minor.
+	toInfo, err := LookupVersion(to)
+	if err != nil {
+		return false, err
+	}
+	fromMinor := minorOf(from)
+	for _, allowed := range toInfo.AllowedFromVersions {
+		if allowed == fromMinor {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
-// DefaultUIVersion returns the known-good UI version for a server version, or
-// an empty string when the server version is unknown.
+// DefaultUIVersion returns the known-good UI version for a server version, or an
+// empty string when the server version is unknown.
 func DefaultUIVersion(serverVersion string) string {
-	if info, ok := supportedVersions[serverVersion]; ok {
-		return info.DefaultUIVersion
+	info, err := LookupVersion(serverVersion)
+	if err != nil {
+		return ""
 	}
-	return ""
+	return info.DefaultUIVersion
 }

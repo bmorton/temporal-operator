@@ -1,0 +1,58 @@
+# Temporal version compatibility matrix.
+#
+# This is the single source of truth for supported Temporal server versions.
+# Regenerate internal/temporal/versions_gen.go after editing:
+#
+#     make gen-version-matrix
+#
+# Source: https://github.com/temporalio/temporal/releases
+versions:
+  - version: "1.27"
+    patchVersions: ["1.27.0"]
+    minSchemaSQL: "v1.12"
+    minSchemaCassandra: "v1.9"
+    minSchemaES: "v9"
+    allowedFromVersions: ["1.26"]
+    uiSeries: "2.31"
+    defaultUIVersion: "2.31.2"
+    cassandraVisibilitySupported: false
+
+  - version: "1.28"
+    patchVersions: ["1.28.0"]
+    minSchemaSQL: "v1.12"
+    minSchemaCassandra: "v1.9"
+    minSchemaES: "v9"
+    allowedFromVersions: ["1.27"]
+    uiSeries: "2.32"
+    defaultUIVersion: "2.32.0"
+    cassandraVisibilitySupported: false
+
+  - version: "1.29"
+    patchVersions: ["1.29.0"]
+    minSchemaSQL: "v1.12"
+    minSchemaCassandra: "v1.9"
+    minSchemaES: "v9"
+    allowedFromVersions: ["1.28"]
+    uiSeries: "2.33"
+    defaultUIVersion: "2.33.1"
+    cassandraVisibilitySupported: false
+
+  - version: "1.30"
+    patchVersions: ["1.30.0"]
+    minSchemaSQL: "v1.12"
+    minSchemaCassandra: "v1.9"
+    minSchemaES: "v9"
+    allowedFromVersions: ["1.29"]
+    uiSeries: "2.34"
+    defaultUIVersion: "2.34.0"
+    cassandraVisibilitySupported: false
+
+  - version: "1.31"
+    patchVersions: ["1.31.0", "1.31.2"]
+    minSchemaSQL: "v1.12"
+    minSchemaCassandra: "v1.9"
+    minSchemaES: "v9"
+    allowedFromVersions: ["1.30"]
+    uiSeries: "2.34"
+    defaultUIVersion: "2.34.0"
+    cassandraVisibilitySupported: false

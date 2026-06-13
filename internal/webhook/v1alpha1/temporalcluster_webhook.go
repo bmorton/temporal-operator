@@ -168,6 +168,12 @@ func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.
 			"issuerRef is required when mtls.provider is cert-manager"))
 	}
 
+	if cluster.Spec.DynamicConfig != nil {
+		if _, _, err := temporal.RenderDynamicConfig(cluster.Spec.DynamicConfig, cluster.Spec.Version); err != nil {
+			errs = append(errs, field.Invalid(specPath.Child("dynamicConfig"), nil, err.Error()))
+		}
+	}
+
 	return errs
 }
 

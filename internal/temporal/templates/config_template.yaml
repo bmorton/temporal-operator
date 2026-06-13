@@ -1,0 +1,188 @@
+{{- define "datastore" -}}
+{{- if eq .Kind "sql" }}
+sql:
+    pluginName: {{ .PluginName | quote }}
+    databaseName: {{ .DatabaseName | quote }}
+    connectAddr: {{ .ConnectAddr | quote }}
+    connectProtocol: "tcp"
+    user: {{ .User | quote }}
+{{- if .PasswordCommand }}
+    passwordCommand: {{ .PasswordCommand | quote }}
+{{- else }}
+    password: {{ .Password | quote }}
+{{- end }}
+    maxConns: {{ .MaxConns }}
+    maxIdleConns: {{ .MaxIdleConns }}
+    maxConnLifetime: {{ .MaxConnLifetime | quote }}
+{{- if .TLS }}
+    tls:
+        enabled: {{ .TLS.Enabled }}
+        caFile: {{ .TLS.CAFile | quote }}
+        certFile: {{ .TLS.CertFile | quote }}
+        keyFile: {{ .TLS.KeyFile | quote }}
+        enableHostVerification: {{ .TLS.EnableHostVerification }}
+        serverName: {{ .TLS.ServerName | quote }}
+{{- end }}
+{{- else if eq .Kind "cassandra" }}
+cassandra:
+    hosts: {{ .Hosts | quote }}
+    keyspace: {{ .Keyspace | quote }}
+    user: {{ .User | quote }}
+    password: {{ .Password | quote }}
+    port: {{ .Port }}
+{{- if .Datacenter }}
+    datacenter: {{ .Datacenter | quote }}
+{{- end }}
+    maxConns: {{ .MaxConns }}
+{{- if .TLS }}
+    tls:
+        enabled: {{ .TLS.Enabled }}
+        caFile: {{ .TLS.CAFile | quote }}
+        certFile: {{ .TLS.CertFile | quote }}
+        keyFile: {{ .TLS.KeyFile | quote }}
+        enableHostVerification: {{ .TLS.EnableHostVerification }}
+        serverName: {{ .TLS.ServerName | quote }}
+{{- end }}
+{{- else if eq .Kind "elasticsearch" }}
+elasticsearch:
+    version: {{ .ESVersion | quote }}
+    url:
+        scheme: {{ .URLScheme | quote }}
+        host: {{ .URLHost | quote }}
+    username: {{ .User | quote }}
+    password: {{ .Password | quote }}
+    indices:
+        visibility: {{ .VisibilityIndex | quote }}
+{{- end }}
+{{- end -}}
+log:
+    stdout: true
+    level: {{ .LogLevel }}
+
+persistence:
+    numHistoryShards: {{ .NumHistoryShards }}
+    defaultStore: {{ .DefaultStoreName }}
+    visibilityStore: {{ .VisibilityStoreName }}
+    datastores:
+        {{ .DefaultStoreName }}:
+{{ include "datastore" .DefaultStore | trim | indent 12 }}
+        {{ .VisibilityStoreName }}:
+{{ include "datastore" .VisibilityStore | trim | indent 12 }}
+
+global:
+    membership:
+        maxJoinDuration: 30s
+        broadcastAddress: {{ .BroadcastAddress | quote }}
+    pprof:
+        port: 0
+{{- if .MTLS.Enabled }}
+    tls:
+        refreshInterval: {{ .MTLS.RefreshInterval }}
+        internode:
+            server:
+                requireClientAuth: {{ .MTLS.RequireClientAuth }}
+                certFile: {{ .MTLS.InternodeServerCert }}
+                keyFile: {{ .MTLS.InternodeServerKey }}
+                clientCaFiles:
+                    - {{ .MTLS.InternodeClientCA }}
+            client:
+                serverName: {{ .MTLS.InternodeServerName | quote }}
+                rootCaFiles:
+                    - {{ .MTLS.InternodeClientCA }}
+        frontend:
+            server:
+                requireClientAuth: {{ .MTLS.RequireClientAuth }}
+                certFile: {{ .MTLS.FrontendServerCert }}
+                keyFile: {{ .MTLS.FrontendServerKey }}
+                clientCaFiles:
+                    - {{ .MTLS.InternodeClientCA }}
+            client:
+                serverName: {{ .MTLS.FrontendServerName | quote }}
+                rootCaFiles:
+                    - {{ .MTLS.InternodeClientCA }}
+{{- end }}
+{{- if .Metrics.Enabled }}
+    metrics:
+        prometheus:
+            timerType: histogram
+            listenAddress: {{ .Metrics.ListenAddress | quote }}
+{{- end }}
+{{- if .Authorization }}
+    authorization:
+        authorizer: {{ .Authorization.Authorizer | quote }}
+        claimMapper: {{ .Authorization.ClaimMapper | quote }}
+{{- end }}
+
+services:
+    frontend:
+        rpc:
+            grpcPort: {{ .Services.frontend.GRPCPort }}
+            membershipPort: {{ .Services.frontend.MembershipPort }}
+            bindOnIP: {{ .BindOnIP | quote }}
+            httpPort: {{ .Services.frontend.HTTPPort }}
+{{- if .UseInternalFrontend }}
+    internal-frontend:
+        rpc:
+            grpcPort: {{ .Services.internalFrontend.GRPCPort }}
+            membershipPort: {{ .Services.internalFrontend.MembershipPort }}
+            bindOnIP: {{ .BindOnIP | quote }}
+            httpPort: {{ .Services.internalFrontend.HTTPPort }}
+{{- end }}
+    matching:
+        rpc:
+            grpcPort: {{ .Services.matching.GRPCPort }}
+            membershipPort: {{ .Services.matching.MembershipPort }}
+            bindOnIP: {{ .BindOnIP | quote }}
+    history:
+        rpc:
+            grpcPort: {{ .Services.history.GRPCPort }}
+            membershipPort: {{ .Services.history.MembershipPort }}
+            bindOnIP: {{ .BindOnIP | quote }}
+    worker:
+        rpc:
+            grpcPort: {{ .Services.worker.GRPCPort }}
+            membershipPort: {{ .Services.worker.MembershipPort }}
+            bindOnIP: {{ .BindOnIP | quote }}
+
+clusterMetadata:
+    enableGlobalNamespace: {{ .EnableGlobalNamespace }}
+    failoverVersionIncrement: 10
+    masterClusterName: {{ .MasterClusterName | quote }}
+    currentClusterName: {{ .CurrentClusterName | quote }}
+    clusterInformation:
+        {{ .CurrentClusterName }}:
+            enabled: true
+            initialFailoverVersion: 1
+            rpcName: "frontend"
+            rpcAddress: {{ printf "127.0.0.1:%d" (int .Services.frontend.GRPCPort) | quote }}
+            httpAddress: {{ printf "127.0.0.1:%d" (int .Services.frontend.HTTPPort) | quote }}
+
+dcRedirectionPolicy:
+    policy: "noop"
+{{- if .Archival }}
+
+archival:
+    history:
+        state: {{ .Archival.HistoryState | quote }}
+        enableRead: true
+        provider:
+            filestore:
+                fileMode: "0666"
+                dirMode: "0766"
+    visibility:
+        state: {{ .Archival.VisibilityState | quote }}
+        enableRead: true
+        provider:
+            filestore:
+                fileMode: "0666"
+                dirMode: "0766"
+{{- end }}
+{{- if .PublicClient }}
+
+publicClient:
+    hostPort: {{ .PublicClient | quote }}
+{{- end }}
+
+dynamicConfigClient:
+    filepath: {{ .DynamicConfigPath | quote }}
+    pollInterval: "60s"
