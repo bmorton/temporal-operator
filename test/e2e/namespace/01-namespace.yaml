@@ -1,0 +1,11 @@
+# Registers a namespace against the cluster from the postgres lifecycle suite.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: orders
+spec:
+  clusterRef:
+    name: temporal-lifecycle
+  retentionPeriod: "168h"
+  description: "Orders processing namespace"
+  ownerEmail: "team@example.com"

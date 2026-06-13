@@ -54,6 +54,11 @@ spec:
           spec:
             description: spec defines the desired state of TemporalNamespace
             properties:
+              allowDeletion:
+                description: |-
+                  AllowDeletion permits the operator to delete the Temporal namespace when
+                  the CR is deleted. When false, the namespace is left in place.
+                type: boolean
               clusterRef:
                 description: ClusterRef references the TemporalCluster that owns this
                   namespace.
@@ -71,6 +76,15 @@ spec:
                 x-kubernetes-map-type: atomic
               description:
                 description: Description is a human-friendly description of the namespace.
+                type: string
+              driftDetection:
+                default: reconcile
+                description: |-
+                  DriftDetection controls whether the operator reconciles drift between the
+                  spec and the live namespace.
+                enum:
+                - reconcile
+                - ignore
                 type: string
               ownerEmail:
                 description: OwnerEmail is the owner contact for the namespace.
@@ -144,9 +158,21 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              lastUpdated:
+                description: LastUpdated is when the operator last reconciled the
+                  namespace.
+                format: date-time
+                type: string
+              namespaceID:
+                description: NamespaceID is the Temporal-assigned namespace UUID.
+                type: string
               observedGeneration:
                 format: int64
                 type: integer
+              registered:
+                description: Registered indicates whether the namespace exists in
+                  the Temporal cluster.
+                type: boolean
             type: object
         required:
         - spec

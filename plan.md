@@ -59,7 +59,12 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   abstraction + injectable factory, gocql Cassandra backend, HTTP Elasticsearch
   backend (inline index-template), `temporal-cassandra-tool` schema Jobs, tests,
   K8ssandra/ECK Chainsaw e2e. _(commit `faf3a5f`)_
-- [ ] **Milestone 10 — Upgrades across Temporal versions** _(next up)_
+- [x] **Milestone 10 — Upgrades across Temporal versions.** Upgrade sub-reconciler
+  with the `status.upgrade` phase machine (preflight → schema → ordered per-service
+  rolling restarts → post-upgrade), per-service version threading, Rollbackable
+  flag, events, envtest, upgrade Chainsaw e2e, nightly upgrade-matrix workflow.
+  _(commit `f81e7b1`)_
+- [ ] **Milestone 11 — `TemporalNamespace` reconciler** _(next up)_
 
 ---
 

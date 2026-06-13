@@ -1,0 +1,35 @@
+# Chainsaw test: register a Temporal namespace against a running cluster and
+# verify it appears via tctl. Requires the CNPG operator.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: namespace
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - apply:
+            file: ../postgres/02-secrets.yaml
+    - name: cluster
+      try:
+        - apply:
+            file: ../postgres/lifecycle/01-temporalcluster.yaml
+        - assert:
+            file: ../postgres/lifecycle/01-assert.yaml
+    - name: register-namespace
+      try:
+        - apply:
+            file: 01-namespace.yaml
+        - assert:
+            file: 01-assert.yaml
+        - script:
+            content: |
+              kubectl run -n $NAMESPACE tctl-list --rm -i --restart=Never \
+                --image=temporalio/admin-tools:1.31.2 -- \
+                temporal operator namespace describe \
+                --address temporal-lifecycle-frontend:7233 orders

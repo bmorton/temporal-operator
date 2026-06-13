@@ -38,12 +38,36 @@ type TemporalNamespaceSpec struct {
 	// OwnerEmail is the owner contact for the namespace.
 	// +optional
 	OwnerEmail string `json:"ownerEmail,omitempty"`
+
+	// AllowDeletion permits the operator to delete the Temporal namespace when
+	// the CR is deleted. When false, the namespace is left in place.
+	// +optional
+	AllowDeletion bool `json:"allowDeletion,omitempty"`
+
+	// DriftDetection controls whether the operator reconciles drift between the
+	// spec and the live namespace.
+	// +kubebuilder:validation:Enum=reconcile;ignore
+	// +kubebuilder:default=reconcile
+	// +optional
+	DriftDetection string `json:"driftDetection,omitempty"`
 }
 
 // TemporalNamespaceStatus defines the observed state of TemporalNamespace.
 type TemporalNamespaceStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// Registered indicates whether the namespace exists in the Temporal cluster.
+	// +optional
+	Registered bool `json:"registered,omitempty"`
+
+	// NamespaceID is the Temporal-assigned namespace UUID.
+	// +optional
+	NamespaceID string `json:"namespaceID,omitempty"`
+
+	// LastUpdated is when the operator last reconciled the namespace.
+	// +optional
+	LastUpdated *metav1.Time `json:"lastUpdated,omitempty"`
 
 	// +listType=map
 	// +listMapKey=type

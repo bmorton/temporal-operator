@@ -103,6 +103,7 @@ rules:
   resources:
   - temporalclusterclients
   - temporalclusters
+  - temporalnamespaces
   verbs:
   - create
   - delete
@@ -116,6 +117,7 @@ rules:
   resources:
   - temporalclusterclients/finalizers
   - temporalclusters/finalizers
+  - temporalnamespaces/finalizers
   verbs:
   - update
 - apiGroups:
@@ -123,6 +125,7 @@ rules:
   resources:
   - temporalclusterclients/status
   - temporalclusters/status
+  - temporalnamespaces/status
   verbs:
   - get
   - patch
