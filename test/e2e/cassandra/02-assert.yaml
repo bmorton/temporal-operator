@@ -1,0 +1,7 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-cass
+status:
+  (conditions[?type == 'SchemaReady'].status | [0]): "True"
+  (conditions[?type == 'Ready'].status | [0]): "True"

@@ -1,0 +1,29 @@
+# A TemporalCluster using Cassandra for the default store and Elasticsearch for
+# visibility is the typical production layout. This fixture uses Cassandra for
+# the default store and an ES visibility store (see the elasticsearch suite).
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-cass
+spec:
+  version: "1.31.2"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      cassandra:
+        hosts: ["temporal-cass-dc1-service"]
+        port: 9042
+        keyspace: temporal
+        user: temporal-cass-superuser
+        passwordSecretRef:
+          name: temporal-cass-superuser
+          key: password
+    visibilityStore:
+      cassandra:
+        hosts: ["temporal-cass-dc1-service"]
+        port: 9042
+        keyspace: temporal_visibility
+        user: temporal-cass-superuser
+        passwordSecretRef:
+          name: temporal-cass-superuser
+          key: password

@@ -43,36 +43,70 @@ const persistenceRequeueAfter = 30 * time.Second
 // postgresSchemaDir is the on-image schema directory for the postgres12 plugin.
 const postgresSchemaDir = "v12"
 
-// reconcilePersistence probes the datastore and drives schema setup/migration
-// via Jobs. It is Postgres-only at this milestone; non-SQL stores are skipped.
+// Datastore backend kinds.
+const (
+	kindCassandra     = "cassandra"
+	kindElasticsearch = "elasticsearch"
+)
+
+// backendFactory returns the configured datastore backend factory, defaulting to
+// the real implementation.
+func (r *TemporalClusterReconciler) backendFactory() persistence.BackendFactory {
+	if r.BackendFactory != nil {
+		return r.BackendFactory
+	}
+	return persistence.DefaultBackendFactory
+}
+
+func storeDBName(store temporalv1alpha1.DatastoreSpec) string {
+	switch {
+	case store.SQL != nil:
+		return store.SQL.Database
+	case store.Cassandra != nil:
+		return store.Cassandra.Keyspace
+	default:
+		return ""
+	}
+}
+
+// minSchemaFor returns the required minimum schema version for a store given the
+// backend kind.
+func minSchemaFor(info *temporal.VersionInfo, kind string) string {
+	switch kind {
+	case kindCassandra:
+		return info.MinSchemaCassandra
+	case kindElasticsearch:
+		return info.MinSchemaES
+	default:
+		return info.MinSchemaSQL
+	}
+}
+
+type schemaTarget struct {
+	store   resources.SchemaStore
+	spec    temporalv1alpha1.DatastoreSpec
+	backend persistence.Backend
+}
+
+// reconcilePersistence probes the datastore(s) and drives schema setup/migration
+// via Jobs (SQL, Cassandra) or inline (Elasticsearch).
 func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-
-	defStore := cluster.Spec.Persistence.DefaultStore
-	if defStore.SQL == nil {
-		// Only SQL (Postgres) persistence is implemented at this milestone.
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               temporalv1alpha1.ConditionPersistenceReachable,
-			Status:             metav1.ConditionUnknown,
-			Reason:             temporalv1alpha1.ReasonNotImplemented,
-			Message:            "only SQL persistence is implemented",
-			ObservedGeneration: cluster.Generation,
-		})
-		return ctrl.Result{}, nil
-	}
-
+	factory := r.backendFactory()
 	resolver := persistence.NewSecretResolver(r.Client, cluster.Namespace)
-	defCred, err := resolver.ResolveSQL(ctx, defStore.SQL)
-	if err != nil {
-		r.setReachable(cluster, false, fmt.Sprintf("resolving default store password: %v", err))
-		return ctrl.Result{RequeueAfter: persistenceRequeueAfter}, nil
-	}
-	defDSN := persistence.BuildPostgresDSN(defStore.SQL, defCred.Password, defStore.SQL.Database)
 
-	if err := r.prober().Probe(ctx, defDSN); err != nil {
-		log.Info("persistence unreachable", "error", err.Error())
+	targets, err := r.buildSchemaTargets(ctx, cluster, factory, resolver)
+	if err != nil {
 		r.setReachable(cluster, false, err.Error())
 		return ctrl.Result{RequeueAfter: persistenceRequeueAfter}, nil
+	}
+
+	for _, t := range targets {
+		if err := t.backend.Probe(ctx); err != nil {
+			log.Info("persistence unreachable", "store", t.store, "error", err.Error())
+			r.setReachable(cluster, false, fmt.Sprintf("%s store: %v", t.store, err))
+			return ctrl.Result{RequeueAfter: persistenceRequeueAfter}, nil
+		}
 	}
 	r.setReachable(cluster, true, "datastore is reachable")
 	cluster.Status.Persistence.Reachable = true
@@ -81,27 +115,13 @@ func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cl
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	if cluster.Status.Persistence.SchemaVersions == nil {
 		cluster.Status.Persistence.SchemaVersions = map[string]string{}
 	}
 
-	targets := []schemaTarget{
-		{store: resources.StoreDefault, spec: defStore.SQL, dsn: defDSN},
-	}
-	if vis := cluster.Spec.Persistence.VisibilityStore; vis.SQL != nil {
-		visCred, err := resolver.ResolveSQL(ctx, vis.SQL)
-		if err != nil {
-			r.setReachable(cluster, false, fmt.Sprintf("resolving visibility store password: %v", err))
-			return ctrl.Result{RequeueAfter: persistenceRequeueAfter}, nil
-		}
-		visDSN := persistence.BuildPostgresDSN(vis.SQL, visCred.Password, vis.SQL.Database)
-		targets = append(targets, schemaTarget{store: resources.StoreVisibility, spec: vis.SQL, dsn: visDSN})
-	}
-
 	migrating := false
 	for _, t := range targets {
-		res, err := r.reconcileStoreSchema(ctx, cluster, t, info.MinSchemaSQL)
+		res, err := r.reconcileStoreSchema(ctx, cluster, t, minSchemaFor(info, t.backend.Kind()))
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -123,10 +143,28 @@ func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cl
 	return ctrl.Result{}, nil
 }
 
-type schemaTarget struct {
-	store resources.SchemaStore
-	spec  *temporalv1alpha1.SQLDatastoreSpec
-	dsn   string
+func (r *TemporalClusterReconciler) buildSchemaTargets(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, factory persistence.BackendFactory, resolver *persistence.SecretResolver) ([]schemaTarget, error) {
+	build := func(store temporalv1alpha1.DatastoreSpec, name resources.SchemaStore) (schemaTarget, error) {
+		cred, err := resolver.ResolveStore(ctx, store)
+		if err != nil {
+			return schemaTarget{}, fmt.Errorf("resolving %s store credential: %w", name, err)
+		}
+		backend, err := factory(store, cred, storeDBName(store))
+		if err != nil {
+			return schemaTarget{}, fmt.Errorf("building %s backend: %w", name, err)
+		}
+		return schemaTarget{store: name, spec: store, backend: backend}, nil
+	}
+
+	defTarget, err := build(cluster.Spec.Persistence.DefaultStore, resources.StoreDefault)
+	if err != nil {
+		return nil, err
+	}
+	visTarget, err := build(cluster.Spec.Persistence.VisibilityStore, resources.StoreVisibility)
+	if err != nil {
+		return nil, err
+	}
+	return []schemaTarget{defTarget, visTarget}, nil
 }
 
 type storeResult struct {
@@ -135,10 +173,9 @@ type storeResult struct {
 	message string
 }
 
-// reconcileStoreSchema ensures a single store's schema reaches minSchema by
-// running setup and/or update Jobs as needed.
+// reconcileStoreSchema ensures a single store's schema reaches minSchema.
 func (r *TemporalClusterReconciler) reconcileStoreSchema(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, t schemaTarget, minSchema string) (storeResult, error) {
-	current, err := r.schemaInspector().CurrentSchemaVersion(ctx, t.dsn, t.spec.Database)
+	current, err := t.backend.SchemaVersion(ctx)
 	if err != nil {
 		return storeResult{}, fmt.Errorf("inspecting %s schema: %w", t.store, err)
 	}
@@ -148,7 +185,23 @@ func (r *TemporalClusterReconciler) reconcileStoreSchema(ctx context.Context, cl
 		return storeResult{done: true}, nil
 	}
 
-	// A fresh database needs the schema_version bookkeeping created first.
+	// Elasticsearch manages schema inline (index templates) rather than via Jobs.
+	if inline, err := t.backend.EnsureSchema(ctx, minSchema); err != nil {
+		return storeResult{}, fmt.Errorf("applying %s schema: %w", t.store, err)
+	} else if inline {
+		current, err = t.backend.SchemaVersion(ctx)
+		if err != nil {
+			return storeResult{}, err
+		}
+		cluster.Status.Persistence.SchemaVersions[string(t.store)] = current
+		return storeResult{done: persistence.SchemaSatisfies(current, minSchema)}, nil
+	}
+
+	return r.reconcileJobSchema(ctx, cluster, t, current)
+}
+
+// reconcileJobSchema runs setup/update Jobs for SQL and Cassandra stores.
+func (r *TemporalClusterReconciler) reconcileJobSchema(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, t schemaTarget, current string) (storeResult, error) {
 	if current == "" {
 		setup, err := r.ensureSchemaJob(ctx, cluster, t, resources.ActionSetup)
 		if err != nil {
@@ -169,8 +222,6 @@ func (r *TemporalClusterReconciler) reconcileStoreSchema(ctx context.Context, cl
 	if update == jobFailed {
 		return storeResult{failed: true, message: fmt.Sprintf("%s update-schema job failed", t.store)}, nil
 	}
-	// Even on success we report not-done until a subsequent inspect confirms the
-	// schema satisfies the minimum.
 	return storeResult{}, nil
 }
 
@@ -191,7 +242,8 @@ func (r *TemporalClusterReconciler) ensureSchemaJob(ctx context.Context, cluster
 	if apierrors.IsNotFound(err) {
 		built := resources.BuildSchemaJob(resources.SchemaJobParams{
 			Cluster:          cluster,
-			SQLSpec:          t.spec,
+			SQLSpec:          t.spec.SQL,
+			CassandraSpec:    t.spec.Cassandra,
 			Store:            t.store,
 			Action:           action,
 			SchemaVersionDir: postgresSchemaDir,
@@ -250,20 +302,4 @@ func (r *TemporalClusterReconciler) setSchemaReady(cluster *temporalv1alpha1.Tem
 		Message:            message,
 		ObservedGeneration: cluster.Generation,
 	})
-}
-
-// prober returns the configured Prober, defaulting to the SQL prober.
-func (r *TemporalClusterReconciler) prober() persistence.Prober {
-	if r.Prober != nil {
-		return r.Prober
-	}
-	return persistence.SQLProber{}
-}
-
-// schemaInspector returns the configured SchemaInspector, defaulting to the SQL prober.
-func (r *TemporalClusterReconciler) schemaInspector() persistence.SchemaInspector {
-	if r.SchemaInspector != nil {
-		return r.SchemaInspector
-	}
-	return persistence.SQLProber{}
 }

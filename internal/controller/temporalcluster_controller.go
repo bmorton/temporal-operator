@@ -43,10 +43,9 @@ type TemporalClusterReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 
-	// Prober and SchemaInspector are injectable for testing; when nil the
-	// default Postgres SQL implementation is used.
-	Prober          persistence.Prober
-	SchemaInspector persistence.SchemaInspector
+	// BackendFactory builds datastore backends and is injectable for testing;
+	// when nil the default real implementation is used.
+	BackendFactory persistence.BackendFactory
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalclusters,verbs=get;list;watch;create;update;patch;delete

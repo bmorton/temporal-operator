@@ -1,0 +1,36 @@
+# Chainsaw test: Elasticsearch visibility via the ECK (Elastic Cloud on
+# Kubernetes) Operator, with a Postgres default store from the postgres suite.
+#
+# Prerequisite: install the ECK operator (elasticsearch.k8s.elastic.co CRDs) and
+# the CNPG operator.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: elasticsearch
+spec:
+  timeouts:
+    apply: 2m
+    assert: 10m
+  steps:
+    - name: provision-deps
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - apply:
+            file: ../postgres/02-secrets.yaml
+        - apply:
+            file: 01-elasticsearch.yaml
+        - assert:
+            resource:
+              apiVersion: elasticsearch.k8s.elastic.co/v1
+              kind: Elasticsearch
+              metadata:
+                name: temporal-es
+              status:
+                health: green
+    - name: cluster-es-visibility
+      try:
+        - apply:
+            file: 02-temporalcluster.yaml
+        - assert:
+            file: 02-assert.yaml

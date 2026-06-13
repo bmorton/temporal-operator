@@ -54,15 +54,20 @@ const (
 	schemaJobTTLAfterFinish int32 = 600
 
 	// passwordEnvVar is the env var temporal-sql-tool reads the password from.
-	passwordEnvVar = "SQL_PASSWORD"
+	passwordEnvVar          = "SQL_PASSWORD"
+	cassandraPasswordEnvVar = "CASSANDRA_PASSWORD"
 )
 
 // SchemaJobParams describes a single schema Job to build.
 type SchemaJobParams struct {
 	// Cluster is the owning TemporalCluster.
 	Cluster *temporalv1alpha1.TemporalCluster
-	// SQLSpec is the resolved SQL datastore spec for the target store.
+	// SQLSpec is the resolved SQL datastore spec for the target store. Set for
+	// SQL-backed stores.
 	SQLSpec *temporalv1alpha1.SQLDatastoreSpec
+	// CassandraSpec is the resolved Cassandra datastore spec. Set for
+	// Cassandra-backed stores.
+	CassandraSpec *temporalv1alpha1.CassandraDatastoreSpec
 	// Store and Action select the operation.
 	Store  SchemaStore
 	Action SchemaAction
@@ -70,12 +75,14 @@ type SchemaJobParams struct {
 	SchemaVersionDir string
 }
 
+func (p SchemaJobParams) isCassandra() bool { return p.CassandraSpec != nil }
+
 // SchemaJobName returns the deterministic name for a schema Job.
 func SchemaJobName(clusterName string, store SchemaStore, action SchemaAction) string {
 	return fmt.Sprintf("%s-schema-%s-%s", clusterName, store, action)
 }
 
-func schemaDir(version string, store SchemaStore) string {
+func sqlSchemaDir(version string, store SchemaStore) string {
 	sub := "temporal"
 	if store == StoreVisibility {
 		sub = "visibility"
@@ -83,7 +90,29 @@ func schemaDir(version string, store SchemaStore) string {
 	return fmt.Sprintf("/etc/temporal/schema/postgresql/%s/%s/versioned", version, sub)
 }
 
+func cassandraSchemaDir(store SchemaStore) string {
+	sub := "temporal"
+	if store == StoreVisibility {
+		sub = "visibility"
+	}
+	return fmt.Sprintf("/etc/temporal/schema/cassandra/%s/versioned", sub)
+}
+
+func schemaCommand(p SchemaJobParams) string {
+	if p.isCassandra() {
+		return "temporal-cassandra-tool"
+	}
+	return "temporal-sql-tool"
+}
+
 func schemaToolArgs(p SchemaJobParams) []string {
+	if p.isCassandra() {
+		return cassandraToolArgs(p)
+	}
+	return sqlToolArgs(p)
+}
+
+func sqlToolArgs(p SchemaJobParams) []string {
 	spec := p.SQLSpec
 	plugin := spec.PluginName
 	if plugin == "" {
@@ -94,7 +123,7 @@ func schemaToolArgs(p SchemaJobParams) []string {
 		"--endpoint", spec.Host,
 		"--port", fmt.Sprintf("%d", spec.Port),
 		"--user", spec.User,
-		"--database", databaseName(p),
+		"--database", spec.Database,
 	}
 	if spec.TLS != nil && spec.TLS.Enabled {
 		args = append(args, "--tls")
@@ -106,29 +135,59 @@ func schemaToolArgs(p SchemaJobParams) []string {
 	case ActionSetup:
 		args = append(args, "setup-schema", "-v", "0.0")
 	case ActionUpdate:
-		args = append(args, "update-schema", "-d", schemaDir(p.SchemaVersionDir, p.Store))
+		args = append(args, "update-schema", "-d", sqlSchemaDir(p.SchemaVersionDir, p.Store))
 	}
 	return args
 }
 
-func databaseName(p SchemaJobParams) string {
-	return p.SQLSpec.Database
+func cassandraToolArgs(p SchemaJobParams) []string {
+	spec := p.CassandraSpec
+	endpoint := ""
+	if len(spec.Hosts) > 0 {
+		endpoint = spec.Hosts[0]
+	}
+	args := []string{
+		"--endpoint", endpoint,
+		"--port", fmt.Sprintf("%d", spec.Port),
+		"--keyspace", spec.Keyspace,
+	}
+	if spec.User != "" {
+		args = append(args, "--user", spec.User)
+	}
+	if spec.TLS != nil && spec.TLS.Enabled {
+		args = append(args, "--tls")
+	}
+	switch p.Action {
+	case ActionSetup:
+		args = append(args, "setup-schema", "-v", "0.0")
+	case ActionUpdate:
+		args = append(args, "update-schema", "-d", cassandraSchemaDir(p.Store))
+	}
+	return args
 }
 
-func passwordEnv(spec *temporalv1alpha1.SQLDatastoreSpec) []corev1.EnvVar {
-	if spec.PasswordSecretRef == nil {
+func passwordEnv(p SchemaJobParams) []corev1.EnvVar {
+	var ref *temporalv1alpha1.SecretKeyReference
+	envName := passwordEnvVar
+	if p.isCassandra() {
+		ref = p.CassandraSpec.PasswordSecretRef
+		envName = cassandraPasswordEnvVar
+	} else {
+		ref = p.SQLSpec.PasswordSecretRef
+	}
+	if ref == nil {
 		return nil
 	}
-	key := spec.PasswordSecretRef.Key
+	key := ref.Key
 	if key == "" {
 		key = "password"
 	}
 	return []corev1.EnvVar{
 		{
-			Name: passwordEnvVar,
+			Name: envName,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: spec.PasswordSecretRef.Name},
+					LocalObjectReference: corev1.LocalObjectReference{Name: ref.Name},
 					Key:                  key,
 				},
 			},
@@ -171,9 +230,9 @@ func BuildSchemaJob(p SchemaJobParams) *batchv1.Job {
 						{
 							Name:    "schema",
 							Image:   temporal.AdminToolsImage(p.Cluster.Spec.Version),
-							Command: []string{"temporal-sql-tool"},
+							Command: []string{schemaCommand(p)},
 							Args:    schemaToolArgs(p),
-							Env:     passwordEnv(p.SQLSpec),
+							Env:     passwordEnv(p),
 						},
 					},
 				},

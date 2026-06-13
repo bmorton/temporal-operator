@@ -1,0 +1,36 @@
+# Chainsaw test: Cassandra default store via the K8ssandra Operator.
+#
+# Prerequisite: install the K8ssandra Operator (which provides the
+# cassandra.datastax.com / k8ssandra.io CRDs). This test assumes a K8ssandraCluster
+# named "temporal-cass" exposing a CQL service "temporal-cass-dc1-service".
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: cassandra
+spec:
+  timeouts:
+    apply: 2m
+    assert: 10m
+  steps:
+    - name: provision-cassandra
+      try:
+        - apply:
+            file: 01-k8ssandra.yaml
+        - assert:
+            resource:
+              apiVersion: k8ssandra.io/v1alpha1
+              kind: K8ssandraCluster
+              metadata:
+                name: temporal-cass
+              status:
+                (conditions[?type == 'CassandraInitialized'].status | [0]): "True"
+    - name: cluster-cassandra
+      try:
+        - apply:
+            file: 02-temporalcluster.yaml
+        - assert:
+            file: 02-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster

@@ -148,3 +148,28 @@ func BuildPostgresDSN(spec *temporalv1alpha1.SQLDatastoreSpec, password, dbName 
 	u.RawQuery = q.Encode()
 	return u.String()
 }
+
+// sqlBackend adapts the SQL prober to the Backend interface.
+type sqlBackend struct {
+	spec   *temporalv1alpha1.SQLDatastoreSpec
+	cred   ResolvedCredential
+	dbName string
+}
+
+func (b *sqlBackend) dsn() string {
+	return BuildPostgresDSN(b.spec, b.cred.Password, b.dbName)
+}
+
+func (b *sqlBackend) Probe(ctx context.Context) error {
+	return SQLProber{}.Probe(ctx, b.dsn())
+}
+
+func (b *sqlBackend) SchemaVersion(ctx context.Context) (string, error) {
+	return SQLProber{}.CurrentSchemaVersion(ctx, b.dsn(), b.dbName)
+}
+
+func (b *sqlBackend) EnsureSchema(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}
+
+func (b *sqlBackend) Kind() string { return "sql" }

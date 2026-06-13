@@ -38,17 +38,16 @@ var _ = Describe("TemporalCluster services reconciler", func() {
 	ctx := context.Background()
 	var counter int
 
-	readySchema := fakeInspector{versions: map[string]string{
+	readyVersions := map[string]string{
 		"temporal":            "1.12",
 		"temporal_visibility": "1.12",
-	}}
+	}
 
 	reconcileFor := func(name string) {
 		r := &TemporalClusterReconciler{
-			Client:          k8sClient,
-			Scheme:          k8sClient.Scheme(),
-			Prober:          fakeProber{},
-			SchemaInspector: readySchema,
+			Client:         k8sClient,
+			Scheme:         k8sClient.Scheme(),
+			BackendFactory: fakeBackendFactory(nil, readyVersions),
 		}
 		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "default"}})
 		Expect(err).NotTo(HaveOccurred())

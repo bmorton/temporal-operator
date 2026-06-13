@@ -33,22 +33,6 @@ import (
 	"github.com/bmorton/temporal-operator/internal/resources"
 )
 
-type fakeProber struct{ err error }
-
-func (f fakeProber) Probe(_ context.Context, _ string) error { return f.err }
-
-type fakeInspector struct {
-	versions map[string]string
-	err      error
-}
-
-func (f fakeInspector) CurrentSchemaVersion(_ context.Context, _, dbName string) (string, error) {
-	if f.err != nil {
-		return "", f.err
-	}
-	return f.versions[dbName], nil
-}
-
 var _ = Describe("TemporalCluster persistence reconciler", func() {
 	ctx := context.Background()
 	var counter int
@@ -73,12 +57,11 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 		_ = k8sClient.Create(ctx, secret)
 	})
 
-	reconcileWith := func(c *temporalv1alpha1.TemporalCluster, prober fakeProber, inspector fakeInspector) {
+	reconcileWith := func(c *temporalv1alpha1.TemporalCluster, probeErr error, versions map[string]string) {
 		r := &TemporalClusterReconciler{
-			Client:          k8sClient,
-			Scheme:          k8sClient.Scheme(),
-			Prober:          prober,
-			SchemaInspector: inspector,
+			Client:         k8sClient,
+			Scheme:         k8sClient.Scheme(),
+			BackendFactory: fakeBackendFactory(probeErr, versions),
 		}
 		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: c.Name, Namespace: c.Namespace}})
 		Expect(err).NotTo(HaveOccurred())
@@ -92,7 +75,7 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 
 	It("marks persistence unreachable when the probe fails", func() {
 		c := newCluster()
-		reconcileWith(c, fakeProber{err: fmt.Errorf("connection refused")}, fakeInspector{})
+		reconcileWith(c, fmt.Errorf("connection refused"), nil)
 
 		cond := conditionStatus(c.Name, temporalv1alpha1.ConditionPersistenceReachable)
 		Expect(cond).NotTo(BeNil())
@@ -102,7 +85,7 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 
 	It("creates setup jobs and reports schema migrating on a fresh database", func() {
 		c := newCluster()
-		reconcileWith(c, fakeProber{}, fakeInspector{versions: map[string]string{}})
+		reconcileWith(c, nil, map[string]string{})
 
 		By("setting PersistenceReachable=True")
 		Expect(conditionStatus(c.Name, temporalv1alpha1.ConditionPersistenceReachable).Status).To(Equal(metav1.ConditionTrue))
@@ -123,10 +106,10 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 
 	It("reports SchemaReady=True when the schema already satisfies the minimum", func() {
 		c := newCluster()
-		reconcileWith(c, fakeProber{}, fakeInspector{versions: map[string]string{
+		reconcileWith(c, nil, map[string]string{
 			"temporal":            "1.12",
 			"temporal_visibility": "1.12",
-		}})
+		})
 
 		cond := conditionStatus(c.Name, temporalv1alpha1.ConditionSchemaReady)
 		Expect(cond).NotTo(BeNil())
@@ -141,7 +124,7 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 	It("reports SchemaReady=False when a schema job fails", func() {
 		c := newCluster()
 		// First pass creates the setup job.
-		reconcileWith(c, fakeProber{}, fakeInspector{versions: map[string]string{}})
+		reconcileWith(c, nil, map[string]string{})
 
 		jobName := resources.SchemaJobName(c.Name, resources.StoreDefault, resources.ActionSetup)
 		job := &batchv1.Job{}
@@ -156,10 +139,83 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 		}
 		Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
 
-		reconcileWith(c, fakeProber{}, fakeInspector{versions: map[string]string{}})
+		reconcileWith(c, nil, map[string]string{})
 
 		cond := conditionStatus(c.Name, temporalv1alpha1.ConditionSchemaReady)
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(cond.Reason).To(Equal("SchemaMigrationFailed"))
+	})
+})
+
+var _ = Describe("TemporalCluster Cassandra and Elasticsearch backends", func() {
+	ctx := context.Background()
+	var counter int
+
+	cassandraESCluster := func() *temporalv1alpha1.TemporalCluster {
+		counter++
+		name := fmt.Sprintf("cass-%d", counter)
+		c := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalClusterSpec{
+				Version:          "1.31.2",
+				NumHistoryShards: 512,
+				Persistence: temporalv1alpha1.PersistenceSpec{
+					DefaultStore: temporalv1alpha1.DatastoreSpec{
+						Cassandra: &temporalv1alpha1.CassandraDatastoreSpec{
+							Hosts:    []string{"cass-0.cass", "cass-1.cass"},
+							Port:     9042,
+							Keyspace: "temporal",
+							User:     "temporal",
+						},
+					},
+					VisibilityStore: temporalv1alpha1.DatastoreSpec{
+						Elasticsearch: &temporalv1alpha1.ElasticsearchDatastoreSpec{
+							URL:     "elasticsearch.default.svc:9200",
+							Version: "v8",
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
+		return c
+	}
+
+	reconcileWith := func(c *temporalv1alpha1.TemporalCluster, versions map[string]string) {
+		r := &TemporalClusterReconciler{
+			Client:         k8sClient,
+			Scheme:         k8sClient.Scheme(),
+			BackendFactory: fakeBackendFactory(nil, versions),
+		}
+		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: c.Name, Namespace: "default"}})
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	It("creates a Cassandra setup-schema job using temporal-cassandra-tool", func() {
+		c := cassandraESCluster()
+		reconcileWith(c, map[string]string{}) // empty -> fresh schema
+
+		job := &batchv1.Job{}
+		jobName := resources.SchemaJobName(c.Name, resources.StoreDefault, resources.ActionSetup)
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: jobName, Namespace: "default"}, job)).To(Succeed())
+		Expect(job.Spec.Template.Spec.Containers[0].Command).To(ContainElement("temporal-cassandra-tool"))
+		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--keyspace"))
+	})
+
+	It("applies the Elasticsearch visibility schema inline without a Job", func() {
+		c := cassandraESCluster()
+		// Mark the cassandra default store satisfied so only the ES path is exercised.
+		reconcileWith(c, map[string]string{"temporal": "1.9"})
+
+		By("not creating a visibility schema Job for Elasticsearch")
+		jobName := resources.SchemaJobName(c.Name, resources.StoreVisibility, resources.ActionSetup)
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: jobName, Namespace: "default"}, &batchv1.Job{})
+		Expect(err).To(HaveOccurred())
+
+		By("reporting SchemaReady=True once ES applies inline and cassandra is satisfied")
+		got := &temporalv1alpha1.TemporalCluster{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: c.Name, Namespace: "default"}, got)).To(Succeed())
+		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, temporalv1alpha1.ConditionSchemaReady)).To(BeTrue())
 	})
 })

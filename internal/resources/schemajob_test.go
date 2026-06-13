@@ -108,3 +108,35 @@ func TestBuildSchemaJobUpdateVisibility(t *testing.T) {
 		t.Errorf("expected schema dir %q in %v", wantDir, c.Args)
 	}
 }
+
+func cassandraSpec() *temporalv1alpha1.CassandraDatastoreSpec {
+	return &temporalv1alpha1.CassandraDatastoreSpec{
+		Hosts:    []string{"cass-0", "cass-1"},
+		Port:     9042,
+		Keyspace: "temporal",
+		User:     "temporal",
+	}
+}
+
+func TestBuildCassandraSchemaJob(t *testing.T) {
+	job := BuildSchemaJob(SchemaJobParams{
+		Cluster:       testCluster(),
+		CassandraSpec: cassandraSpec(),
+		Store:         StoreDefault,
+		Action:        ActionUpdate,
+	})
+	c := job.Spec.Template.Spec.Containers[0]
+	if c.Command[0] != "temporal-cassandra-tool" {
+		t.Errorf("expected cassandra tool, got %v", c.Command)
+	}
+	if !slices.Contains(c.Args, "--keyspace") || !slices.Contains(c.Args, "temporal") {
+		t.Errorf("expected keyspace arg, got %v", c.Args)
+	}
+	if !slices.Contains(c.Args, "--endpoint") || !slices.Contains(c.Args, "cass-0") {
+		t.Errorf("expected endpoint to be first host, got %v", c.Args)
+	}
+	wantDir := "/etc/temporal/schema/cassandra/temporal/versioned"
+	if !slices.Contains(c.Args, wantDir) {
+		t.Errorf("expected cassandra schema dir, got %v", c.Args)
+	}
+}

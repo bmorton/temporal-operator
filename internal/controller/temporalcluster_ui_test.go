@@ -38,10 +38,10 @@ var _ = Describe("TemporalCluster UI and monitoring", func() {
 	ctx := context.Background()
 	var counter int
 
-	readySchema := fakeInspector{versions: map[string]string{
+	readyVersions := map[string]string{
 		"temporal":            "1.12",
 		"temporal_visibility": "1.12",
-	}}
+	}
 
 	BeforeEach(func() {
 		_ = k8sClient.Create(ctx, &corev1.Secret{
@@ -52,10 +52,9 @@ var _ = Describe("TemporalCluster UI and monitoring", func() {
 
 	reconcileFor := func(name string) {
 		r := &TemporalClusterReconciler{
-			Client:          k8sClient,
-			Scheme:          k8sClient.Scheme(),
-			Prober:          fakeProber{},
-			SchemaInspector: readySchema,
+			Client:         k8sClient,
+			Scheme:         k8sClient.Scheme(),
+			BackendFactory: fakeBackendFactory(nil, readyVersions),
 		}
 		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "default"}})
 		Expect(err).NotTo(HaveOccurred())

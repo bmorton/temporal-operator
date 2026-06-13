@@ -1,0 +1,28 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-es
+spec:
+  version: "1.31.2"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: temporal-pg-rw
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      elasticsearch:
+        url: https://temporal-es-es-http:9200
+        version: v8
+        username: elastic
+        passwordSecretRef:
+          name: temporal-es-es-elastic-user
+          key: elastic
+        tls:
+          enabled: true
