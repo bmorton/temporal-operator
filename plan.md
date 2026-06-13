@@ -26,7 +26,12 @@ A coding-agent-ready, milestone-driven implementation plan for a modern Kubernet
   three satellite CRD stubs (resource-only), CEL validations (immutable shards,
   exactly-one datastore), conditions enumeration, samples, `crd-ref-docs` +
   `make api-docs`, envtest for CEL. _(commit `23af968`)_
-- [ ] **Milestone 3 — Webhooks** _(in progress)_
+- [x] **Milestone 3 — Webhooks.** TemporalCluster defaulting + validation
+  (version/datastore/mTLS/shard-immutability/upgrade-path/preventDeletion),
+  satellite validating webhooks, seeded version matrix (`internal/temporal`),
+  cert-manager webhook certs, tests. Conversion webhook deferred (single
+  version). _(commit `6207411`)_
+- [ ] **Milestone 4 — Version matrix + config template engine** _(next up)_
 
 ---
 
