@@ -1,0 +1,9 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: temporal-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: temporalcluster-sample
+spec:
+  # TODO(user): Add fields here
