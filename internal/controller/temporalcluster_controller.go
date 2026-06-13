@@ -19,6 +19,9 @@ package controller
 import (
 	"context"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,7 +30,7 @@ import (
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
 
-// TemporalClusterReconciler reconciles a TemporalCluster object
+// TemporalClusterReconciler reconciles a TemporalCluster object.
 type TemporalClusterReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -37,19 +40,35 @@ type TemporalClusterReconciler struct {
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalclusters/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the TemporalCluster object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.4/pkg/reconcile
+// Reconcile is part of the main Kubernetes reconciliation loop. At this
+// milestone the reconciler is a scaffold only: it records that it has observed
+// the resource and marks it as not-yet-implemented via the Ready condition.
 func (r *TemporalClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	log := logf.FromContext(ctx)
 
-	// TODO(user): your logic here
+	var cluster temporalv1alpha1.TemporalCluster
+	if err := r.Get(ctx, req.NamespacedName, &cluster); err != nil {
+		// Ignore not-found errors: the object was deleted.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	log.Info("reconciling TemporalCluster", "version", cluster.Spec.Version)
+
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:               temporalv1alpha1.ConditionReady,
+		Status:             metav1.ConditionFalse,
+		Reason:             temporalv1alpha1.ReasonNotImplemented,
+		Message:            "Reconciler scaffold only",
+		ObservedGeneration: cluster.Generation,
+	})
+	cluster.Status.ObservedGeneration = cluster.Generation
+
+	if err := r.Status().Update(ctx, &cluster); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }

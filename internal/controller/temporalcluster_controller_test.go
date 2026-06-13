@@ -18,14 +18,15 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
@@ -38,7 +39,7 @@ var _ = Describe("TemporalCluster Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "default",
 		}
 		temporalcluster := &temporalv1alpha1.TemporalCluster{}
 
@@ -51,14 +52,15 @@ var _ = Describe("TemporalCluster Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: temporalv1alpha1.TemporalClusterSpec{
+						Version: "1.31.2",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &temporalv1alpha1.TemporalCluster{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
@@ -66,7 +68,8 @@ var _ = Describe("TemporalCluster Controller", func() {
 			By("Cleanup the specific resource instance TemporalCluster")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
-		It("should successfully reconcile the resource", func() {
+
+		It("should set a Ready=False condition with reason NotImplemented", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &TemporalClusterReconciler{
 				Client: k8sClient,
@@ -77,8 +80,18 @@ var _ = Describe("TemporalCluster Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			By("Verifying the Ready condition")
+			Eventually(func(g Gomega) {
+				resource := &temporalv1alpha1.TemporalCluster{}
+				g.Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+
+				cond := meta.FindStatusCondition(resource.Status.Conditions, temporalv1alpha1.ConditionReady)
+				g.Expect(cond).NotTo(BeNil())
+				g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(cond.Reason).To(Equal(temporalv1alpha1.ReasonNotImplemented))
+				g.Expect(resource.Status.ObservedGeneration).To(Equal(resource.Generation))
+			}, 5*time.Second, 200*time.Millisecond).Should(Succeed())
 		})
 	})
 })
