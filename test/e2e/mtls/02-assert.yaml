@@ -1,0 +1,12 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterClient
+metadata:
+  name: temporal-mtls-worker
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: temporal-mtls-worker-creds
+type: kubernetes.io/tls

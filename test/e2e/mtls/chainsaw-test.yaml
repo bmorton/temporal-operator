@@ -1,0 +1,57 @@
+# Chainsaw mTLS test: provision Postgres + a CA issuer, deploy a cluster with
+# mTLS, and issue client credentials. Requires cert-manager and the CNPG
+# operator installed.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: mtls
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+        - apply:
+            file: ../postgres/02-secrets.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: create-visibility-db
+              status:
+                succeeded: 1
+    - name: issuer
+      try:
+        - apply:
+            file: 00-issuer.yaml
+    - name: cluster-mtls
+      try:
+        - apply:
+            file: 01-temporalcluster.yaml
+        - assert:
+            file: 01-assert.yaml
+      catch:
+        - describe:
+            apiVersion: cert-manager.io/v1
+            kind: Certificate
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster
+    - name: client-credentials
+      try:
+        - apply:
+            file: 02-client.yaml
+        - assert:
+            file: 02-assert.yaml

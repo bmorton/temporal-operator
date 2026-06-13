@@ -33,6 +33,7 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/persistence"
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 )
 
 // TemporalClusterReconciler reconciles a TemporalCluster object.
@@ -56,6 +57,7 @@ type TemporalClusterReconciler struct {
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates;issuers,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile drives the TemporalCluster toward its desired state. At this
 // milestone it reconciles persistence (reachability + schema) and reports the
@@ -73,6 +75,10 @@ func (r *TemporalClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	result, err := r.reconcilePersistence(ctx, &cluster)
 	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileMTLS(ctx, &cluster); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -103,6 +109,7 @@ func (r *TemporalClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&policyv1.PodDisruptionBudget{}).
+		Owns(&certmanagerv1.Certificate{}).
 		Named("temporalcluster").
 		Complete(r)
 }

@@ -82,8 +82,18 @@ func containerPorts(svc ServiceInfo) []corev1.ContainerPort {
 	return ports
 }
 
+// MTLSMounts describes the cert secrets to mount when mTLS is enabled.
+type MTLSMounts struct {
+	Enabled         bool
+	InternodeSecret string
+	FrontendSecret  string
+	// CertHash, when set, is stamped on the pod template to trigger a rolling
+	// restart on certificate rotation.
+	CertHash string
+}
+
 // BuildDeployment builds the Deployment for a single Temporal service.
-func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash string) *appsv1.Deployment {
+func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash string, mtls *MTLSMounts) *appsv1.Deployment {
 	replicas := int32(1)
 	var resources corev1.ResourceRequirements
 	var nodeSelector map[string]string
@@ -149,6 +159,34 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 		},
 	}
 
+	podAnnotations := map[string]string{ConfigHashAnnotation: configHash}
+
+	if mtls != nil && mtls.Enabled {
+		if mtls.CertHash != "" {
+			podAnnotations[CertHashAnnotation] = mtls.CertHash
+		}
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name: "internode-certs", MountPath: InternodeCertMountPath, ReadOnly: true,
+		})
+		volumes = append(volumes, corev1.Volume{
+			Name: "internode-certs",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: mtls.InternodeSecret},
+			},
+		})
+		if svc.Name == ServiceFrontend || svc.Name == ServiceInternalFrontend {
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				Name: "frontend-certs", MountPath: FrontendCertMountPath, ReadOnly: true,
+			})
+			volumes = append(volumes, corev1.Volume{
+				Name: "frontend-certs",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{SecretName: mtls.FrontendSecret},
+				},
+			})
+		}
+	}
+
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -162,7 +200,7 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      podLabels,
-					Annotations: map[string]string{ConfigHashAnnotation: configHash},
+					Annotations: podAnnotations,
 				},
 				Spec: corev1.PodSpec{
 					ImagePullSecrets:          cluster.Spec.ImagePullSecrets,

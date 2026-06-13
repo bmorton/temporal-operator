@@ -49,6 +49,7 @@ func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, clust
 		return err
 	}
 	configHash := resources.ConfigHash(rendered.config)
+	mtls := r.mtlsMounts(ctx, cluster)
 
 	dynamicCM := resources.BuildDynamicConfigMap(cluster, rendered.dynamicConfig)
 	configSecret := resources.BuildConfigSecret(cluster, rendered.config)
@@ -61,7 +62,7 @@ func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, clust
 
 	services := resources.EnabledServices(cluster)
 	for _, svc := range services {
-		if err := r.apply(ctx, cluster, resources.BuildDeployment(cluster, svc, configHash)); err != nil {
+		if err := r.apply(ctx, cluster, resources.BuildDeployment(cluster, svc, configHash, mtls)); err != nil {
 			return err
 		}
 		if err := r.apply(ctx, cluster, resources.BuildHeadlessService(cluster, svc)); err != nil {
@@ -177,8 +178,9 @@ func (r *TemporalClusterReconciler) computeReadyAndPhase(cluster *temporalv1alph
 	reachable := meta.IsStatusConditionTrue(conds, temporalv1alpha1.ConditionPersistenceReachable)
 	schemaReady := meta.IsStatusConditionTrue(conds, temporalv1alpha1.ConditionSchemaReady)
 	available := meta.IsStatusConditionTrue(conds, temporalv1alpha1.ConditionAvailable)
+	mtlsReady := !mTLSEnabled(cluster) || meta.IsStatusConditionTrue(conds, temporalv1alpha1.ConditionMTLSReady)
 
-	ready := reachable && schemaReady && available
+	ready := reachable && schemaReady && available && mtlsReady
 	wasReady := meta.IsStatusConditionTrue(conds, temporalv1alpha1.ConditionReady)
 	switch {
 	case !reachable:

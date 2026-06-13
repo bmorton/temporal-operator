@@ -32,6 +32,9 @@ const (
 	// ConfigHashAnnotation stamps the rendered-config hash onto pods so config
 	// changes trigger a rollout.
 	ConfigHashAnnotation = "temporal.bmor10.com/config-hash"
+	// CertHashAnnotation stamps the mTLS cert hash onto pods so certificate
+	// rotation triggers a rollout.
+	CertHashAnnotation = "temporal.bmor10.com/cert-hash"
 
 	managedByValue = "temporal-operator"
 	nameValue      = "temporal"

@@ -1,0 +1,15 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-mtls
+status:
+  (conditions[?type == 'MTLSReady'].status | [0]): "True"
+  (conditions[?type == 'Ready'].status | [0]): "True"
+---
+# The operator-created internode certificate is issued.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: temporal-mtls-internode
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"

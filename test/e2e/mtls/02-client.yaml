@@ -1,0 +1,9 @@
+# A TemporalClusterClient producing a worker credentials Secret.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterClient
+metadata:
+  name: temporal-mtls-worker
+spec:
+  clusterRef:
+    name: temporal-mtls
+  secretName: temporal-mtls-worker-creds

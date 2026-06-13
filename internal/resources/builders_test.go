@@ -63,7 +63,7 @@ func TestSelectorLabelsStableAcrossVersion(t *testing.T) {
 func TestBuildDeployment(t *testing.T) {
 	c := builderCluster()
 	svc := EnabledServices(c)[0] // frontend
-	dep := BuildDeployment(c, svc, "abc123")
+	dep := BuildDeployment(c, svc, "abc123", nil)
 
 	if dep.Name != "tc-frontend" {
 		t.Errorf("unexpected name %q", dep.Name)
@@ -127,5 +127,49 @@ func TestConfigBuildersAndHash(t *testing.T) {
 	h2 := ConfigHash("stable")
 	if h1 != h2 {
 		t.Errorf("hash must be stable")
+	}
+}
+
+func TestBuildCertificates(t *testing.T) {
+	c := builderCluster()
+	c.Spec.MTLS = &temporalv1alpha1.MTLSSpec{
+		Provider:  "cert-manager",
+		IssuerRef: &temporalv1alpha1.IssuerReference{Name: "ca"},
+		Frontend:  &temporalv1alpha1.FrontendMTLSSpec{DNSNames: []string{"temporal.example.com"}},
+	}
+
+	internode := BuildInternodeCertificate(c)
+	if internode.Name != "tc-internode" || internode.Spec.SecretName != "tc-internode" {
+		t.Errorf("unexpected internode cert: %s/%s", internode.Name, internode.Spec.SecretName)
+	}
+	if internode.Spec.IssuerRef.Name != "ca" {
+		t.Errorf("unexpected issuer %q", internode.Spec.IssuerRef.Name)
+	}
+	if len(internode.Spec.DNSNames) == 0 {
+		t.Errorf("expected internode DNS names")
+	}
+
+	frontend := BuildFrontendCertificate(c)
+	if !slices.Contains(frontend.Spec.DNSNames, "temporal.example.com") {
+		t.Errorf("expected user DNS name in frontend cert: %v", frontend.Spec.DNSNames)
+	}
+}
+
+func TestBuildClientCertificate(t *testing.T) {
+	c := builderCluster()
+	c.Spec.MTLS = &temporalv1alpha1.MTLSSpec{
+		Provider:  "cert-manager",
+		IssuerRef: &temporalv1alpha1.IssuerReference{Name: "ca"},
+	}
+	cc := &temporalv1alpha1.TemporalClusterClient{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker", Namespace: "ns"},
+		Spec:       temporalv1alpha1.TemporalClusterClientSpec{SecretName: "worker-creds"},
+	}
+	cert := BuildClientCertificate(cc, c)
+	if cert.Spec.SecretName != "worker-creds" {
+		t.Errorf("unexpected secret name %q", cert.Spec.SecretName)
+	}
+	if len(cert.Spec.Usages) != 1 || cert.Spec.Usages[0] != "client auth" {
+		t.Errorf("expected client auth usage, got %v", cert.Spec.Usages)
 	}
 }
