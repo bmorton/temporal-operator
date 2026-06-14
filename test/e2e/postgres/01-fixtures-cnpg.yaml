@@ -7,6 +7,12 @@
 # CNPG provisions a Secret named "<cluster>-app" containing the application
 # user's credentials (keys: username, password), referenced by the
 # TemporalCluster below.
+#
+# The "temporal" login role and its password are created by initdb and stored in
+# the generated "<cluster>-app" Secret. Do NOT redeclare "temporal" under
+# spec.managed.roles without a passwordSecret: CNPG would reconcile the role to
+# PASSWORD NULL / NOLOGIN, breaking password authentication for both the
+# create-visibility-db Job and the operator.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -19,8 +25,3 @@ spec:
     initdb:
       database: temporal
       owner: temporal
-  managed:
-    roles:
-      - name: temporal
-        ensure: present
-        login: true

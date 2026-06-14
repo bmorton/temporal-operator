@@ -8,6 +8,11 @@ permissions:
   contents: write
   pull-requests: write
 
+# NOTE: This workflow also requires the repository setting
+# "Allow GitHub Actions to create and approve pull requests"
+# (Settings > Actions > General > Workflow permissions) to be enabled.
+# Without it, release-please fails with:
+#   "GitHub Actions is not permitted to create or approve pull requests."
 jobs:
   release-please:
     name: Release Please
@@ -16,4 +21,3 @@ jobs:
       - uses: googleapis/release-please-action@v4
         with:
           release-type: go
-          package-name: temporal-operator
