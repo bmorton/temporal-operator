@@ -17,3 +17,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: wagoid/commitlint-github-action@v6
+        with:
+          # Pre-1.0: Conventional Commits are guidance, not a hard gate.
+          # Report results but never fail CI on commits we don't control.
+          failOnErrors: false
+          failOnWarnings: false
