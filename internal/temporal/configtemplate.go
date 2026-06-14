@@ -206,6 +206,17 @@ func DefaultServicePorts() map[string]ServicePort {
 	}
 }
 
+// broadcastAddressOrDefault returns addr if non-empty, otherwise the Temporal
+// env-var placeholder "${POD_IP}". The Temporal config loader evaluates
+// ${VAR} references at server startup, so the actual pod IP is injected at
+// runtime via the Kubernetes downward API.
+func broadcastAddressOrDefault(addr string) string {
+	if addr != "" {
+		return addr
+	}
+	return "${POD_IP}"
+}
+
 func sqlConnLifetime(spec *temporalv1alpha1.SQLDatastoreSpec) string {
 	if spec.MaxConnLifetime != nil {
 		return spec.MaxConnLifetime.Duration.String()
@@ -375,7 +386,7 @@ func BuildConfigData(cluster *temporalv1alpha1.TemporalCluster, opts BuildOption
 		DefaultStore:        defaultStore,
 		VisibilityStore:     visStore,
 		BindOnIP:            bindOnIP,
-		BroadcastAddress:    opts.BroadcastAddress,
+		BroadcastAddress:    broadcastAddressOrDefault(opts.BroadcastAddress),
 		Services:            defaultServices(),
 		CurrentClusterName:  "active",
 		MasterClusterName:   "active",

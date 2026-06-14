@@ -128,16 +128,28 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 	readiness := grpcProbe(svc.Ports.GRPCPort)
 	readiness.TimeoutSeconds = 3
 
+	// The config Secret is mounted read-only. Temporal's config loader does
+	// not perform env-var substitution for broadcastAddress in 1.31+, so we
+	// use a shell wrapper: copy config to a writable emptyDir, substitute
+	// ${POD_IP} with the real pod IP, then exec the server binary.
 	container := corev1.Container{
-		Name:  "temporal",
-		Image: serverImage(cluster, version),
-		Command: []string{
-			"temporal-server",
-			"--root", "/etc/temporal",
-			"--config", "config",
-			"--env", "config",
-			"start",
-			"--service", svc.Name,
+		Name:    "temporal",
+		Image:   serverImage(cluster, version),
+		Command: []string{"/bin/sh", "-c"},
+		Args: []string{
+			`cp -r /etc/temporal/config /tmp/temporal/temporal-config && ` +
+				`sed -i "s/\${POD_IP}/$POD_IP/g" /tmp/temporal/temporal-config/*.yaml && ` +
+				`exec temporal-server ` +
+				`--root /tmp/temporal --config temporal-config --env config ` +
+				`start --service ` + svc.Name,
+		},
+		Env: []corev1.EnvVar{
+			{
+				Name: "POD_IP",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.podIP"},
+				},
+			},
 		},
 		Ports:          containerPorts(svc),
 		Resources:      resources,
@@ -147,6 +159,7 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "config", MountPath: configMountPath, ReadOnly: true},
 			{Name: "dynamicconfig", MountPath: dynamicConfigMountPath, ReadOnly: true},
+			{Name: "processed-config", MountPath: "/tmp/temporal"},
 		},
 	}
 
@@ -164,6 +177,10 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 					LocalObjectReference: corev1.LocalObjectReference{Name: DynamicConfigMapName(cluster.Name)},
 				},
 			},
+		},
+		{
+			Name:         "processed-config",
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 		},
 	}
 

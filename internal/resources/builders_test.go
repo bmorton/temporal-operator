@@ -18,6 +18,7 @@ package resources
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -72,8 +73,14 @@ func TestBuildDeployment(t *testing.T) {
 	if ctr.Image != "temporalio/server:1.31.1" {
 		t.Errorf("unexpected image %q", ctr.Image)
 	}
-	if !slices.Contains(ctr.Command, "--service") || !slices.Contains(ctr.Command, "frontend") {
-		t.Errorf("expected --service frontend, got %v", ctr.Command)
+	if !slices.Contains(ctr.Command, "/bin/sh") {
+		t.Errorf("expected shell wrapper command, got %v", ctr.Command)
+	}
+	if len(ctr.Args) != 1 || !strings.Contains(ctr.Args[0], "--service frontend") {
+		t.Errorf("expected --service frontend in args, got %v", ctr.Args)
+	}
+	if !strings.Contains(ctr.Args[0], "POD_IP") {
+		t.Errorf("expected POD_IP substitution in entrypoint, got %v", ctr.Args)
 	}
 	if dep.Spec.Template.Annotations[ConfigHashAnnotation] != "abc123" {
 		t.Errorf("expected config-hash annotation")
