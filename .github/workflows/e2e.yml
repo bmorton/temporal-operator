@@ -15,7 +15,7 @@ jobs:
   # the nightly schedule.
   matrix:
     name: Compute matrix
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     outputs:
       combos: ${{ steps.set.outputs.combos }}
     steps:
@@ -30,7 +30,7 @@ jobs:
   e2e:
     name: e2e (${{ matrix.combo.suite }})
     needs: matrix
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     strategy:
       fail-fast: false
       matrix:
@@ -134,7 +134,7 @@ jobs:
     name: E2E result
     if: always()
     needs: e2e
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     steps:
       - name: Check matrix result
         run: |

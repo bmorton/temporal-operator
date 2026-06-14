@@ -16,7 +16,7 @@ permissions:
 jobs:
   release-please:
     name: Release Please
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     steps:
       - uses: googleapis/release-please-action@v4
         with:

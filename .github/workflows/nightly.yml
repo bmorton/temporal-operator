@@ -11,7 +11,7 @@ permissions:
 jobs:
   upgrade-matrix:
     name: Upgrade ${{ matrix.from }} -> ${{ matrix.to }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     strategy:
       fail-fast: false
       matrix:
