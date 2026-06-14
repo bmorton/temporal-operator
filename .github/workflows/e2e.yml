@@ -99,13 +99,16 @@ jobs:
             [ -n "$img" ] || continue
             echo "::group::Loading $img"
             for attempt in 1 2 3; do
-              if docker pull "$img"; then
+              if docker pull --platform linux/amd64 "$img"; then
                 break
               fi
               echo "docker pull $img failed (attempt $attempt), retrying..."
               sleep $((attempt * 5))
             done
-            kind load docker-image "$img" --name temporal-operator-test-e2e
+            # kind load uses ctr --all-platforms which fails on multi-arch
+            # images. Import directly with ctr, omitting --all-platforms.
+            docker save "$img" | docker exec -i temporal-operator-test-e2e-control-plane \
+              ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs -
             echo "::endgroup::"
           done
 
