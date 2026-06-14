@@ -29,8 +29,8 @@ helm uninstall temporal-operator --namespace temporal-system
 | Key | Description | Default |
 |---|---|---|
 | `manager.replicas` | Controller manager replica count | `1` |
-| `manager.image.repository` | Operator image repository | `controller` |
-| `manager.image.tag` | Operator image tag | `latest` |
+| `manager.image.repository` | Operator image repository | `ghcr.io/bmorton/temporal-operator` |
+| `manager.image.tag` | Operator image tag | chart `appVersion` |
 | `manager.resources` | Controller resource requests/limits | see `values.yaml` |
 | `crd.enable` | Install the CRDs with the chart | `true` |
 | `crd.keep` | Keep CRDs on chart uninstall | `true` |
