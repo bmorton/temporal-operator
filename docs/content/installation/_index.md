@@ -1,3 +1,8 @@
++++
+title = "Installation"
+weight = 20
++++
+
 # Installation
 
 The operator ships in three formats.
