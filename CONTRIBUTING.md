@@ -39,7 +39,7 @@ make run               # run the controller locally
 
 ## Conventional Commits
 
-All commit messages **must** follow the
+We **prefer** commit messages that follow the
 [Conventional Commits](https://www.conventionalcommits.org/) specification, e.g.:
 
 ```
@@ -48,8 +48,13 @@ fix(webhook): reject immutable shard count change
 docs: document mTLS configuration
 ```
 
-Allowed types include `feat`, `fix`, `docs`, `style`, `refactor`, `perf`,
-`test`, `build`, `ci`, `chore`, and `revert`. This is enforced by CI.
+Common types are `feat`, `fix`, `docs`, `style`, `refactor`, `perf`,
+`test`, `build`, `ci`, `chore`, and `revert`. CI checks commit messages and
+reports suggestions, but **the check is non-blocking** — it will not fail your
+PR. The leading `type:` matters most: while the project is pre-1.0,
+[release-please](https://github.com/googleapis/release-please) uses it to build
+the changelog and choose the next version, so `feat:` and `fix:` are
+especially helpful.
 
 ## Developer Certificate of Origin (DCO)
 
