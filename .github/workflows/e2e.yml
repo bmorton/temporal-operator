@@ -81,6 +81,9 @@ jobs:
           set -euo pipefail
           root="test/e2e/$(echo '${{ matrix.combo.suite }}' | cut -d/ -f1)"
           # Temporal versions drive the derived server and admin-tools images.
+          # Scope to the 1.x line on purpose: the fixtures also carry unrelated
+          # "version:" fields (Elasticsearch 8.x, UI 2.x) that must not be
+          # turned into bogus temporalio/server:<x> pulls.
           versions=$( { grep -rhoE 'version: *"?1\.[0-9]+\.[0-9]+' "$root" || true; } \
             | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
           images=""
@@ -89,7 +92,7 @@ jobs:
           done
           # Pick up any images referenced literally in the fixtures/scripts
           # (e.g. admin-tools health checks or pinned UI images).
-          images="$images $(grep -rhoE 'temporalio/[a-z-]+:[^ "}]+' "$root" || true)"
+          images="$images $(grep -rhoE 'temporalio/[a-zA-Z0-9-]+:[^ "}]+' "$root" || true)"
           for img in $(echo "$images" | tr ' ' '\n' | sort -u); do
             [ -n "$img" ] || continue
             echo "::group::Loading $img"
@@ -98,7 +101,7 @@ jobs:
                 break
               fi
               echo "docker pull $img failed (attempt $attempt), retrying..."
-              sleep $((attempt * 10))
+              sleep $((attempt * 5))
             done
             kind load docker-image "$img" --name temporal-operator-test-e2e
             echo "::endgroup::"
