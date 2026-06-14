@@ -29,7 +29,7 @@ import (
 func raw(s string) runtime.RawExtension { return runtime.RawExtension{Raw: []byte(s)} }
 
 func TestRenderDynamicConfigEmpty(t *testing.T) {
-	out, warnings, err := RenderDynamicConfig(nil, "1.31.2")
+	out, warnings, err := RenderDynamicConfig(nil, "1.31.1")
 	if err != nil || out != "" || warnings != nil {
 		t.Fatalf("expected empty render, got out=%q warnings=%v err=%v", out, warnings, err)
 	}
@@ -52,7 +52,7 @@ func TestRenderDynamicConfig(t *testing.T) {
 		},
 	}
 
-	out, warnings, err := RenderDynamicConfig(spec, "1.31.2")
+	out, warnings, err := RenderDynamicConfig(spec, "1.31.1")
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestRenderDynamicConfigRemovedKey(t *testing.T) {
 			"some.removedKey": {{Value: raw("1")}},
 		},
 	}
-	if _, _, err := RenderDynamicConfig(spec, "1.31.2"); err == nil {
+	if _, _, err := RenderDynamicConfig(spec, "1.31.1"); err == nil {
 		t.Errorf("expected error for removed dynamic config key")
 	}
 }

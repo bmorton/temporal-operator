@@ -81,7 +81,7 @@ var _ = Describe("TemporalSearchAttribute reconciler", func() {
 		name := fmt.Sprintf("sa-cluster-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })

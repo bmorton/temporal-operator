@@ -18,6 +18,7 @@ package resources
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +29,7 @@ import (
 func builderCluster() *temporalv1alpha1.TemporalCluster {
 	return &temporalv1alpha1.TemporalCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "tc", Namespace: "ns"},
-		Spec:       temporalv1alpha1.TemporalClusterSpec{Version: "1.31.2"},
+		Spec:       temporalv1alpha1.TemporalClusterSpec{Version: "1.31.1"},
 	}
 }
 
@@ -52,7 +53,7 @@ func TestSelectorLabelsStableAcrossVersion(t *testing.T) {
 		t.Errorf("selector labels must not include version")
 	}
 	full := StandardLabels(c, "frontend")
-	if full[LabelVersion] != "1.31.2" {
+	if full[LabelVersion] != "1.31.1" {
 		t.Errorf("standard labels must include version")
 	}
 	if full[LabelManagedBy] != managedByValue {
@@ -69,11 +70,17 @@ func TestBuildDeployment(t *testing.T) {
 		t.Errorf("unexpected name %q", dep.Name)
 	}
 	ctr := dep.Spec.Template.Spec.Containers[0]
-	if ctr.Image != "temporalio/server:1.31.2" {
+	if ctr.Image != "temporalio/server:1.31.1" {
 		t.Errorf("unexpected image %q", ctr.Image)
 	}
-	if !slices.Contains(ctr.Command, "--service") || !slices.Contains(ctr.Command, "frontend") {
-		t.Errorf("expected --service frontend, got %v", ctr.Command)
+	if !slices.Contains(ctr.Command, "/bin/sh") {
+		t.Errorf("expected shell wrapper command, got %v", ctr.Command)
+	}
+	if len(ctr.Args) != 1 || !strings.Contains(ctr.Args[0], "--service frontend") {
+		t.Errorf("expected --service frontend in args, got %v", ctr.Args)
+	}
+	if !strings.Contains(ctr.Args[0], "POD_IP") {
+		t.Errorf("expected POD_IP substitution in entrypoint, got %v", ctr.Args)
 	}
 	if dep.Spec.Template.Annotations[ConfigHashAnnotation] != "abc123" {
 		t.Errorf("expected config-hash annotation")

@@ -52,7 +52,7 @@ var _ = Describe("TemporalCluster Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					Spec: validClusterSpec("1.31.2"),
+					Spec: validClusterSpec("1.31.1"),
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -126,7 +126,7 @@ var _ = Describe("TemporalCluster CRD validation", func() {
 	It("rejects setting both sql and cassandra on a store (CEL)", func() {
 		resource := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cel-both-stores", Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		resource.Spec.Persistence.DefaultStore.Cassandra = &temporalv1alpha1.CassandraDatastoreSpec{
 			Hosts:    []string{"cassandra.default.svc"},
@@ -148,7 +148,7 @@ var _ = Describe("TemporalCluster CRD validation", func() {
 		name := "immutable-shards"
 		resource := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 		DeferCleanup(func() {

@@ -12,7 +12,7 @@ permissions:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -30,7 +30,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +53,7 @@ jobs:
 
   build:
     name: Build image
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -71,7 +71,7 @@ jobs:
 
   govulncheck:
     name: govulncheck
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

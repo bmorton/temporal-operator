@@ -76,11 +76,7 @@ test-golden-update: ## Regenerate config-template golden files.
 KIND_CLUSTER ?= temporal-operator-test-e2e
 
 .PHONY: setup-test-e2e
-setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
-	@command -v $(KIND) >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
-		exit 1; \
-	}
+setup-test-e2e: kind ## Set up a Kind cluster for e2e tests if it does not exist
 	@case "$$($(KIND) get clusters)" in \
 		*"$(KIND_CLUSTER)"*) \
 			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
@@ -211,7 +207,7 @@ $(LOCALBIN):
 
 ## Tool Binaries
 KUBECTL ?= kubectl
-KIND ?= kind
+KIND ?= $(LOCALBIN)/kind
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
@@ -283,13 +279,17 @@ $(CRD_REF_DOCS): $(LOCALBIN)
 api-docs: crd-ref-docs ## Generate CRD API reference documentation.
 	"$(CRD_REF_DOCS)" --source-path=./api/v1alpha1 --config=hack/crd-ref-docs-config.yaml --renderer=markdown --output-path=docs/api/v1alpha1.md
 
+.PHONY: kind
+kind: $(KIND) ## Download kind locally if necessary.
+$(KIND): $(LOCALBIN)
+	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,$(KIND_VERSION))
+
 .PHONY: install-tools
-install-tools: controller-gen kustomize envtest golangci-lint chainsaw crd-ref-docs ## Install all pinned developer tooling into ./bin.
+install-tools: controller-gen kustomize envtest golangci-lint chainsaw crd-ref-docs kind ## Install all pinned developer tooling into ./bin.
 	@echo "Developer tooling installed in $(LOCALBIN)."
 
 .PHONY: kind-up
-kind-up: ## Create a local kind cluster for development.
-	@command -v $(KIND) >/dev/null 2>&1 || { echo "Kind is not installed. Please install Kind manually."; exit 1; }
+kind-up: kind ## Create a local kind cluster for development.
 	@case "$$($(KIND) get clusters)" in \
 		*"$(KIND_CLUSTER)"*) echo "Kind cluster '$(KIND_CLUSTER)' already exists." ;; \
 		*) echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; $(KIND) create cluster --name $(KIND_CLUSTER) ;; \

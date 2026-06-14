@@ -11,7 +11,7 @@ permissions:
 jobs:
   upgrade-matrix:
     name: Upgrade ${{ matrix.from }} -> ${{ matrix.to }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     strategy:
       fail-fast: false
       matrix:
@@ -23,7 +23,7 @@ jobs:
           - from: "1.29.0"
             to: "1.30.0"
           - from: "1.30.0"
-            to: "1.31.2"
+            to: "1.31.1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

@@ -42,7 +42,7 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 		name := fmt.Sprintf("pg-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
@@ -94,7 +94,7 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 		job := &batchv1.Job{}
 		jobName := resources.SchemaJobName(c.Name, resources.StoreDefault, resources.ActionSetup)
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: jobName, Namespace: "default"}, job)).To(Succeed())
-		Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("temporalio/admin-tools:1.31.2"))
+		Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("temporalio/admin-tools:1.31.1"))
 		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("setup-schema"))
 		Expect(job.OwnerReferences).NotTo(BeEmpty())
 
@@ -157,7 +157,7 @@ var _ = Describe("TemporalCluster Cassandra and Elasticsearch backends", func() 
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
 			Spec: temporalv1alpha1.TemporalClusterSpec{
-				Version:          "1.31.2",
+				Version:          "1.31.1",
 				NumHistoryShards: 512,
 				Persistence: temporalv1alpha1.PersistenceSpec{
 					DefaultStore: temporalv1alpha1.DatastoreSpec{

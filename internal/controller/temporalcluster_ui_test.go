@@ -65,7 +65,7 @@ var _ = Describe("TemporalCluster UI and monitoring", func() {
 		name := fmt.Sprintf("ui-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		mutate(c)
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())

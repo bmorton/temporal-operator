@@ -25,7 +25,7 @@ import (
 // TemporalClusterSpec defines the desired state of TemporalCluster.
 // +kubebuilder:validation:XValidation:rule="self.numHistoryShards == oldSelf.numHistoryShards",message="numHistoryShards is immutable"
 type TemporalClusterSpec struct {
-	// Version is the Temporal server version, e.g. "1.31.2".
+	// Version is the Temporal server version, e.g. "1.31.1".
 	// +kubebuilder:validation:Pattern=`^\d+\.\d+\.\d+$`
 	Version string `json:"version"`
 

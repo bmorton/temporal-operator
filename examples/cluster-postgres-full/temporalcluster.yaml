@@ -4,7 +4,7 @@ kind: TemporalCluster
 metadata:
   name: full
 spec:
-  version: "1.31.2"
+  version: "1.31.1"
   numHistoryShards: 4096
   services:
     frontend: { replicas: 2, resources: { requests: { cpu: 250m, memory: 256Mi } } }

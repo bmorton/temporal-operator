@@ -46,7 +46,7 @@ body:
     id: temporal-version
     attributes:
       label: Temporal version
-      placeholder: e.g. 1.31.2
+      placeholder: e.g. 1.31.1
     validations:
       required: false
   - type: textarea

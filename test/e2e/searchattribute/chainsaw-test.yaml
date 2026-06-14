@@ -30,6 +30,6 @@ spec:
         - script:
             content: |
               kubectl run -n $NAMESPACE tctl-sa --rm -i --restart=Never \
-                --image=temporalio/admin-tools:1.31.2 -- \
+                --image=temporalio/admin-tools:1.31.1 -- \
                 temporal operator search-attribute list \
                 --address temporal-lifecycle-frontend:7233 --namespace default

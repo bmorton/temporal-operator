@@ -33,7 +33,7 @@ import (
 type VersionInfo struct {
 	// Version is the minor version, e.g. "1.31".
 	Version string
-	// PatchVersions are the exact supported patch releases, e.g. "1.31.2".
+	// PatchVersions are the exact supported patch releases, e.g. "1.31.1".
 	PatchVersions []string
 	// MinSchemaSQL is the minimum SQL schema version required.
 	MinSchemaSQL string
@@ -78,7 +78,7 @@ func parseSemver(v string) (semver, error) {
 }
 
 // minorOf returns the "major.minor" prefix of a version string. The input may
-// already be a minor ("1.31") or a full patch version ("1.31.2").
+// already be a minor ("1.31") or a full patch version ("1.31.1").
 func minorOf(version string) string {
 	parts := strings.Split(version, ".")
 	if len(parts) >= 2 {
@@ -88,7 +88,7 @@ func minorOf(version string) string {
 }
 
 // LookupVersion returns the VersionInfo for a version, which may be a minor
-// ("1.31") or an exact patch ("1.31.2").
+// ("1.31") or an exact patch ("1.31.1").
 func LookupVersion(version string) (*VersionInfo, error) {
 	minor := minorOf(version)
 	for i := range supportedVersions {

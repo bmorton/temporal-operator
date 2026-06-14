@@ -65,7 +65,7 @@ var _ = Describe("TemporalCluster mTLS reconciler", func() {
 		name := fmt.Sprintf("mtls-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		c.Spec.MTLS = &temporalv1alpha1.MTLSSpec{
 			Provider:  "cert-manager",
@@ -152,7 +152,7 @@ var _ = Describe("TemporalClusterClient reconciler", func() {
 		name := fmt.Sprintf("cc-cluster-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		c.Spec.MTLS = &temporalv1alpha1.MTLSSpec{
 			Provider:  "cert-manager",
@@ -205,7 +205,7 @@ var _ = Describe("TemporalClusterClient reconciler", func() {
 		clusterName := fmt.Sprintf("nomtls-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })

@@ -88,7 +88,7 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		})
 	})
 
-	It("rolls services in order from 1.31.0 to 1.31.2 and records phases", func() {
+	It("rolls services in order from 1.31.0 to 1.31.1 and records phases", func() {
 		counter++
 		name := fmt.Sprintf("upg-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
@@ -105,9 +105,9 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		Expect(get(name).Status.Version).To(Equal("1.31.0"))
 		Expect(meta.IsStatusConditionTrue(get(name).Status.Conditions, temporalv1alpha1.ConditionReady)).To(BeTrue())
 
-		By("requesting an upgrade to 1.31.2")
+		By("requesting an upgrade to 1.31.1")
 		cur := get(name)
-		cur.Spec.Version = "1.31.2"
+		cur.Spec.Version = "1.31.1"
 		Expect(k8sClient.Update(ctx, cur)).To(Succeed())
 
 		By("driving the upgrade phase machine to completion")
@@ -115,7 +115,7 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		var rollbackableDuringSchema *bool
 		for i := 0; i < 20; i++ {
 			reconcileOnce(name)
-			markReadyAtVersion(name, "1.31.2")
+			markReadyAtVersion(name, "1.31.1")
 
 			c := get(name)
 			if c.Status.Upgrade != nil {
@@ -125,13 +125,13 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 					rollbackableDuringSchema = &v
 				}
 			}
-			if c.Status.Version == "1.31.2" && c.Status.Upgrade == nil {
+			if c.Status.Version == "1.31.1" && c.Status.Upgrade == nil {
 				break
 			}
 		}
 
 		final := get(name)
-		Expect(final.Status.Version).To(Equal("1.31.2"))
+		Expect(final.Status.Version).To(Equal("1.31.1"))
 		Expect(final.Status.Upgrade).To(BeNil())
 
 		By("having passed through the ordered rolling phases")
@@ -149,17 +149,17 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		name := fmt.Sprintf("fresh-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
 
 		reconcileOnce(name)
-		markReadyAtVersion(name, "1.31.2")
+		markReadyAtVersion(name, "1.31.1")
 		reconcileOnce(name)
 
 		final := get(name)
 		Expect(final.Status.Upgrade).To(BeNil())
-		Expect(final.Status.Version).To(Equal("1.31.2"))
+		Expect(final.Status.Version).To(Equal("1.31.1"))
 	})
 })

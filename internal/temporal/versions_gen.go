@@ -59,7 +59,7 @@ var supportedVersions = []VersionInfo{
 	},
 	{
 		Version:                      "1.31",
-		PatchVersions:                []string{"1.31.0", "1.31.2"},
+		PatchVersions:                []string{"1.31.0", "1.31.1"},
 		MinSchemaSQL:                 "v1.12",
 		MinSchemaCassandra:           "v1.9",
 		MinSchemaES:                  "v9",

@@ -15,22 +15,22 @@ jobs:
   # the nightly schedule.
   matrix:
     name: Compute matrix
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     outputs:
       combos: ${{ steps.set.outputs.combos }}
     steps:
       - id: set
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo 'combos=[{"temporal":"1.31.2","persistence":"postgres","suite":"postgres/lifecycle"},{"temporal":"1.31.2","persistence":"mtls","suite":"mtls"},{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}]' >> "$GITHUB_OUTPUT"
+            echo 'combos=[{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"},{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"},{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}]' >> "$GITHUB_OUTPUT"
           else
-            echo 'combos=[{"temporal":"1.31.2","persistence":"postgres","suite":"postgres/lifecycle"}]' >> "$GITHUB_OUTPUT"
+            echo 'combos=[{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"}]' >> "$GITHUB_OUTPUT"
           fi
 
   e2e:
     name: e2e (${{ matrix.combo.suite }})
     needs: matrix
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     strategy:
       fail-fast: false
       matrix:
@@ -43,7 +43,9 @@ jobs:
           cache: true
 
       - name: Install tooling
-        run: make install-tools
+        run: |
+          make install-tools
+          echo "$PWD/bin" >> "$GITHUB_PATH"
 
       - name: Create kind cluster
         run: make kind-up
@@ -68,6 +70,47 @@ jobs:
             --set manager.image.tag=e2e \
             --set manager.image.pullPolicy=Never
           kubectl -n temporal-system rollout status deploy/temporal-operator-controller-manager --timeout=180s
+
+      # Pre-pull the Temporal images on the runner and side-load them into the
+      # kind node. The CNPG/cert-manager images come from quay.io/ghcr.io, but
+      # the Temporal server/admin-tools images live on Docker Hub, where the
+      # kind node's anonymous, unauthenticated kubelet pulls are rate-limited
+      # and crash-loop the schema-setup Job with ImagePullBackOff. Loading the
+      # images locally lets the default IfNotPresent pull policy find them
+      # without hitting Docker Hub from inside the cluster.
+      - name: Pre-pull and load Temporal images
+        run: |
+          set -euo pipefail
+          root="test/e2e/$(echo '${{ matrix.combo.suite }}' | cut -d/ -f1)"
+          # Temporal versions drive the derived server and admin-tools images.
+          # Scope to the 1.x line on purpose: the fixtures also carry unrelated
+          # "version:" fields (Elasticsearch 8.x, UI 2.x) that must not be
+          # turned into bogus temporalio/server:<x> pulls.
+          versions=$( { grep -rhoE 'version: *"?1\.[0-9]+\.[0-9]+' "$root" || true; } \
+            | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
+          images=""
+          for v in $versions; do
+            images="$images temporalio/server:$v temporalio/admin-tools:$v"
+          done
+          # Pick up any images referenced literally in the fixtures/scripts
+          # (e.g. admin-tools health checks or pinned UI images).
+          images="$images $(grep -rhoE 'temporalio/[a-zA-Z0-9-]+:[^ "}]+' "$root" || true)"
+          for img in $(echo "$images" | tr ' ' '\n' | sort -u); do
+            [ -n "$img" ] || continue
+            echo "::group::Loading $img"
+            for attempt in 1 2 3; do
+              if docker pull --platform linux/amd64 "$img"; then
+                break
+              fi
+              echo "docker pull $img failed (attempt $attempt), retrying..."
+              sleep $((attempt * 5))
+            done
+            # kind load uses ctr --all-platforms which fails on multi-arch
+            # images. Import directly with ctr, omitting --all-platforms.
+            docker save "$img" | docker exec -i temporal-operator-test-e2e-control-plane \
+              ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs -
+            echo "::endgroup::"
+          done
 
       - name: Run Chainsaw suite
         run: ./bin/chainsaw test --test-dir test/e2e/${{ matrix.combo.suite }} --config .chainsaw.yaml
@@ -96,7 +139,7 @@ jobs:
     name: E2E result
     if: always()
     needs: e2e
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-temporal-operator
     steps:
       - name: Check matrix result
         run: |

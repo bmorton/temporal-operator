@@ -6022,7 +6022,7 @@ spec:
                 - enabled
                 type: object
               version:
-                description: Version is the Temporal server version, e.g. "1.31.2".
+                description: Version is the Temporal server version, e.g. "1.31.1".
                 pattern: ^\d+\.\d+\.\d+$
                 type: string
             required:

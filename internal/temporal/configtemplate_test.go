@@ -48,7 +48,7 @@ func baseCluster() *temporalv1alpha1.TemporalCluster {
 	return &temporalv1alpha1.TemporalCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 		Spec: temporalv1alpha1.TemporalClusterSpec{
-			Version:          "1.31.2",
+			Version:          "1.31.1",
 			NumHistoryShards: 512,
 			Persistence: temporalv1alpha1.PersistenceSpec{
 				DefaultStore:    temporalv1alpha1.DatastoreSpec{SQL: sqlStore("temporal")},

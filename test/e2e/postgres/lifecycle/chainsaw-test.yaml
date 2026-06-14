@@ -52,6 +52,6 @@ spec:
             timeout: 2m
             content: |
               kubectl run -n $NAMESPACE tctl-health --rm -i --restart=Never \
-                --image=temporalio/admin-tools:1.31.2 -- \
+                --image=temporalio/admin-tools:1.31.1 -- \
                 temporal operator cluster health \
                 --address temporal-lifecycle-frontend:7233
