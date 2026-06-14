@@ -69,6 +69,41 @@ jobs:
             --set manager.image.pullPolicy=Never
           kubectl -n temporal-system rollout status deploy/temporal-operator-controller-manager --timeout=180s
 
+      # Pre-pull the Temporal images on the runner and side-load them into the
+      # kind node. The CNPG/cert-manager images come from quay.io/ghcr.io, but
+      # the Temporal server/admin-tools images live on Docker Hub, where the
+      # kind node's anonymous, unauthenticated kubelet pulls are rate-limited
+      # and crash-loop the schema-setup Job with ImagePullBackOff. Loading the
+      # images locally lets the default IfNotPresent pull policy find them
+      # without hitting Docker Hub from inside the cluster.
+      - name: Pre-pull and load Temporal images
+        run: |
+          set -euo pipefail
+          root="test/e2e/$(echo '${{ matrix.combo.suite }}' | cut -d/ -f1)"
+          # Temporal versions drive the derived server and admin-tools images.
+          versions=$( { grep -rhoE 'version: *"?1\.[0-9]+\.[0-9]+' "$root" || true; } \
+            | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
+          images=""
+          for v in $versions; do
+            images="$images temporalio/server:$v temporalio/admin-tools:$v"
+          done
+          # Pick up any images referenced literally in the fixtures/scripts
+          # (e.g. admin-tools health checks or pinned UI images).
+          images="$images $(grep -rhoE 'temporalio/[a-z-]+:[^ "}]+' "$root" || true)"
+          for img in $(echo "$images" | tr ' ' '\n' | sort -u); do
+            [ -n "$img" ] || continue
+            echo "::group::Loading $img"
+            for attempt in 1 2 3; do
+              if docker pull "$img"; then
+                break
+              fi
+              echo "docker pull $img failed (attempt $attempt), retrying..."
+              sleep $((attempt * 10))
+            done
+            kind load docker-image "$img" --name temporal-operator-test-e2e
+            echo "::endgroup::"
+          done
+
       - name: Run Chainsaw suite
         run: ./bin/chainsaw test --test-dir test/e2e/${{ matrix.combo.suite }} --config .chainsaw.yaml
 
