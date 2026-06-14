@@ -29,7 +29,7 @@ func testCluster() *temporalv1alpha1.TemporalCluster {
 	return &temporalv1alpha1.TemporalCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "tc", Namespace: "ns"},
 		Spec: temporalv1alpha1.TemporalClusterSpec{
-			Version: "1.31.2",
+			Version: "1.31.1",
 		},
 	}
 }
@@ -68,7 +68,7 @@ func TestBuildSchemaJobSetup(t *testing.T) {
 		t.Errorf("unexpected metadata: %s/%s", job.Namespace, job.Name)
 	}
 	c := job.Spec.Template.Spec.Containers[0]
-	if c.Image != "temporalio/admin-tools:1.31.2" {
+	if c.Image != "temporalio/admin-tools:1.31.1" {
 		t.Errorf("unexpected image %q", c.Image)
 	}
 	if c.Command[0] != "temporal-sql-tool" {

@@ -44,6 +44,6 @@ When `READY` is `True`, the cluster is serving on
 ## 5. Run a workflow
 
 ```sh
-kubectl run tctl --rm -it --image=temporalio/admin-tools:1.31.2 -- \
+kubectl run tctl --rm -it --image=temporalio/admin-tools:1.31.1 -- \
   temporal operator cluster health --address temporal-lifecycle-frontend:7233
 ```

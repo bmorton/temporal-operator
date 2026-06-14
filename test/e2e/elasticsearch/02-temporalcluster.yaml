@@ -3,7 +3,7 @@ kind: TemporalCluster
 metadata:
   name: temporal-es
 spec:
-  version: "1.31.2"
+  version: "1.31.1"
   numHistoryShards: 512
   persistence:
     defaultStore:

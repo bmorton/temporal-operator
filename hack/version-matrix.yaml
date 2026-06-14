@@ -48,7 +48,7 @@ versions:
     cassandraVisibilitySupported: false
 
   - version: "1.31"
-    patchVersions: ["1.31.0", "1.31.2"]
+    patchVersions: ["1.31.0", "1.31.1"]
     minSchemaSQL: "v1.12"
     minSchemaCassandra: "v1.9"
     minSchemaES: "v9"

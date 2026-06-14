@@ -412,7 +412,7 @@ This plan is written for an autonomous (or semi-autonomous) coding agent working
 
 ```go
 type TemporalClusterSpec struct {
-    // Version is the Temporal server version, e.g. "1.31.2".
+    // Version is the Temporal server version, e.g. "1.31.1".
     // +kubebuilder:validation:Pattern=`^\d+\.\d+\.\d+$`
     Version string `json:"version"`
 
@@ -692,7 +692,7 @@ package temporal
 
 type VersionInfo struct {
     Version              string   // "1.31"
-    PatchVersions        []string // ["1.31.0", "1.31.1", "1.31.2"]
+    PatchVersions        []string // ["1.31.0", "1.31.1", "1.31.1"]
     MinSchemaSQL         string   // "v12.1.14"
     MinSchemaCassandra   string   // "v1.10"
     MinSchemaES          string   // "v14"

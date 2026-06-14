@@ -22,9 +22,9 @@ jobs:
       - id: set
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo 'combos=[{"temporal":"1.31.2","persistence":"postgres","suite":"postgres/lifecycle"},{"temporal":"1.31.2","persistence":"mtls","suite":"mtls"},{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}]' >> "$GITHUB_OUTPUT"
+            echo 'combos=[{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"},{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"},{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}]' >> "$GITHUB_OUTPUT"
           else
-            echo 'combos=[{"temporal":"1.31.2","persistence":"postgres","suite":"postgres/lifecycle"}]' >> "$GITHUB_OUTPUT"
+            echo 'combos=[{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"}]' >> "$GITHUB_OUTPUT"
           fi
 
   e2e:

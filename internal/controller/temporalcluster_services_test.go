@@ -65,7 +65,7 @@ var _ = Describe("TemporalCluster services reconciler", func() {
 		name := fmt.Sprintf("svc-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.2"),
+			Spec:       validClusterSpec("1.31.1"),
 		}
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
@@ -121,7 +121,7 @@ var _ = Describe("TemporalCluster services reconciler", func() {
 		Expect(meta.IsStatusConditionTrue(c.Status.Conditions, temporalv1alpha1.ConditionAvailable)).To(BeTrue())
 		Expect(meta.IsStatusConditionTrue(c.Status.Conditions, temporalv1alpha1.ConditionReady)).To(BeTrue())
 		Expect(c.Status.Phase).To(Equal("Ready"))
-		Expect(c.Status.Version).To(Equal("1.31.2"))
+		Expect(c.Status.Version).To(Equal("1.31.1"))
 		Expect(c.Status.Services).To(HaveKey("frontend"))
 	})
 })

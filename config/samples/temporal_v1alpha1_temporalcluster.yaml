@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: temporalcluster-sample
 spec:
-  version: "1.31.2"
+  version: "1.31.1"
   numHistoryShards: 512
   persistence:
     defaultStore:

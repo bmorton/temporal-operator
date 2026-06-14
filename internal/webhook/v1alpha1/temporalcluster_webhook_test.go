@@ -38,7 +38,7 @@ func validCluster() *temporalv1alpha1.TemporalCluster {
 	}
 	return &temporalv1alpha1.TemporalCluster{
 		Spec: temporalv1alpha1.TemporalClusterSpec{
-			Version:          "1.31.2",
+			Version:          "1.31.1",
 			NumHistoryShards: 512,
 			Persistence: temporalv1alpha1.PersistenceSpec{
 				DefaultStore:    temporalv1alpha1.DatastoreSpec{SQL: sql("temporal")},
@@ -70,7 +70,7 @@ var _ = Describe("TemporalCluster Webhook", func() {
 			obj.Spec.Image = ""
 			Expect(defaulter.Default(ctx, obj)).To(Succeed())
 
-			Expect(obj.Spec.Image).To(Equal("temporalio/server:1.31.2"))
+			Expect(obj.Spec.Image).To(Equal("temporalio/server:1.31.1"))
 			Expect(obj.Spec.Services.Frontend.Replicas).To(HaveValue(Equal(int32(2))))
 			Expect(obj.Spec.Services.History.Replicas).To(HaveValue(Equal(int32(3))))
 			Expect(obj.Spec.Services.Matching.Replicas).To(HaveValue(Equal(int32(2))))
@@ -125,14 +125,14 @@ var _ = Describe("TemporalCluster Webhook", func() {
 
 		It("rejects a non-adjacent version jump", func() {
 			oldObj.Spec.Version = "1.27.0"
-			obj.Spec.Version = "1.31.2"
+			obj.Spec.Version = "1.31.1"
 			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("admits a patch-level version bump within the same minor", func() {
 			oldObj.Spec.Version = "1.31.0"
-			obj.Spec.Version = "1.31.2"
+			obj.Spec.Version = "1.31.1"
 			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
 			Expect(err).NotTo(HaveOccurred())
 		})

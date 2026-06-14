@@ -643,7 +643,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `version` _string_ | Version is the Temporal server version, e.g. "1.31.2". |  | Pattern: `^\d+\.\d+\.\d+$` <br /> |
+| `version` _string_ | Version is the Temporal server version, e.g. "1.31.1". |  | Pattern: `^\d+\.\d+\.\d+$` <br /> |
 | `numHistoryShards` _integer_ | NumHistoryShards is the number of history shards. IMMUTABLE after creation.<br />Choose carefully: 512 small prod, 4096 large prod. | 512 | Maximum: 16384 <br />Minimum: 1 <br /> |
 | `image` _string_ | Image is the Temporal server image. Default: temporalio/server:<Version>. |  | Optional: \{\} <br /> |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core) array_ | ImagePullSecrets references secrets for pulling the server image. |  | Optional: \{\} <br /> |
