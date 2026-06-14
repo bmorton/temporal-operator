@@ -13,6 +13,11 @@
 # spec.managed.roles without a passwordSecret: CNPG would reconcile the role to
 # PASSWORD NULL / NOLOGIN, breaking password authentication for both the
 # create-visibility-db Job and the operator.
+#
+# postInitSQL runs once, as the superuser, right after initdb creates the
+# "temporal" role. Granting CREATEDB lets the create-visibility-db Job create
+# the separate "temporal_visibility" database while still connecting as the
+# unprivileged application user.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -25,3 +30,5 @@ spec:
     initdb:
       database: temporal
       owner: temporal
+      postInitSQL:
+        - ALTER ROLE temporal WITH CREATEDB;
