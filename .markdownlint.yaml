@@ -4,3 +4,5 @@ MD013: false   # line length
 MD033: false   # inline HTML
 MD041: false   # first line heading
 MD060: false   # table-column-style: pedantic pipe spacing, version-dependent
+MD025:         # allow a Hugo front-matter title alongside the body's H1
+  front_matter_title: ""

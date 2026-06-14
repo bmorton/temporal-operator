@@ -25,11 +25,13 @@ jobs:
             examples/**/*.md
             !docs/content/reference/**
             !docs/api/**
+            !docs/themes/**
+            !docs/superpowers/**
           config: ".markdownlint.yaml"
       - name: Check links
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md --exclude-path docs/content/reference --exclude-path docs/api
+          args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md --exclude-path docs/content/reference --exclude-path docs/api --exclude-path docs/themes --exclude-path docs/superpowers
           fail: false
 
   build-deploy:
