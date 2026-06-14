@@ -18,3 +18,8 @@ coverage.*
 # Local env / kube
 kubeconfig
 *.local.yaml
+
+# Hugo docs site
+docs/public/
+docs/resources/
+.hugo_build.lock
