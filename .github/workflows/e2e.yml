@@ -43,7 +43,9 @@ jobs:
           cache: true
 
       - name: Install tooling
-        run: make install-tools
+        run: |
+          make install-tools
+          echo "$PWD/bin" >> "$GITHUB_PATH"
 
       - name: Create kind cluster
         run: make kind-up
