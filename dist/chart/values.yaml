@@ -3,8 +3,10 @@ manager:
   replicas: 1
   
   image:
-    repository: controller
-    tag: latest
+    repository: ghcr.io/bmorton/temporal-operator
+    # Defaults to the chart's appVersion (the released operator version) when
+    # left empty. Override to pin a specific image tag.
+    tag: ""
     pullPolicy: IfNotPresent
 
   # Arguments

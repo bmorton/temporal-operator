@@ -13,6 +13,31 @@ through declarative custom resources.
 
 > **Status:** early development. APIs are `v1alpha1` and subject to change.
 
+## Installation
+
+The operator is published as a Helm chart (OCI) and a multi-arch container
+image on GitHub Container Registry.
+
+**Prerequisites:**
+
+- A Kubernetes cluster (the operator image is built for `linux/amd64` and
+  `linux/arm64`).
+- [cert-manager](https://cert-manager.io/docs/installation/) installed in the
+  cluster — the chart provisions webhook and metrics certificates through it.
+
+**Install:**
+
+```sh
+helm install temporal-operator \
+  oci://ghcr.io/bmorton/charts/temporal-operator --version 0.1.0 \
+  --namespace temporal-operator-system --create-namespace
+```
+
+The chart defaults to the matching operator image
+(`ghcr.io/bmorton/temporal-operator`) at the chart's `appVersion`, so no extra
+configuration is required. See [`dist/chart/README.md`](./dist/chart/README.md)
+for configurable values.
+
 ## Custom Resources
 
 | Kind | Short | Purpose |
