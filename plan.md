@@ -692,7 +692,7 @@ package temporal
 
 type VersionInfo struct {
     Version              string   // "1.31"
-    PatchVersions        []string // ["1.31.0", "1.31.1", "1.31.1"]
+    PatchVersions        []string // ["1.31.0", "1.31.1"]
     MinSchemaSQL         string   // "v12.1.14"
     MinSchemaCassandra   string   // "v1.10"
     MinSchemaES          string   // "v14"
