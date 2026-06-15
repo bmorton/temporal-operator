@@ -34,8 +34,8 @@ var temporalsearchattributelog = logf.Log.WithName("temporalsearchattribute-reso
 
 // SetupTemporalSearchAttributeWebhookWithManager registers the webhook for TemporalSearchAttribute in the manager.
 func SetupTemporalSearchAttributeWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&temporalv1alpha1.TemporalSearchAttribute{}).
-		WithValidator(&TemporalSearchAttributeCustomValidator{}).
+	return ctrl.NewWebhookManagedBy(mgr, &temporalv1alpha1.TemporalSearchAttribute{}).
+		WithCustomValidator(&TemporalSearchAttributeCustomValidator{}).
 		Complete()
 }
 

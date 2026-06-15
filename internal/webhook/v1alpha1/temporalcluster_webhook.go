@@ -42,9 +42,9 @@ var temporalclusterlog = logf.Log.WithName("temporalcluster-resource")
 
 // SetupTemporalClusterWebhookWithManager registers the webhook for TemporalCluster in the manager.
 func SetupTemporalClusterWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&temporalv1alpha1.TemporalCluster{}).
-		WithValidator(&TemporalClusterCustomValidator{}).
-		WithDefaulter(&TemporalClusterCustomDefaulter{}).
+	return ctrl.NewWebhookManagedBy(mgr, &temporalv1alpha1.TemporalCluster{}).
+		WithCustomValidator(&TemporalClusterCustomValidator{}).
+		WithCustomDefaulter(&TemporalClusterCustomDefaulter{}).
 		Complete()
 }
 

@@ -34,8 +34,8 @@ var temporalnamespacelog = logf.Log.WithName("temporalnamespace-resource")
 
 // SetupTemporalNamespaceWebhookWithManager registers the webhook for TemporalNamespace in the manager.
 func SetupTemporalNamespaceWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&temporalv1alpha1.TemporalNamespace{}).
-		WithValidator(&TemporalNamespaceCustomValidator{}).
+	return ctrl.NewWebhookManagedBy(mgr, &temporalv1alpha1.TemporalNamespace{}).
+		WithCustomValidator(&TemporalNamespaceCustomValidator{}).
 		Complete()
 }
 
