@@ -37,9 +37,9 @@ func TestCanUpgrade(t *testing.T) {
 	}{
 		{"patch bump", "1.31.0", "1.31.1", true, false},
 		{"same version", "1.31.1", "1.31.1", true, false},
-		{"adjacent minor", "1.30.0", "1.31.0", true, false},
-		{"minor skip", "1.29.0", "1.31.0", false, false},
-		{"downgrade minor", "1.31.0", "1.30.0", false, false},
+		{"adjacent minor", "1.30.4", "1.31.0", true, false},
+		{"minor skip", "1.29.6", "1.31.0", false, false},
+		{"downgrade minor", "1.31.0", "1.30.4", false, false},
 		{"downgrade patch", "1.31.1", "1.31.0", false, false},
 		{"unsupported target", "1.31.0", "9.9.9", false, true},
 		{"bad from", "garbage", "1.31.1", false, true},

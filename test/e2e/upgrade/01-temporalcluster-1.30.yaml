@@ -9,7 +9,7 @@ kind: TemporalCluster
 metadata:
   name: temporal-upgrade
 spec:
-  version: "1.30.0"
+  version: "1.30.4"
   numHistoryShards: 512
   persistence:
     defaultStore:
