@@ -72,7 +72,7 @@ extra to install or wait on in CI.
    - Timeouts mirror the ES suite (`apply: 2m`, `assert: 10m`).
 
 2. **`01-opensearch.yaml`** — `Deployment` (replicas: 1) + `Service`
-   (`temporal-os`, port 9200). Container `opensearchproject/opensearch:2.17.1`
+   (`temporal-os`, port 9200). Container `opensearchproject/opensearch:2.19.5`
    with env:
    - `discovery.type=single-node`
    - `DISABLE_SECURITY_PLUGIN=true`
@@ -109,13 +109,13 @@ extra to install or wait on in CI.
   `{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}`.
   Do **not** add it to the PR-only combo list.
 - Extend the "Pre-pull and load Temporal images" step to also pull and side-load
-  `opensearchproject/opensearch:2.17.1` into the kind node (Docker Hub images are
+  `opensearchproject/opensearch:2.19.5` into the kind node (Docker Hub images are
   rate-limited for the kind kubelet's anonymous pulls, like the temporalio images).
   The version is pinned, so a literal addition to the image list is sufficient.
 
 ## Decisions (confirmed)
 
-- OpenSearch target: **2.x**, pinned to **2.17.1**, single node.
+- OpenSearch target: **2.x**, pinned to **2.19.5**, single node.
 - Temporal `version`: **v8** (works with OpenSearch 2.x via the olivere v7 client).
 - Default store: **Postgres** via CNPG, reusing the existing postgres fixtures.
 - PR matrix: OpenSearch runs in the **full/non-PR matrix only**.
