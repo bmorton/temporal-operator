@@ -10,7 +10,7 @@ on:
       suite:
         description: Which suite(s) to run
         type: choice
-        options: [default, mtls, upgrade, all]
+        options: [default, mtls, upgrade, opensearch, all]
         default: default
 
 permissions:
@@ -33,14 +33,16 @@ jobs:
           postgres='{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"}'
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
           upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
+          opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
           if [ "$EVENT" = "schedule" ]; then
-            echo "combos=[$postgres,$mtls,$upgrade]" >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             case "$SUITE" in
-              mtls)    echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
-              upgrade) echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
-              all)     echo "combos=[$postgres,$mtls,$upgrade]" >> "$GITHUB_OUTPUT" ;;
-              *)       echo "combos=[$postgres]" >> "$GITHUB_OUTPUT" ;;
+              mtls)       echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
+              upgrade)    echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
+              opensearch) echo "combos=[$opensearch]" >> "$GITHUB_OUTPUT" ;;
+              all)        echo "combos=[$postgres,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT" ;;
+              *)          echo "combos=[$postgres]" >> "$GITHUB_OUTPUT" ;;
             esac
           else
             echo "combos=[$postgres]" >> "$GITHUB_OUTPUT"
