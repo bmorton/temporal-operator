@@ -23,6 +23,14 @@ spec:
                 readyInstances: 1
         - apply:
             file: ../postgres/02-secrets.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: create-visibility-db
+              status:
+                succeeded: 1
     - name: deploy-old-version
       try:
         - apply:
