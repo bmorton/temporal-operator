@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0](https://github.com/bmorton/temporal-operator/compare/v0.1.0...v0.2.0) (2026-06-15)
+
+
+### Features
+
+* **chart:** default operator image to the published GHCR image ([9c64499](https://github.com/bmorton/temporal-operator/commit/9c64499982caacbb01fb64cbc8d501379a32076c))
+* **chart:** default operator image to the published GHCR image ([932ecf9](https://github.com/bmorton/temporal-operator/commit/932ecf93c22e59fb52da2b86c9e1b6ef2f8faf04))
+* **docs:** publish documentation to GitHub Pages with Hugo ([1cf16a1](https://github.com/bmorton/temporal-operator/commit/1cf16a15165de98d72dc29ebfa08f0a3c085b8fd))
+
 ## 0.1.0 (2026-06-14)
 
 
