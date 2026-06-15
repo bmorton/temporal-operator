@@ -37,6 +37,8 @@ jobs:
         combo: ${{ fromJSON(needs.matrix.outputs.combos) }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -142,8 +144,10 @@ jobs:
     runs-on: namespace-profile-temporal-operator
     steps:
       - name: Check matrix result
+        env:
+          E2E_RESULT: ${{ needs.e2e.result }}
         run: |
-          if [ "${{ needs.e2e.result }}" != "success" ]; then
+          if [ "$E2E_RESULT" != "success" ]; then
             echo "e2e matrix failed"
             exit 1
           fi
