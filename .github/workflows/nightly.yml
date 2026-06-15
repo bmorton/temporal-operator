@@ -31,8 +31,11 @@ jobs:
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
+          cache: true
       - name: Install tooling
-        run: make install-tools
+        run: |
+          make install-tools
+          echo "$PWD/bin" >> "$GITHUB_PATH"
       - name: Create kind cluster
         run: make kind-up
       - name: Build and load operator image
@@ -44,13 +47,69 @@ jobs:
           kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
           kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml
           kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+          kubectl -n cnpg-system rollout status deploy/cnpg-controller-manager --timeout=180s
+      - name: Deploy operator
+        run: |
+          make deploy IMG=temporal-operator:nightly
+          kubectl -n temporal-operator-system rollout status deploy/temporal-operator-controller-manager --timeout=180s
+      # Pre-pull the Temporal images on the runner and side-load them into the
+      # kind node. The CNPG/cert-manager images come from quay.io/ghcr.io, but
+      # the Temporal server/admin-tools images live on Docker Hub, where the
+      # kind node's anonymous, unauthenticated kubelet pulls are rate-limited
+      # and crash-loop the schema-setup Job with ImagePullBackOff. Loading the
+      # images locally lets the default IfNotPresent pull policy find them
+      # without hitting Docker Hub from inside the cluster. The upgrade test
+      # provisions two Temporal versions, so both sets of images are needed.
+      - name: Pre-pull and load Temporal images
+        run: |
+          set -euo pipefail
+          root="test/e2e/upgrade"
+          # Temporal versions drive the derived server and admin-tools images.
+          # Scope to the 1.x line on purpose: the fixtures also carry unrelated
+          # "version:" fields that must not be turned into bogus
+          # temporalio/server:<x> pulls.
+          versions=$( { grep -rhoE 'version: *"?1\.[0-9]+\.[0-9]+' "$root" || true; } \
+            | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
+          images=""
+          for v in $versions; do
+            images="$images temporalio/server:$v temporalio/admin-tools:$v"
+          done
+          # Pick up any images referenced literally in the fixtures/scripts.
+          images="$images $(grep -rhoE 'temporalio/[a-zA-Z0-9-]+:[^ "}]+' "$root" || true)"
+          for img in $(echo "$images" | tr ' ' '\n' | sort -u); do
+            [ -n "$img" ] || continue
+            echo "::group::Loading $img"
+            for attempt in 1 2 3; do
+              if docker pull --platform linux/amd64 "$img"; then
+                break
+              fi
+              echo "docker pull $img failed (attempt $attempt), retrying..."
+              sleep $((attempt * 5))
+            done
+            # kind load uses ctr --all-platforms which fails on multi-arch
+            # images. Import directly with ctr, omitting --all-platforms.
+            docker save "$img" | docker exec -i temporal-operator-test-e2e-control-plane \
+              ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs -
+            echo "::endgroup::"
+          done
       - name: Run upgrade Chainsaw test
         env:
           UPGRADE_FROM: ${{ matrix.from }}
           UPGRADE_TO: ${{ matrix.to }}
+        run: ./bin/chainsaw test --test-dir test/e2e/upgrade --config .chainsaw.yaml
+      - name: Collect diagnostics
+        if: failure()
         run: |
-          make deploy IMG=temporal-operator:nightly
-          ./bin/chainsaw test --test-dir test/e2e/upgrade --config .chainsaw.yaml
+          mkdir -p artifacts
+          kubectl get all -A > artifacts/all.txt || true
+          kubectl get temporalcluster -A -o yaml > artifacts/temporalclusters.yaml || true
+          kubectl -n temporal-operator-system logs deploy/temporal-operator-controller-manager --tail=2000 > artifacts/operator.log || true
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-diagnostics-${{ strategy.job-index }}
+          path: artifacts/
       - name: Tear down kind cluster
         if: always()
         run: make kind-down

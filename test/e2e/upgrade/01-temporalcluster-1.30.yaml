@@ -1,3 +1,9 @@
+# The operator reconciler pings the datastore from its own pod in the
+# temporal-system namespace, so the host must be a namespace-qualified FQDN.
+# A bare "temporal-pg-rw" would resolve against temporal-system (where the
+# service does not exist) and fail with PersistenceUnreachable. Chainsaw
+# templating (enabled by default) substitutes the ephemeral test namespace via
+# the built-in $namespace binding.
 apiVersion: temporal.bmor10.com/v1alpha1
 kind: TemporalCluster
 metadata:
@@ -9,7 +15,7 @@ spec:
     defaultStore:
       sql:
         pluginName: postgres12
-        host: temporal-pg-rw
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
         port: 5432
         database: temporal
         user: temporal
@@ -19,7 +25,7 @@ spec:
     visibilityStore:
       sql:
         pluginName: postgres12
-        host: temporal-pg-rw
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
         port: 5432
         database: temporal_visibility
         user: temporal

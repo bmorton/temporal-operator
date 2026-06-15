@@ -9,7 +9,7 @@ spec:
     defaultStore:
       sql:
         pluginName: postgres12
-        host: temporal-pg-rw
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
         port: 5432
         database: temporal
         user: temporal
