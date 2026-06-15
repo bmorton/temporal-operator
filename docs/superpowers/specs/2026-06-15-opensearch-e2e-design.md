@@ -64,9 +64,12 @@ extra to install or wait on in CI.
 ### Files (`test/e2e/opensearch/`)
 
 1. **`chainsaw-test.yaml`** — Steps:
-   - `provision-deps`: apply `../postgres/01-fixtures-cnpg.yaml`,
-     `../postgres/02-secrets.yaml`, and `01-opensearch.yaml`; assert the
-     OpenSearch Deployment is available.
+   - `provision-deps`: apply `../postgres/01-fixtures-cnpg.yaml` and
+     `01-opensearch.yaml`; assert the OpenSearch Deployment is available.
+     (Note: `../postgres/02-secrets.yaml` is intentionally **not** reused — it
+     only creates the `temporal_visibility` Postgres database, which is unused
+     when visibility is OpenSearch. Only the default `temporal` database, created
+     by CNPG initdb, is needed.)
    - `cluster-os-visibility`: apply `02-temporalcluster.yaml`; assert
      `02-assert.yaml`.
    - Timeouts mirror the ES suite (`apply: 2m`, `assert: 10m`).
@@ -93,9 +96,12 @@ extra to install or wait on in CI.
      `temporal`, user `temporal`, `passwordSecretRef` → `temporal-pg-app`.
    - `persistence.visibilityStore.elasticsearch`:
      - `version: v8`
-     - `url: (join('.', ['http://temporal-os', $namespace, 'svc.cluster.local:9200']))`
-       (namespace-qualified FQDN — the operator probes from `temporal-system`)
-     - `tls.enabled: false`, no username/password.
+     - `url: (join('.', ['temporal-os', $namespace, 'svc.cluster.local:9200']))`
+       — namespace-qualified FQDN as `host:port` **without** a scheme. The
+       operator passes this straight into Temporal's `url.host`, and the absence
+       of `tls` yields `scheme: http` (confirmed by golden `es-visibility.yaml`).
+       The FQDN is required because the operator probes from `temporal-system`.
+     - `tls` omitted (plain HTTP), no username/password.
 
 4. **`02-assert.yaml`** — TemporalCluster status:
    - `conditions[?type == 'SchemaReady'].status == "True"`
