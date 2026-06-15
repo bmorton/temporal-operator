@@ -4,9 +4,7 @@ on:
   push:
     branches: ["main"]
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 # NOTE: This workflow also requires the repository setting
 # "Allow GitHub Actions to create and approve pull requests"
@@ -17,8 +15,30 @@ jobs:
   release-please:
     name: Release Please
     runs-on: namespace-profile-temporal-operator
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+      - id: release
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # When release-please creates a release (and its tag), build and publish it in
+  # this same workflow run. The tag push itself cannot trigger release.yml
+  # because it is made with the default GITHUB_TOKEN.
+  release:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      actions: read
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
