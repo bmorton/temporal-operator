@@ -1,0 +1,30 @@
+# Chainsaw test: OpenSearch 2.x visibility store (plain single-node Deployment)
+# with a Postgres default store from the postgres suite.
+#
+# Prerequisite: install the CNPG operator (postgresql.cnpg.io CRDs). No
+# OpenSearch operator is needed. ../postgres/02-secrets.yaml is intentionally not
+# applied: it only creates the temporal_visibility Postgres database, which is
+# unused when visibility is served by OpenSearch.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: opensearch
+spec:
+  timeouts:
+    apply: 2m
+    assert: 10m
+  steps:
+    - name: provision-deps
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - apply:
+            file: 01-opensearch.yaml
+        - assert:
+            file: 01-assert.yaml
+    - name: cluster-os-visibility
+      try:
+        - apply:
+            file: 02-temporalcluster.yaml
+        - assert:
+            file: 02-assert.yaml
