@@ -87,6 +87,12 @@ jobs:
     with:
       base64-subjects: ${{ needs.goreleaser.outputs.hashes }}
       upload-assets: true
+      # The repository is private, but the published image and Helm chart (and
+      # the image's org.opencontainers.image.source label) already disclose the
+      # repo name. Allow the SLSA generator to proceed so provenance is attested;
+      # the repo name appearing in the public Rekor transparency log discloses
+      # nothing not already public.
+      private-repository: true
 
   publish-chart:
     name: Publish Helm chart
