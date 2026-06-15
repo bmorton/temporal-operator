@@ -44,8 +44,8 @@ func FrontendCertName(clusterName string) string {
 	return clusterName + "-frontend-tls"
 }
 
-// issuerRef converts the CR's IssuerReference into a cert-manager ObjectReference.
-func issuerRef(ref *temporalv1alpha1.IssuerReference) cmmeta.ObjectReference {
+// issuerRef converts the CR's IssuerReference into a cert-manager IssuerReference.
+func issuerRef(ref *temporalv1alpha1.IssuerReference) cmmeta.IssuerReference {
 	kind := ref.Kind
 	if kind == "" {
 		kind = "Issuer"
@@ -54,7 +54,7 @@ func issuerRef(ref *temporalv1alpha1.IssuerReference) cmmeta.ObjectReference {
 	if group == "" {
 		group = "cert-manager.io"
 	}
-	return cmmeta.ObjectReference{Name: ref.Name, Kind: kind, Group: group}
+	return cmmeta.IssuerReference{Name: ref.Name, Kind: kind, Group: group}
 }
 
 // serviceDNSNames returns the in-cluster DNS names for a service's headless and

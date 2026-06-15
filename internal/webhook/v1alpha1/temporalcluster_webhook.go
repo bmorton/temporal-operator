@@ -23,11 +23,9 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -43,8 +41,8 @@ var temporalclusterlog = logf.Log.WithName("temporalcluster-resource")
 // SetupTemporalClusterWebhookWithManager registers the webhook for TemporalCluster in the manager.
 func SetupTemporalClusterWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &temporalv1alpha1.TemporalCluster{}).
-		WithCustomValidator(&TemporalClusterCustomValidator{}).
-		WithCustomDefaulter(&TemporalClusterCustomDefaulter{}).
+		WithValidator(&TemporalClusterCustomValidator{}).
+		WithDefaulter(&TemporalClusterCustomDefaulter{}).
 		Complete()
 }
 
@@ -53,7 +51,7 @@ func SetupTemporalClusterWebhookWithManager(mgr ctrl.Manager) error {
 // TemporalClusterCustomDefaulter sets default values on TemporalCluster resources.
 type TemporalClusterCustomDefaulter struct{}
 
-var _ webhook.CustomDefaulter = &TemporalClusterCustomDefaulter{}
+var _ admission.Defaulter[*temporalv1alpha1.TemporalCluster] = &TemporalClusterCustomDefaulter{}
 
 func ptrInt32(v int32) *int32 { return &v }
 
@@ -66,12 +64,8 @@ func defaultReplicas(svc **temporalv1alpha1.ServiceSpec, replicas int32) {
 	}
 }
 
-// Default implements webhook.CustomDefaulter.
-func (d *TemporalClusterCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	cluster, ok := obj.(*temporalv1alpha1.TemporalCluster)
-	if !ok {
-		return fmt.Errorf("expected a TemporalCluster object but got %T", obj)
-	}
+// Default implements admission.Defaulter.
+func (d *TemporalClusterCustomDefaulter) Default(_ context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
 	temporalclusterlog.Info("Defaulting for TemporalCluster", "name", cluster.GetName())
 
 	if cluster.Spec.Image == "" {
@@ -124,7 +118,7 @@ func (d *TemporalClusterCustomDefaulter) Default(_ context.Context, obj runtime.
 // TemporalClusterCustomValidator validates TemporalCluster resources.
 type TemporalClusterCustomValidator struct{}
 
-var _ webhook.CustomValidator = &TemporalClusterCustomValidator{}
+var _ admission.Validator[*temporalv1alpha1.TemporalCluster] = &TemporalClusterCustomValidator{}
 
 func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.TemporalCluster) field.ErrorList {
 	var errs field.ErrorList
@@ -177,12 +171,8 @@ func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.
 	return errs
 }
 
-// ValidateCreate implements webhook.CustomValidator.
-func (v *TemporalClusterCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	cluster, ok := obj.(*temporalv1alpha1.TemporalCluster)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalCluster object but got %T", obj)
-	}
+// ValidateCreate implements admission.Validator.
+func (v *TemporalClusterCustomValidator) ValidateCreate(_ context.Context, cluster *temporalv1alpha1.TemporalCluster) (admission.Warnings, error) {
 	temporalclusterlog.Info("Validation for TemporalCluster upon creation", "name", cluster.GetName())
 
 	if errs := v.validateSpec(cluster); len(errs) > 0 {
@@ -191,16 +181,8 @@ func (v *TemporalClusterCustomValidator) ValidateCreate(_ context.Context, obj r
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator.
-func (v *TemporalClusterCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	newCluster, ok := newObj.(*temporalv1alpha1.TemporalCluster)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalCluster object for the newObj but got %T", newObj)
-	}
-	oldCluster, ok := oldObj.(*temporalv1alpha1.TemporalCluster)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalCluster object for the oldObj but got %T", oldObj)
-	}
+// ValidateUpdate implements admission.Validator.
+func (v *TemporalClusterCustomValidator) ValidateUpdate(_ context.Context, oldCluster, newCluster *temporalv1alpha1.TemporalCluster) (admission.Warnings, error) {
 	temporalclusterlog.Info("Validation for TemporalCluster upon update", "name", newCluster.GetName())
 
 	errs := v.validateSpec(newCluster)
@@ -242,12 +224,8 @@ func (v *TemporalClusterCustomValidator) ValidateUpdate(_ context.Context, oldOb
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.CustomValidator.
-func (v *TemporalClusterCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	cluster, ok := obj.(*temporalv1alpha1.TemporalCluster)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalCluster object but got %T", obj)
-	}
+// ValidateDelete implements admission.Validator.
+func (v *TemporalClusterCustomValidator) ValidateDelete(_ context.Context, cluster *temporalv1alpha1.TemporalCluster) (admission.Warnings, error) {
 	temporalclusterlog.Info("Validation for TemporalCluster upon deletion", "name", cluster.GetName())
 
 	if cluster.Spec.PreventDeletion {

@@ -20,10 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -35,7 +33,7 @@ var temporalnamespacelog = logf.Log.WithName("temporalnamespace-resource")
 // SetupTemporalNamespaceWebhookWithManager registers the webhook for TemporalNamespace in the manager.
 func SetupTemporalNamespaceWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &temporalv1alpha1.TemporalNamespace{}).
-		WithCustomValidator(&TemporalNamespaceCustomValidator{}).
+		WithValidator(&TemporalNamespaceCustomValidator{}).
 		Complete()
 }
 
@@ -54,14 +52,10 @@ type TemporalNamespaceCustomValidator struct {
 	// TODO(user): Add more fields as needed for validation
 }
 
-var _ webhook.CustomValidator = &TemporalNamespaceCustomValidator{}
+var _ admission.Validator[*temporalv1alpha1.TemporalNamespace] = &TemporalNamespaceCustomValidator{}
 
-// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TemporalNamespace.
-func (v *TemporalNamespaceCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	temporalnamespace, ok := obj.(*temporalv1alpha1.TemporalNamespace)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalNamespace object but got %T", obj)
-	}
+// ValidateCreate implements admission.Validator so a webhook will be registered for the type TemporalNamespace.
+func (v *TemporalNamespaceCustomValidator) ValidateCreate(_ context.Context, temporalnamespace *temporalv1alpha1.TemporalNamespace) (admission.Warnings, error) {
 	temporalnamespacelog.Info("Validation for TemporalNamespace upon creation", "name", temporalnamespace.GetName())
 
 	if temporalnamespace.Spec.ClusterRef.Name == "" {
@@ -71,12 +65,8 @@ func (v *TemporalNamespaceCustomValidator) ValidateCreate(_ context.Context, obj
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TemporalNamespace.
-func (v *TemporalNamespaceCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	temporalnamespace, ok := newObj.(*temporalv1alpha1.TemporalNamespace)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalNamespace object for the newObj but got %T", newObj)
-	}
+// ValidateUpdate implements admission.Validator so a webhook will be registered for the type TemporalNamespace.
+func (v *TemporalNamespaceCustomValidator) ValidateUpdate(_ context.Context, _, temporalnamespace *temporalv1alpha1.TemporalNamespace) (admission.Warnings, error) {
 	temporalnamespacelog.Info("Validation for TemporalNamespace upon update", "name", temporalnamespace.GetName())
 
 	if temporalnamespace.Spec.ClusterRef.Name == "" {
@@ -86,12 +76,8 @@ func (v *TemporalNamespaceCustomValidator) ValidateUpdate(_ context.Context, old
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TemporalNamespace.
-func (v *TemporalNamespaceCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	temporalnamespace, ok := obj.(*temporalv1alpha1.TemporalNamespace)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalNamespace object but got %T", obj)
-	}
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type TemporalNamespace.
+func (v *TemporalNamespaceCustomValidator) ValidateDelete(_ context.Context, temporalnamespace *temporalv1alpha1.TemporalNamespace) (admission.Warnings, error) {
 	temporalnamespacelog.Info("Validation for TemporalNamespace upon deletion", "name", temporalnamespace.GetName())
 
 	// TODO(user): fill in your validation logic upon object deletion.
