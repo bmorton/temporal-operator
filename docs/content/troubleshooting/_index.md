@@ -9,7 +9,15 @@ weight = 60
 
 - Check the datastore host/port and that the password Secret exists with the
   referenced key.
-- For Postgres, confirm the database and visibility database exist.
+- The operator pings the datastore from its own pod (in `temporal-system`), so a
+  Postgres `host` must be a namespace-qualified FQDN
+  (e.g. `temporal-pg-rw.temporal.svc.cluster.local`), not a bare service name.
+- For Postgres, confirm the database and visibility database exist. The operator
+  does not create databases — both `temporal` and `temporal_visibility` must
+  exist before schema setup.
+- `remaining connection slots are reserved for ... SUPERUSER` (SQLSTATE 53300)
+  means Postgres ran out of connections. Each service pod pools to both stores;
+  raise `max_connections` (200 is a good starting point for a small cluster).
 
 ## SchemaReady=False
 

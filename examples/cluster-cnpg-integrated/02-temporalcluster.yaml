@@ -1,9 +1,14 @@
-# A full TemporalCluster backed by the CNPG Postgres provisioned by the parent
-# postgres suite. The operator should deploy all services and reach Ready=True.
+# A TemporalCluster backed by the CNPG Postgres from 01-cnpg.yaml.
+#
+# The operator reconciler pings the datastore from its OWN pod (in the
+# temporal-system namespace), so the persistence host must be a
+# namespace-qualified FQDN. A bare "temporal-pg-rw" would resolve in the
+# operator's namespace and fail with PersistenceUnreachable.
 apiVersion: temporal.bmor10.com/v1alpha1
 kind: TemporalCluster
 metadata:
-  name: temporal-lifecycle
+  name: temporal
+  namespace: temporal
 spec:
   version: "1.31.1"
   numHistoryShards: 512
@@ -11,7 +16,7 @@ spec:
     defaultStore:
       sql:
         pluginName: postgres12
-        host: temporal-pg-rw
+        host: temporal-pg-rw.temporal.svc.cluster.local
         port: 5432
         database: temporal
         user: temporal
@@ -21,10 +26,34 @@ spec:
     visibilityStore:
       sql:
         pluginName: postgres12
-        host: temporal-pg-rw
+        host: temporal-pg-rw.temporal.svc.cluster.local
         port: 5432
         database: temporal_visibility
         user: temporal
         passwordSecretRef:
           name: temporal-pg-app
           key: password
+  # Web UI. Reach it with `kubectl -n temporal port-forward svc/temporal-ui
+  # 8080:8080`, or uncomment the ingress block to expose it.
+  ui:
+    enabled: true
+    # ingress:
+    #   enabled: true
+    #   ingressClassName: nginx
+    #   host: temporal.example.com
+    #   tlsSecretName: temporal-example-com-tls
+    #   annotations:
+    #     cert-manager.io/cluster-issuer: letsencrypt-prod
+---
+# Declarative namespace registered on the cluster once it is Ready.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: default
+  namespace: temporal
+spec:
+  clusterRef:
+    name: temporal
+  retentionPeriod: "72h"
+  description: "Default namespace"
+  allowDeletion: true

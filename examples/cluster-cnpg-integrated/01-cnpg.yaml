@@ -1,26 +1,44 @@
-# CloudNativePG (CNPG) Postgres cluster used as the Temporal datastore.
+# CloudNativePG (CNPG) Postgres used as the Temporal datastore.
 #
 # Prerequisite: the CNPG operator must be installed in the cluster, e.g.:
 #   kubectl apply --server-side -f \
 #     https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml
 #
-# CNPG provisions a Secret named "<cluster>-app" containing the application
-# user's credentials (keys: username, password), referenced by the
-# TemporalCluster below.
+# Two things Temporal needs that aren't obvious:
+#
+#   1. Two databases. The operator only runs schema setup (setup-schema); it
+#      does NOT create databases. initdb creates "temporal"; the postInitSQL
+#      below creates the separate "temporal_visibility" database.
+#
+#   2. Enough connections. Each Temporal service pod opens a connection pool to
+#      BOTH stores, which blows past Postgres's default max_connections of 100
+#      and surfaces as "remaining connection slots are reserved for ... SUPERUSER"
+#      (SQLSTATE 53300). Raise it to 200.
+#
+# CNPG generates a Secret "temporal-pg-app" (keys: username, password) for the
+# "temporal" app user, referenced by the TemporalCluster. Do NOT redeclare the
+# "temporal" role under spec.managed.roles without a passwordSecret — CNPG would
+# reset it to PASSWORD NULL / NOLOGIN and break password authentication.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: temporal
+---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: temporal-pg
+  namespace: temporal
 spec:
   instances: 1
   storage:
-    size: 1Gi
+    size: 5Gi
+  postgresql:
+    parameters:
+      max_connections: "200"
   bootstrap:
     initdb:
       database: temporal
       owner: temporal
-  managed:
-    roles:
-      - name: temporal
-        ensure: present
-        login: true
+      postInitSQL:
+        - CREATE DATABASE temporal_visibility OWNER temporal;
