@@ -43,7 +43,30 @@ spec:
             file: 02-temporalcluster-1.31.yaml
         - assert:
             file: 02-assert.yaml
-      catch:
-        - describe:
-            apiVersion: temporal.bmor10.com/v1alpha1
-            kind: TemporalCluster
+  # Runs on ANY step failure, before Chainsaw tears down the ephemeral
+  # namespace, so the operator-managed pods/jobs/logs are still available.
+  catch:
+    - describe:
+        apiVersion: temporal.bmor10.com/v1alpha1
+        kind: TemporalCluster
+    - script:
+        env:
+          - name: NS
+            value: ($namespace)
+        content: |
+          set +e
+          echo "===== PODS ====="
+          kubectl -n "$NS" get pods -o wide
+          echo "===== JOBS ====="
+          kubectl -n "$NS" get jobs
+          echo "===== DEPLOYMENTS ====="
+          kubectl -n "$NS" get deploy
+          echo "===== DESCRIBE PODS ====="
+          kubectl -n "$NS" describe pods
+          echo "===== EVENTS ====="
+          kubectl -n "$NS" get events --sort-by=.lastTimestamp | tail -60
+          echo "===== POD LOGS ====="
+          for p in $(kubectl -n "$NS" get pods -o name); do
+            echo "----- $p -----"
+            kubectl -n "$NS" logs "$p" --all-containers --tail=100
+          done

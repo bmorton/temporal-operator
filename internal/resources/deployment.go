@@ -121,13 +121,6 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 	if version != "" {
 		podLabels[LabelVersion] = version
 	}
-	startup := grpcProbe(svc.Ports.GRPCPort)
-	startup.FailureThreshold = 30
-	startup.PeriodSeconds = 5
-
-	readiness := grpcProbe(svc.Ports.GRPCPort)
-	readiness.TimeoutSeconds = 3
-
 	// The config Secret is mounted read-only. Temporal's config loader does
 	// not perform env-var substitution for broadcastAddress in 1.31+, so we
 	// use a shell wrapper: copy config to a writable emptyDir, substitute
@@ -151,16 +144,31 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 				},
 			},
 		},
-		Ports:          containerPorts(svc),
-		Resources:      resources,
-		LivenessProbe:  grpcProbe(svc.Ports.GRPCPort),
-		ReadinessProbe: readiness,
-		StartupProbe:   startup,
+		Ports:     containerPorts(svc),
+		Resources: resources,
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "config", MountPath: configMountPath, ReadOnly: true},
 			{Name: "dynamicconfig", MountPath: dynamicConfigMountPath, ReadOnly: true},
 			{Name: "processed-config", MountPath: "/tmp/temporal"},
 		},
+	}
+
+	// The worker service does not expose a client-facing gRPC server, so it
+	// does not answer gRPC health checks (this is unreliable before Temporal
+	// 1.31 and the upstream Temporal Helm chart omits worker probes entirely).
+	// Probing it would fail its startup probe forever and the cluster would
+	// never report Ready. Only the request-serving services get gRPC probes.
+	if svc.Name != ServiceWorker {
+		startup := grpcProbe(svc.Ports.GRPCPort)
+		startup.FailureThreshold = 30
+		startup.PeriodSeconds = 5
+
+		readiness := grpcProbe(svc.Ports.GRPCPort)
+		readiness.TimeoutSeconds = 3
+
+		container.LivenessProbe = grpcProbe(svc.Ports.GRPCPort)
+		container.ReadinessProbe = readiness
+		container.StartupProbe = startup
 	}
 
 	volumes := []corev1.Volume{
