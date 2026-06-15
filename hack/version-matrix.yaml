@@ -18,7 +18,7 @@ versions:
     cassandraVisibilitySupported: false
 
   - version: "1.28"
-    patchVersions: ["1.28.0"]
+    patchVersions: ["1.28.3"]
     minSchemaSQL: "v1.12"
     minSchemaCassandra: "v1.9"
     minSchemaES: "v9"
@@ -28,17 +28,17 @@ versions:
     cassandraVisibilitySupported: false
 
   - version: "1.29"
-    patchVersions: ["1.29.0"]
+    patchVersions: ["1.29.6"]
     minSchemaSQL: "v1.12"
     minSchemaCassandra: "v1.9"
     minSchemaES: "v9"
     allowedFromVersions: ["1.28"]
     uiSeries: "2.33"
-    defaultUIVersion: "2.33.1"
+    defaultUIVersion: "2.33.0"
     cassandraVisibilitySupported: false
 
   - version: "1.30"
-    patchVersions: ["1.30.0"]
+    patchVersions: ["1.30.4"]
     minSchemaSQL: "v1.12"
     minSchemaCassandra: "v1.9"
     minSchemaES: "v9"

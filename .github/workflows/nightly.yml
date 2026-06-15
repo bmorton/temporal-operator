@@ -17,12 +17,12 @@ jobs:
       matrix:
         include:
           - from: "1.27.0"
-            to: "1.28.0"
-          - from: "1.28.0"
-            to: "1.29.0"
-          - from: "1.29.0"
-            to: "1.30.0"
-          - from: "1.30.0"
+            to: "1.28.3"
+          - from: "1.28.3"
+            to: "1.29.6"
+          - from: "1.29.6"
+            to: "1.30.4"
+          - from: "1.30.4"
             to: "1.31.1"
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6

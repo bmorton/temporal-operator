@@ -1,4 +1,4 @@
-# Chainsaw upgrade test: bring up a cluster at 1.30.0, upgrade to 1.31.1, and
+# Chainsaw upgrade test: bring up a cluster at 1.30.4, upgrade to 1.31.1, and
 # assert the upgrade phase machine completes. Requires the CNPG operator.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
