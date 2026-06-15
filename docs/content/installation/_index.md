@@ -1,3 +1,8 @@
++++
+title = "Installation"
+weight = 20
++++
+
 # Installation
 
 The operator ships in three formats.
@@ -27,5 +32,5 @@ operator-sdk run bundle ghcr.io/bmorton/temporal-operator-bundle:v0.1.0
 
 ## Verifying releases
 
-See [verifying-releases](../install/verifying-releases.md) for Cosign and SLSA
+See [verifying-releases](./verifying-releases.md) for Cosign and SLSA
 verification.

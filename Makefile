@@ -279,6 +279,23 @@ $(CRD_REF_DOCS): $(LOCALBIN)
 api-docs: crd-ref-docs ## Generate CRD API reference documentation.
 	"$(CRD_REF_DOCS)" --source-path=./api/v1alpha1 --config=hack/crd-ref-docs-config.yaml --renderer=markdown --output-path=docs/api/v1alpha1.md
 
+.PHONY: docs-crd-reference
+docs-crd-reference: crd-ref-docs ## Generate the Hugo CRD reference page (docs/content/reference/_index.md).
+	@mkdir -p docs/content/reference
+	@printf '+++\ntitle = "CRD Reference"\nweight = 70\n+++\n\n' > docs/content/reference/_index.md
+	"$(CRD_REF_DOCS)" --source-path=./api/v1alpha1 --config=hack/crd-ref-docs-config.yaml --renderer=markdown --output-path=docs/content/reference/.crd-reference-body.md
+	@cat docs/content/reference/.crd-reference-body.md >> docs/content/reference/_index.md
+	@rm -f docs/content/reference/.crd-reference-body.md docs/content/reference/crds.md
+	@echo "Generated docs/content/reference/_index.md"
+
+.PHONY: docs-serve
+docs-serve: ## Serve the documentation site locally at http://localhost:1313 (requires Hugo Extended).
+	hugo server --source docs
+
+.PHONY: docs-build
+docs-build: ## Build the documentation site into docs/public (requires Hugo Extended).
+	hugo --source docs --minify
+
 .PHONY: kind
 kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(LOCALBIN)

@@ -1,3 +1,8 @@
++++
+title = "temporal-operator"
+type = "docs"
++++
+
 # temporal-operator
 
 A Kubernetes operator that manages the full lifecycle of [Temporal](https://temporal.io)

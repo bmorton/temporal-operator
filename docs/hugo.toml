@@ -1,0 +1,18 @@
+baseURL = "https://bmorton.github.io/temporal-operator/"
+title = "temporal-operator"
+theme = "hugo-book"
+languageCode = "en-us"
+
+[params]
+  BookTheme = "auto"
+  BookToC = true
+  # Content lives directly under docs/content (no top-level "docs" section),
+  # so render the menu from all root sections.
+  BookSection = "*"
+  BookRepo = "https://github.com/bmorton/temporal-operator"
+  BookEditPath = "edit/main/docs"
+  # Search is intentionally disabled for now (see spec "Out of scope").
+  BookSearch = false
+
+[markup.goldmark.renderer]
+  unsafe = true

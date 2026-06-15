@@ -1,3 +1,8 @@
++++
+title = "CRD Reference"
+weight = 70
++++
+
 # API Reference
 
 ## Packages
@@ -696,6 +701,8 @@ _Appears in:_
 | `retentionPeriod` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ | RetentionPeriod is how long closed workflows are retained. | 72h | Optional: \{\} <br /> |
 | `description` _string_ | Description is a human-friendly description of the namespace. |  | Optional: \{\} <br /> |
 | `ownerEmail` _string_ | OwnerEmail is the owner contact for the namespace. |  | Optional: \{\} <br /> |
+| `allowDeletion` _boolean_ | AllowDeletion permits the operator to delete the Temporal namespace when<br />the CR is deleted. When false, the namespace is left in place. |  | Optional: \{\} <br /> |
+| `driftDetection` _string_ | DriftDetection controls whether the operator reconciles drift between the<br />spec and the live namespace. | reconcile | Enum: [reconcile ignore] <br />Optional: \{\} <br /> |
 
 
 
@@ -735,6 +742,7 @@ _Appears in:_
 | `namespace` _string_ | Namespace is the Temporal namespace to register the attribute in. |  |  |
 | `name` _string_ | Name is the search attribute name. |  |  |
 | `type` _string_ | Type is the search attribute type. Immutable once created. |  | Enum: [Keyword Text Int Double Bool Datetime KeywordList] <br /> |
+| `allowDeletion` _boolean_ | AllowDeletion permits the operator to remove the search attribute from the<br />namespace when the CR is deleted. |  | Optional: \{\} <br /> |
 
 
 
@@ -814,6 +822,7 @@ _Appears in:_
 | `fromVersion` _string_ |  |  | Optional: \{\} <br /> |
 | `toVersion` _string_ |  |  | Optional: \{\} <br /> |
 | `phase` _string_ |  |  | Optional: \{\} <br /> |
+| `rollbackable` _boolean_ | Rollbackable is true until schema migration begins, after which a<br />rollback is no longer safe. |  | Optional: \{\} <br /> |
 | `startedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#time-v1-meta)_ |  |  | Optional: \{\} <br /> |
 
 

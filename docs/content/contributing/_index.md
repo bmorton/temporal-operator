@@ -1,3 +1,8 @@
++++
+title = "Contributing"
+weight = 80
++++
+
 # Contributing
 
 See the repository [CONTRIBUTING.md](https://github.com/bmorton/temporal-operator/blob/main/CONTRIBUTING.md)

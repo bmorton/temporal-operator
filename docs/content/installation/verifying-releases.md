@@ -1,3 +1,8 @@
++++
+title = "Verifying Releases"
+weight = 25
++++
+
 # Verifying releases
 
 Every `temporal-operator` release is built with [GoReleaser](https://goreleaser.com),
