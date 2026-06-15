@@ -27,3 +27,4 @@ docs/public/
 docs/resources/
 .hugo_build.lock
 docs/content/reference/.crd-reference-body.md
+.worktrees
