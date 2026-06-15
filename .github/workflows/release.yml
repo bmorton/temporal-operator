@@ -44,6 +44,13 @@ jobs:
           go-version-file: go.mod
           cache: false
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # Pin cosign to the v2 line. cosign v3 defaults to the new Sigstore
+          # bundle format and ignores --output-signature, which breaks the
+          # sign-blob args in .goreleaser.yml ("create bundle file: ... no such
+          # file or directory"). Revisit when the GoReleaser signing config is
+          # migrated to the bundle format.
+          cosign-release: "v2.6.3"
       - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
