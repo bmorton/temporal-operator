@@ -1,0 +1,31 @@
+# Temporal cluster with a Postgres default store (CNPG) and an OpenSearch
+# visibility store. The visibility store uses the operator's elasticsearch config
+# with version v8; Temporal's olivere/elastic v7 client (used for both v7 and v8)
+# is healthcheck/sniff-disabled and works against OpenSearch 2.x.
+#
+# The visibility URL is a namespace-qualified FQDN in host:port form (no scheme):
+# the operator probes the store from the temporal-system namespace, so a bare
+# service name would not resolve, and the absence of a tls block yields an http
+# scheme in the rendered Temporal config.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-os
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      elasticsearch:
+        url: (join('.', ['temporal-os', $namespace, 'svc.cluster.local:9200']))
+        version: v8
