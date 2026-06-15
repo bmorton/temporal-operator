@@ -16,9 +16,11 @@ jobs:
     name: Lint docs
     runs-on: namespace-profile-temporal-operator
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
       - name: Lint Markdown
-        uses: DavidAnson/markdownlint-cli2-action@v17
+        uses: DavidAnson/markdownlint-cli2-action@db43aef879112c3119a410d69f66701e0d530809 # v17.0.0
         with:
           globs: |
             docs/**/*.md
@@ -29,7 +31,7 @@ jobs:
             !docs/superpowers/**
           config: ".markdownlint.yaml"
       - name: Check links
-        uses: lycheeverse/lychee-action@v2
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
         with:
           args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md --exclude-path docs/content/reference --exclude-path docs/api --exclude-path docs/themes --exclude-path docs/superpowers
           fail: false
@@ -49,24 +51,27 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           submodules: recursive
           fetch-depth: 0
+          persist-credentials: false
       - name: Setup Pages
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - name: Setup Hugo
-        uses: peaceiris/actions-hugo@v3
+        uses: peaceiris/actions-hugo@2752ce1d29631191ea3f27c23495fa06139a5b78 # v3.2.1
         with:
           hugo-version: "0.140.2"
           extended: true
       - name: Build site
-        run: hugo --source docs --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: hugo --source docs --minify --baseURL "${BASE_URL}/"
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: docs/public
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
