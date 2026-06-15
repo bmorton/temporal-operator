@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/bmorton/temporal-operator/compare/v0.2.0...v0.2.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* **e2e:** qualify Postgres host across suites and harden nightly upgrade jobs ([cb98a31](https://github.com/bmorton/temporal-operator/commit/cb98a311fd5df8bbc44907ce07ed723070037615))
+* **e2e:** qualify Postgres host with test namespace across remaining suites ([53c78bc](https://github.com/bmorton/temporal-operator/commit/53c78bc9523c545ecadb6585ef3ab07ea66d8d3e))
+
 ## [0.2.0](https://github.com/bmorton/temporal-operator/compare/v0.1.0...v0.2.0) (2026-06-15)
 
 
