@@ -4,6 +4,9 @@ bin/
 *.test
 *.out
 
+# GoReleaser output (kept separate from the committed dist/ chart + manifests)
+dist-goreleaser/
+
 # Go
 vendor/
 cover.out
