@@ -97,6 +97,28 @@ func TestBuildDeployment(t *testing.T) {
 	}
 }
 
+func TestBuildDeploymentWorkerHasNoProbes(t *testing.T) {
+	c := builderCluster()
+	var worker ServiceInfo
+	for _, svc := range EnabledServices(c) {
+		if svc.Name == ServiceWorker {
+			worker = svc
+		}
+	}
+	if worker.Name != ServiceWorker {
+		t.Fatalf("worker service not found in EnabledServices")
+	}
+
+	ctr := BuildDeployment(c, worker, "abc123", "", nil).Spec.Template.Spec.Containers[0]
+	// The Temporal worker does not serve a client-facing gRPC endpoint, so it
+	// must not get gRPC health probes (matching the upstream Helm chart).
+	// Otherwise the startup probe fails forever and the cluster never goes Ready.
+	if ctr.StartupProbe != nil || ctr.ReadinessProbe != nil || ctr.LivenessProbe != nil {
+		t.Errorf("worker must not have probes, got startup=%v readiness=%v liveness=%v",
+			ctr.StartupProbe, ctr.ReadinessProbe, ctr.LivenessProbe)
+	}
+}
+
 func TestBuildServicesAndPDB(t *testing.T) {
 	c := builderCluster()
 	frontend := EnabledServices(c)[0]
