@@ -25,7 +25,7 @@ jobs:
           - from: "1.30.0"
             to: "1.31.1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

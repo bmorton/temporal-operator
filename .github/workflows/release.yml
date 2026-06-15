@@ -17,7 +17,7 @@ jobs:
     outputs:
       hashes: ${{ steps.hash.outputs.hashes }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: actions/setup-go@v5
@@ -64,7 +64,7 @@ jobs:
     needs: goreleaser
     runs-on: namespace-profile-temporal-operator
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: azure/setup-helm@v4
       - name: Package and push chart to GHCR (OCI)
         run: |

@@ -16,7 +16,7 @@ jobs:
     name: Lint docs
     runs-on: namespace-profile-temporal-operator
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v17
         with:
@@ -49,7 +49,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
           fetch-depth: 0
