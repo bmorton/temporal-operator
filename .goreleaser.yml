@@ -4,6 +4,11 @@ version: 2
 
 project_name: temporal-operator
 
+# Use a dedicated output directory. The default (./dist) is already committed
+# to this repo (the generated Helm chart and install manifests), so GoReleaser's
+# `--clean` would delete those tracked files and abort with a dirty git state.
+dist: dist-goreleaser
+
 before:
   hooks:
     - go mod tidy

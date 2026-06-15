@@ -64,7 +64,7 @@ jobs:
       - name: Generate provenance subjects
         id: hash
         run: |
-          checksums=$(find dist -name 'checksums.txt' | head -1)
+          checksums=$(find dist-goreleaser -name 'checksums.txt' | head -1)
           echo "hashes=$(base64 -w0 < "$checksums")" >> "$GITHUB_OUTPUT"
 
   provenance:
