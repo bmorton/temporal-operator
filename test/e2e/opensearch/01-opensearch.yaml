@@ -1,0 +1,79 @@
+# Single-node OpenSearch 2.x used as the Temporal visibility store. No OpenSearch
+# Kubernetes operator is required: a plain Deployment + Service is enough for a
+# disposable e2e backend.
+#
+# Security is fully disabled (plain HTTP, no auth, no TLS) so the operator's
+# esBackend can probe /_cluster/health and apply the visibility index template
+# without credentials. DISABLE_SECURITY_PLUGIN is the image entrypoint's
+# mechanism for this and writes plugins.security.disabled into opensearch.yml;
+# do NOT also set a plugins.security.disabled env var or OpenSearch aborts with
+# "setting [plugins.security.disabled] already set". compatibility.override_main_response_version
+# keeps Elasticsearch clients (Temporal uses olivere/elastic v7) from rejecting
+# the version handshake. The mmap and disk-watermark settings keep single-node
+# OpenSearch healthy on kind nodes (vm.max_map_count is not raised, and the node
+# disk often sits above the default 85% flood-stage watermark).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-os
+  labels:
+    app: temporal-os
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal-os
+  template:
+    metadata:
+      labels:
+        app: temporal-os
+    spec:
+      containers:
+        - name: opensearch
+          image: opensearchproject/opensearch:2.19.5
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: DISABLE_SECURITY_PLUGIN
+              value: "true"
+            - name: DISABLE_INSTALL_DEMO_CONFIG
+              value: "true"
+            - name: compatibility.override_main_response_version
+              value: "true"
+            - name: node.store.allow_mmap
+              value: "false"
+            - name: cluster.routing.allocation.disk.threshold_enabled
+              value: "false"
+            - name: bootstrap.memory_lock
+              value: "false"
+            - name: OPENSEARCH_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          ports:
+            - name: http
+              containerPort: 9200
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/opensearch/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-os
+spec:
+  selector:
+    app: temporal-os
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
