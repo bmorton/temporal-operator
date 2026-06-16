@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/bmorton/temporal-operator/compare/v0.2.1...v0.3.0) (2026-06-16)
+
+
+### Features
+
+* **e2e:** add nsc-based Chainsaw e2e runner ([#46](https://github.com/bmorton/temporal-operator/issues/46)) ([45c57c7](https://github.com/bmorton/temporal-operator/commit/45c57c7a07362423c51093a0e529d608826b7e21))
+
+
+### Bug Fixes
+
+* **e2e:** wait for create-visibility-db Job before deploying cluster ([#35](https://github.com/bmorton/temporal-operator/issues/35)) ([4937e7e](https://github.com/bmorton/temporal-operator/commit/4937e7ef77d62d9edab82c43b2eff078548e053e))
+* **mtls:** make mTLS clusters healthy and operator controllers mTLS-aware ([#45](https://github.com/bmorton/temporal-operator/issues/45)) ([c7121c2](https://github.com/bmorton/temporal-operator/commit/c7121c2afe69c106ae62a115c95c8e9d72c6a4a6))
+* pin Temporal versions to published server/admin-tools/ui images ([e8b0207](https://github.com/bmorton/temporal-operator/commit/e8b0207233549250fc000fed92f133d9953b4972))
+* worker never becomes Ready (gRPC probe on non-serving worker) + upgrade diagnostics ([#37](https://github.com/bmorton/temporal-operator/issues/37)) ([2e5110a](https://github.com/bmorton/temporal-operator/commit/2e5110ab57db9e91fefd8a48e37061b881a16640))
+
 ## [0.2.1](https://github.com/bmorton/temporal-operator/compare/v0.2.0...v0.2.1) (2026-06-15)
 
 
