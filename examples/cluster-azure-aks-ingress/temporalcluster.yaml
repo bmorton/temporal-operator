@@ -1,5 +1,6 @@
 # Temporal UI exposed on AKS via the Application Gateway Ingress Controller (AGIC).
-# Persistence is elided for brevity — combine with cluster-azure-postgres-flexible.
+# Persistence is shown inline; see cluster-azure-postgres-flexible for the
+# Flexible Server setup details (databases, max_connections, TLS).
 apiVersion: temporal.bmor10.com/v1alpha1
 kind: TemporalCluster
 metadata:
