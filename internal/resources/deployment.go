@@ -17,10 +17,14 @@ limitations under the License.
 package resources
 
 import (
+	"encoding/json"
+	"fmt"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/temporal"
@@ -275,6 +279,58 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 			},
 		},
 	}
+}
+
+// applyPodTemplate layers a PodTemplateOverride onto a generated pod template.
+// Labels and annotations are merged (override wins), and the override's partial
+// PodSpec is strategic-merge patched onto the generated PodSpec (containers and
+// volumes merge by name). Selector labels are re-asserted afterward so an
+// override can never drop a label the Deployment selector depends on. A nil
+// override is a no-op.
+func applyPodTemplate(tmpl corev1.PodTemplateSpec, override *temporalv1alpha1.PodTemplateOverride, selectorLabels map[string]string) (corev1.PodTemplateSpec, error) {
+	if override == nil {
+		return tmpl, nil
+	}
+
+	if len(override.Labels) > 0 && tmpl.Labels == nil {
+		tmpl.Labels = map[string]string{}
+	}
+	for k, v := range override.Labels {
+		tmpl.Labels[k] = v
+	}
+
+	if len(override.Annotations) > 0 && tmpl.Annotations == nil {
+		tmpl.Annotations = map[string]string{}
+	}
+	for k, v := range override.Annotations {
+		tmpl.Annotations[k] = v
+	}
+
+	if override.Spec != nil && len(override.Spec.Raw) > 0 {
+		original, err := json.Marshal(tmpl.Spec)
+		if err != nil {
+			return tmpl, fmt.Errorf("marshaling generated pod spec: %w", err)
+		}
+		patched, err := strategicpatch.StrategicMergePatch(original, override.Spec.Raw, corev1.PodSpec{})
+		if err != nil {
+			return tmpl, fmt.Errorf("applying podTemplate spec patch: %w", err)
+		}
+		var merged corev1.PodSpec
+		if err := json.Unmarshal(patched, &merged); err != nil {
+			return tmpl, fmt.Errorf("unmarshaling patched pod spec: %w", err)
+		}
+		tmpl.Spec = merged
+	}
+
+	// Re-assert selector labels last so an override cannot drop one.
+	if len(selectorLabels) > 0 && tmpl.Labels == nil {
+		tmpl.Labels = map[string]string{}
+	}
+	for k, v := range selectorLabels {
+		tmpl.Labels[k] = v
+	}
+
+	return tmpl, nil
 }
 
 // intstrFromInt is a small helper for service target ports.

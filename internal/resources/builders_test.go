@@ -21,7 +21,9 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
@@ -144,6 +146,97 @@ func TestBuildDeploymentMTLSUsesTCPProbes(t *testing.T) {
 	}
 	if ctr.ReadinessProbe.TimeoutSeconds != 3 {
 		t.Errorf("expected readiness timeoutSeconds 3, got %d", ctr.ReadinessProbe.TimeoutSeconds)
+	}
+}
+
+func TestApplyPodTemplateLabelsAnnotationsAndSpec(t *testing.T) {
+	base := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      map[string]string{"app.kubernetes.io/component": "frontend"},
+			Annotations: map[string]string{"existing": "keep"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "temporal", Image: "temporalio/server:1.31.1"}},
+			Volumes:    []corev1.Volume{{Name: "config"}},
+		},
+	}
+	selector := map[string]string{"app.kubernetes.io/component": "frontend"}
+	override := &temporalv1alpha1.PodTemplateOverride{
+		Labels:      map[string]string{"azure.workload.identity/use": "true"},
+		Annotations: map[string]string{"added": "yes"},
+		Spec: &runtime.RawExtension{Raw: []byte(`{
+			"serviceAccountName": "temporal-azure",
+			"containers": [
+				{"name": "temporal", "volumeMounts": [{"name": "azure-token", "mountPath": "/azure"}]},
+				{"name": "sidecar", "image": "mcr.microsoft.com/azure-cli:latest"}
+			],
+			"volumes": [{"name": "azure-token", "emptyDir": {}}]
+		}`)},
+	}
+
+	got, err := applyPodTemplate(base, override, selector)
+	if err != nil {
+		t.Fatalf("applyPodTemplate returned error: %v", err)
+	}
+
+	if got.Labels["azure.workload.identity/use"] != "true" {
+		t.Errorf("override label missing: %v", got.Labels)
+	}
+	if got.Labels["app.kubernetes.io/component"] != "frontend" {
+		t.Errorf("selector label must be preserved: %v", got.Labels)
+	}
+	if got.Annotations["existing"] != "keep" || got.Annotations["added"] != "yes" {
+		t.Errorf("annotations not merged: %v", got.Annotations)
+	}
+	if got.Spec.ServiceAccountName != "temporal-azure" {
+		t.Errorf("serviceAccountName not set: %q", got.Spec.ServiceAccountName)
+	}
+	if len(got.Spec.Containers) != 2 {
+		t.Fatalf("expected sidecar appended, got %d containers", len(got.Spec.Containers))
+	}
+	var temporal *corev1.Container
+	for i := range got.Spec.Containers {
+		if got.Spec.Containers[i].Name == "temporal" {
+			temporal = &got.Spec.Containers[i]
+		}
+	}
+	if temporal == nil || len(temporal.VolumeMounts) != 1 || temporal.VolumeMounts[0].Name != "azure-token" {
+		t.Errorf("temporal container volumeMount not merged: %+v", temporal)
+	}
+	if len(got.Spec.Volumes) != 2 {
+		t.Errorf("expected azure-token volume appended, got %d", len(got.Spec.Volumes))
+	}
+}
+
+func TestApplyPodTemplateNilIsNoop(t *testing.T) {
+	base := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"a": "b"}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "temporal"}}},
+	}
+	got, err := applyPodTemplate(base, nil, map[string]string{"a": "b"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got.Spec.Containers) != 1 || got.Labels["a"] != "b" {
+		t.Errorf("nil override must be a no-op, got %+v", got)
+	}
+}
+
+func TestApplyPodTemplateOverrideCannotDropSelectorLabel(t *testing.T) {
+	base := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app.kubernetes.io/component": "frontend"}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "temporal"}}},
+	}
+	selector := map[string]string{"app.kubernetes.io/component": "frontend"}
+	override := &temporalv1alpha1.PodTemplateOverride{
+		Labels: map[string]string{"app.kubernetes.io/component": "evil"},
+	}
+	got, err := applyPodTemplate(base, override, selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Labels["app.kubernetes.io/component"] != "frontend" {
+		t.Errorf("selector label must win over override, got %q", got.Labels["app.kubernetes.io/component"])
 	}
 }
 
