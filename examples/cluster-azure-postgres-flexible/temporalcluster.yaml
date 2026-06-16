@@ -1,0 +1,42 @@
+# Azure Database for PostgreSQL Flexible Server with password auth over TLS.
+# Pre-create the `temporal` and `temporal_visibility` databases on the server
+# before applying (the operator only runs setup-schema, it does not CREATE DATABASE).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: temporal-flexible-store
+type: Opaque
+stringData:
+  # Replace with the Flexible Server admin (or app) password.
+  password: "REPLACE_ME"
+---
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: azure
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  ui:
+    enabled: true
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        # Flexible Server endpoint, e.g. my-temporal.postgres.database.azure.com
+        host: REPLACE_ME.postgres.database.azure.com
+        port: 5432
+        database: temporal
+        user: temporaladmin
+        passwordSecretRef: { name: temporal-flexible-store, key: password }
+        # Flexible Server requires TLS.
+        tls: { enabled: true }
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: REPLACE_ME.postgres.database.azure.com
+        port: 5432
+        database: temporal_visibility
+        user: temporaladmin
+        passwordSecretRef: { name: temporal-flexible-store, key: password }
+        tls: { enabled: true }
