@@ -56,6 +56,10 @@ for configurable values.
 See the [documentation site](https://bmorton.github.io/temporal-operator/). The
 [`examples/`](./examples) directory also contains sample custom resources.
 
+The [Resource Preview](https://bmorton.github.io/temporal-operator/tools/resource-preview/)
+tool runs in your browser (no install) and shows every Kubernetes object the
+operator would create for a pasted `TemporalCluster`.
+
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md). This project follows the
