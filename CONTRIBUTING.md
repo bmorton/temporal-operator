@@ -37,6 +37,37 @@ make install           # install CRDs
 make run               # run the controller locally
 ```
 
+### Run e2e (Chainsaw) on Namespace (nsc)
+
+When [kind](https://kind.sigs.k8s.io/) cannot run locally (for example inside a
+devcontainer), you can run the Chainsaw e2e suites against an ephemeral
+[Namespace](https://cloud.namespace.so/) cluster instead. CI still uses kind;
+this is an alternate path for local/agent validation.
+
+Prerequisites: the `nsc` CLI installed and authenticated (`nsc login`), plus
+`kubectl`, `helm`, and `jq` on your `PATH`.
+
+```sh
+make chainsaw-test-nsc                 # runs the postgres/lifecycle suite
+make chainsaw-test-nsc SUITE=mtls      # run a different suite under test/e2e/
+```
+
+The runner builds and pushes the operator image with `nsc build` (no local
+Docker needed), provisions an ephemeral cluster, installs cert-manager,
+CloudNativePG, and the operator, runs the suite, then destroys the cluster.
+
+Billing safety is layered: the cluster is created `--ephemeral` with a 30m
+`--duration` (override with `NSC_DURATION=`) so it auto-expires even if the
+process is killed, and the script destroys it on exit. To purge any leftover
+clusters from interrupted runs:
+
+```sh
+make nsc-clean
+```
+
+`nsc-clean` only destroys clusters labeled `app=temporal-operator-e2e`; it never
+touches the shared Namespace build cluster.
+
 ## Conventional Commits
 
 We **prefer** commit messages that follow the
