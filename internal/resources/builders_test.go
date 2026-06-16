@@ -222,6 +222,41 @@ func TestApplyPodTemplateNilIsNoop(t *testing.T) {
 	}
 }
 
+func TestApplyPodTemplateDoesNotMutateInputMaps(t *testing.T) {
+	base := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      map[string]string{"app.kubernetes.io/component": "frontend"},
+			Annotations: map[string]string{"existing": "keep"},
+		},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "temporal"}}},
+	}
+	override := &temporalv1alpha1.PodTemplateOverride{
+		Labels:      map[string]string{"azure.workload.identity/use": "true"},
+		Annotations: map[string]string{"added": "yes"},
+	}
+	selector := map[string]string{"app.kubernetes.io/component": "frontend", "selector": "required"}
+
+	got, err := applyPodTemplate(base, override, selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Labels["azure.workload.identity/use"] != "true" || got.Labels["selector"] != "required" {
+		t.Fatalf("expected returned template to include merged labels, got %v", got.Labels)
+	}
+	if got.Annotations["added"] != "yes" {
+		t.Fatalf("expected returned template to include merged annotations, got %v", got.Annotations)
+	}
+	if _, ok := base.Labels["azure.workload.identity/use"]; ok {
+		t.Errorf("base labels were mutated: %v", base.Labels)
+	}
+	if _, ok := base.Labels["selector"]; ok {
+		t.Errorf("base labels were mutated by selector re-assertion: %v", base.Labels)
+	}
+	if _, ok := base.Annotations["added"]; ok {
+		t.Errorf("base annotations were mutated: %v", base.Annotations)
+	}
+}
+
 func TestApplyPodTemplateOverrideCannotDropSelectorLabel(t *testing.T) {
 	base := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app.kubernetes.io/component": "frontend"}},
@@ -237,6 +272,16 @@ func TestApplyPodTemplateOverrideCannotDropSelectorLabel(t *testing.T) {
 	}
 	if got.Labels["app.kubernetes.io/component"] != "frontend" {
 		t.Errorf("selector label must win over override, got %q", got.Labels["app.kubernetes.io/component"])
+	}
+}
+
+func TestApplyPodTemplateInvalidSpecErrors(t *testing.T) {
+	base := corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "temporal"}}}}
+	override := &temporalv1alpha1.PodTemplateOverride{
+		Spec: &runtime.RawExtension{Raw: []byte("{ not json")},
+	}
+	if _, err := applyPodTemplate(base, override, nil); err == nil {
+		t.Errorf("expected error for malformed podTemplate spec patch")
 	}
 }
 

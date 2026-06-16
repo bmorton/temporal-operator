@@ -292,18 +292,20 @@ func applyPodTemplate(tmpl corev1.PodTemplateSpec, override *temporalv1alpha1.Po
 		return tmpl, nil
 	}
 
-	if len(override.Labels) > 0 && tmpl.Labels == nil {
-		tmpl.Labels = map[string]string{}
+	labels := map[string]string{}
+	for k, v := range tmpl.Labels {
+		labels[k] = v
 	}
 	for k, v := range override.Labels {
-		tmpl.Labels[k] = v
+		labels[k] = v
 	}
 
-	if len(override.Annotations) > 0 && tmpl.Annotations == nil {
-		tmpl.Annotations = map[string]string{}
+	annotations := map[string]string{}
+	for k, v := range tmpl.Annotations {
+		annotations[k] = v
 	}
 	for k, v := range override.Annotations {
-		tmpl.Annotations[k] = v
+		annotations[k] = v
 	}
 
 	if override.Spec != nil && len(override.Spec.Raw) > 0 {
@@ -323,13 +325,12 @@ func applyPodTemplate(tmpl corev1.PodTemplateSpec, override *temporalv1alpha1.Po
 	}
 
 	// Re-assert selector labels last so an override cannot drop one.
-	if len(selectorLabels) > 0 && tmpl.Labels == nil {
-		tmpl.Labels = map[string]string{}
-	}
 	for k, v := range selectorLabels {
-		tmpl.Labels[k] = v
+		labels[k] = v
 	}
 
+	tmpl.Labels = labels
+	tmpl.Annotations = annotations
 	return tmpl, nil
 }
 
