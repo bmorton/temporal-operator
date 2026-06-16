@@ -20,7 +20,13 @@ limitations under the License.
 package plan
 
 import (
+	"fmt"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/resources"
+	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
 // Phase labels which operator concern produces an object. It is surfaced in the
@@ -50,4 +56,51 @@ func tag(phase Phase, objs ...client.Object) []PlannedObject {
 		out = append(out, PlannedObject{Object: o, Phase: phase})
 	}
 	return out
+}
+
+// PlanFromSpec computes the full desired object set for a cluster using only its
+// spec, with placeholder credentials. It is the entry point for the WebAssembly
+// preview. The cluster is expected to already be defaulted by the caller.
+func PlanFromSpec(cluster *temporalv1alpha1.TemporalCluster) ([]PlannedObject, error) {
+	opts := temporal.BuildOptions{
+		PublicClientHostPort: fmt.Sprintf("%s.%s.svc:%d",
+			resources.FrontendServiceName(cluster.Name), cluster.Namespace,
+			temporal.DefaultServicePorts()["frontend"].GRPCPort),
+	}
+	renderedConfig, err := temporal.RenderClusterConfig(cluster, opts)
+	if err != nil {
+		return nil, fmt.Errorf("rendering config: %w", err)
+	}
+	renderedDynamic, _, err := temporal.RenderDynamicConfig(cluster.Spec.DynamicConfig, cluster.Spec.Version)
+	if err != nil {
+		return nil, fmt.Errorf("rendering dynamic config: %w", err)
+	}
+
+	var mtls *resources.MTLSMounts
+	if resources.MTLSEnabled(cluster) {
+		mtls = &resources.MTLSMounts{
+			Enabled:         true,
+			InternodeSecret: resources.InternodeCertName(cluster.Name),
+			FrontendSecret:  resources.FrontendCertName(cluster.Name),
+		}
+	}
+
+	servicesInput := ServicesInput{
+		RenderedConfig:        renderedConfig,
+		RenderedDynamicConfig: renderedDynamic,
+		ConfigHash:            resources.ConfigHash(renderedConfig),
+		MTLS:                  mtls,
+	}
+
+	var out []PlannedObject
+	out = append(out, PlanSchemaJobs(cluster)...)
+	out = append(out, PlanMTLS(cluster)...)
+	services, err := PlanServices(cluster, servicesInput)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, services...)
+	out = append(out, PlanUI(cluster)...)
+	out = append(out, PlanMonitoring(cluster)...)
+	return out, nil
 }
