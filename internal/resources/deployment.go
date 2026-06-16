@@ -128,7 +128,7 @@ type MTLSMounts struct {
 // BuildDeployment builds the Deployment for a single Temporal service. The
 // version overrides the server image tag (used for per-service rollout during
 // upgrades); when empty the cluster's spec version is used.
-func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash, version string, mtls *MTLSMounts) *appsv1.Deployment {
+func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash, version string, mtls *MTLSMounts) (*appsv1.Deployment, error) {
 	replicas := int32(1)
 	var resources corev1.ResourceRequirements
 	var nodeSelector map[string]string
@@ -252,6 +252,37 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 		}
 	}
 
+	podTemplate := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      podLabels,
+			Annotations: podAnnotations,
+		},
+		Spec: corev1.PodSpec{
+			ImagePullSecrets:          cluster.Spec.ImagePullSecrets,
+			NodeSelector:              nodeSelector,
+			Tolerations:               tolerations,
+			Affinity:                  affinity,
+			TopologySpreadConstraints: topologySpread,
+			Containers:                []corev1.Container{container},
+			Volumes:                   volumes,
+		},
+	}
+
+	selector := SelectorLabels(cluster, svc.Name)
+	var err error
+	if cluster.Spec.Services.Overrides != nil {
+		podTemplate, err = applyPodTemplate(podTemplate, cluster.Spec.Services.Overrides.PodTemplate, selector)
+		if err != nil {
+			return nil, fmt.Errorf("applying shared podTemplate for %s: %w", svc.Name, err)
+		}
+	}
+	if svc.Spec != nil {
+		podTemplate, err = applyPodTemplate(podTemplate, svc.Spec.PodTemplate, selector)
+		if err != nil {
+			return nil, fmt.Errorf("applying podTemplate for %s: %w", svc.Name, err)
+		}
+	}
+
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -262,23 +293,9 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: SelectorLabels(cluster, svc.Name)},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      podLabels,
-					Annotations: podAnnotations,
-				},
-				Spec: corev1.PodSpec{
-					ImagePullSecrets:          cluster.Spec.ImagePullSecrets,
-					NodeSelector:              nodeSelector,
-					Tolerations:               tolerations,
-					Affinity:                  affinity,
-					TopologySpreadConstraints: topologySpread,
-					Containers:                []corev1.Container{container},
-					Volumes:                   volumes,
-				},
-			},
+			Template: podTemplate,
 		},
-	}
+	}, nil
 }
 
 // applyPodTemplate layers a PodTemplateOverride onto a generated pod template.

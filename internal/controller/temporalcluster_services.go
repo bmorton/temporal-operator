@@ -63,7 +63,11 @@ func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, clust
 	services := resources.EnabledServices(cluster)
 	for _, svc := range services {
 		version := serviceVersions[svc.Name]
-		if err := r.apply(ctx, cluster, resources.BuildDeployment(cluster, svc, configHash, version, mtls)); err != nil {
+		dep, err := resources.BuildDeployment(cluster, svc, configHash, version, mtls)
+		if err != nil {
+			return err
+		}
+		if err := r.apply(ctx, cluster, dep); err != nil {
 			return err
 		}
 		if err := r.apply(ctx, cluster, resources.BuildHeadlessService(cluster, svc)); err != nil {

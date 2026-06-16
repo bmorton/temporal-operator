@@ -66,7 +66,10 @@ func TestSelectorLabelsStableAcrossVersion(t *testing.T) {
 func TestBuildDeployment(t *testing.T) {
 	c := builderCluster()
 	svc := EnabledServices(c)[0] // frontend
-	dep := BuildDeployment(c, svc, "abc123", "", nil)
+	dep, err := BuildDeployment(c, svc, "abc123", "", nil)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
 
 	if dep.Name != "tc-frontend" {
 		t.Errorf("unexpected name %q", dep.Name)
@@ -99,6 +102,65 @@ func TestBuildDeployment(t *testing.T) {
 	}
 }
 
+func TestBuildDeploymentAppliesSharedAndPerServicePodTemplate(t *testing.T) {
+	c := builderCluster()
+	c.Spec.Services.Overrides = &temporalv1alpha1.ServiceOverrides{
+		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
+			Labels: map[string]string{"shared": "yes"},
+			Spec:   &runtime.RawExtension{Raw: []byte(`{"serviceAccountName": "shared-sa"}`)},
+		},
+	}
+	c.Spec.Services.Frontend = &temporalv1alpha1.ServiceSpec{
+		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
+			Labels: map[string]string{"perservice": "yes"},
+			Spec:   &runtime.RawExtension{Raw: []byte(`{"serviceAccountName": "frontend-sa"}`)},
+		},
+	}
+
+	var frontend ServiceInfo
+	for _, s := range EnabledServices(c) {
+		if s.Name == ServiceFrontend {
+			frontend = s
+		}
+	}
+
+	dep, err := BuildDeployment(c, frontend, "abc123", "", nil)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
+	tmpl := dep.Spec.Template
+	if tmpl.Labels["shared"] != "yes" || tmpl.Labels["perservice"] != "yes" {
+		t.Errorf("expected both shared and per-service labels, got %v", tmpl.Labels)
+	}
+	if tmpl.Spec.ServiceAccountName != "frontend-sa" {
+		t.Errorf("expected per-service serviceAccountName to win, got %q", tmpl.Spec.ServiceAccountName)
+	}
+	if tmpl.Labels[LabelComponent] != ServiceFrontend {
+		t.Errorf("selector label dropped: %v", tmpl.Labels)
+	}
+	if len(tmpl.Spec.Containers) != 1 || tmpl.Spec.Containers[0].Name != "temporal" {
+		t.Errorf("temporal container not preserved: %+v", tmpl.Spec.Containers)
+	}
+}
+
+func TestBuildDeploymentInvalidPodTemplateSpecErrors(t *testing.T) {
+	c := builderCluster()
+	c.Spec.Services.Worker = &temporalv1alpha1.ServiceSpec{
+		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
+			Spec: &runtime.RawExtension{Raw: []byte(`not-json`)},
+		},
+	}
+	var worker ServiceInfo
+	for _, s := range EnabledServices(c) {
+		if s.Name == ServiceWorker {
+			worker = s
+		}
+	}
+	if _, err := BuildDeployment(c, worker, "abc123", "", nil); err == nil {
+		t.Errorf("expected error for invalid podTemplate spec patch")
+	}
+}
+
 func TestBuildDeploymentWorkerHasNoProbes(t *testing.T) {
 	c := builderCluster()
 	var worker ServiceInfo
@@ -111,7 +173,11 @@ func TestBuildDeploymentWorkerHasNoProbes(t *testing.T) {
 		t.Fatalf("worker service not found in EnabledServices")
 	}
 
-	ctr := BuildDeployment(c, worker, "abc123", "", nil).Spec.Template.Spec.Containers[0]
+	dep, err := BuildDeployment(c, worker, "abc123", "", nil)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
+	ctr := dep.Spec.Template.Spec.Containers[0]
 	// The Temporal worker does not serve a client-facing gRPC endpoint, so it
 	// must not get gRPC health probes (matching the upstream Helm chart).
 	// Otherwise the startup probe fails forever and the cluster never goes Ready.
@@ -125,7 +191,11 @@ func TestBuildDeploymentMTLSUsesTCPProbes(t *testing.T) {
 	c := builderCluster()
 	svc := EnabledServices(c)[0] // frontend
 	mtls := &MTLSMounts{Enabled: true, InternodeSecret: "tc-internode", FrontendSecret: "tc-frontend-tls"}
-	ctr := BuildDeployment(c, svc, "abc123", "", mtls).Spec.Template.Spec.Containers[0]
+	dep, err := BuildDeployment(c, svc, "abc123", "", mtls)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
+	ctr := dep.Spec.Template.Spec.Containers[0]
 
 	if ctr.StartupProbe == nil || ctr.ReadinessProbe == nil || ctr.LivenessProbe == nil {
 		t.Fatalf("expected probes on frontend under mTLS")
