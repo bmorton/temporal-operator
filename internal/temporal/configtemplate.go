@@ -119,6 +119,10 @@ type MTLSConfig struct {
 	FrontendServerCert  string
 	FrontendServerKey   string
 	FrontendServerName  string
+	SystemWorkerCert    string
+	SystemWorkerKey     string
+	SystemWorkerCA      string
+	SystemWorkerName    string
 }
 
 // MetricsConfig holds resolved Prometheus settings.
@@ -338,6 +342,10 @@ func buildMTLS(cluster *temporalv1alpha1.TemporalCluster) MTLSConfig {
 		FrontendServerCert:  frontendCertDir + "/tls.crt",
 		FrontendServerKey:   frontendCertDir + "/tls.key",
 		FrontendServerName:  frontendServerName,
+		SystemWorkerCert:    internodeCertDir + "/tls.crt",
+		SystemWorkerKey:     internodeCertDir + "/tls.key",
+		SystemWorkerCA:      internodeCertDir + "/ca.crt",
+		SystemWorkerName:    frontendServerName,
 	}
 }
 

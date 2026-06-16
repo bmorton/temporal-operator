@@ -60,6 +60,13 @@ global:
                 serverName: "test-frontend.default.svc.cluster.local"
                 rootCaFiles:
                     - /etc/temporal/certs/internode/ca.crt
+        systemWorker:
+            certFile: /etc/temporal/certs/internode/tls.crt
+            keyFile: /etc/temporal/certs/internode/tls.key
+            client:
+                serverName: "test-frontend.default.svc.cluster.local"
+                rootCaFiles:
+                    - /etc/temporal/certs/internode/ca.crt
     metrics:
         prometheus:
             timerType: histogram
