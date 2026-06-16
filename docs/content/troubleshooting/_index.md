@@ -33,6 +33,9 @@ weight = 60
 
 - `kubectl get deploy -l app.kubernetes.io/instance=<cluster>` and inspect
   pod events (image pulls, probe failures, membership join issues).
+- On mTLS clusters the request-serving pods use TCP probes rather than gRPC ones
+  (the native gRPC prober cannot present a client certificate); see the
+  "mTLS health probes" section under Operations for details.
 
 ## Namespace/SearchAttribute not registering
 

@@ -155,3 +155,25 @@ Trigger with `gh workflow run E2E -f suite=mtls` (or `-f suite=all`).
   the operator presents an "internode" identity to the frontend. Acceptable
   while authorization is not enabled; revisit if per-identity authz is added.
 - serverName must stay in sync with the cert SANs; covered by unit tests.
+
+## Addendum: gRPC health probes under mTLS (found during verification)
+
+End-to-end verification surfaced a fourth defect, independent of the TLS-config
+rendering above. With mTLS enabled the request-serving services (frontend,
+history, matching) stayed `0/1` and the cluster never reached `Ready`, because
+Kubernetes' native gRPC prober dials the health endpoint without a client
+certificate and cannot complete the mutual-TLS handshake on the
+`requireClientAuth` port. The servers were healthy; only the probes failed. (The
+worker came up because it has no probe.)
+
+**Fix:** when mTLS is enabled, the request-serving services use a TCP probe
+instead of a gRPC probe. Non-mTLS clusters keep the gRPC probe.
+
+**Known limitation / future work:** a TCP probe only confirms the port accepts
+connections, not gRPC-level health — a weaker signal that is acceptable for now
+but not ideal for production. A future changeset should adopt richer health
+checking under mTLS, e.g. a `grpc-health-probe` exec probe with the internode
+client cert, or first-class support for a service mesh (Linkerd, or
+Istio/Envoy) that terminates mTLS in a sidecar so Temporal serves plaintext and
+standard gRPC probes apply. User-facing docs:
+`docs/content/operations/_index.md` ("mTLS health probes").

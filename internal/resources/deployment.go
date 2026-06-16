@@ -76,6 +76,11 @@ func tcpProbe(port int32) *corev1.Probe {
 // gRPC prober cannot satisfy (it dials without a client certificate, so the
 // mutual-TLS handshake never completes and the probe times out). In that case
 // we fall back to a TCP probe, which succeeds once the listener is up.
+//
+// A TCP probe is a weaker signal than the gRPC health check (it only confirms
+// the port accepts connections). This is documented as a known limitation; see
+// docs/content/operations/_index.md ("mTLS health probes"). A future change may
+// adopt a grpc-health-probe exec probe or a service mesh instead.
 func serviceProbe(port int32, mtlsEnabled bool) *corev1.Probe {
 	if mtlsEnabled {
 		return tcpProbe(port)
