@@ -65,7 +65,11 @@ func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req c
 		return ctrl.Result{RequeueAfter: time.Minute}, r.statusUpdate(ctx, &sa)
 	}
 
-	sac, err := r.clientFactory()(ctx, frontendAddress(&cluster), nil)
+	tlsConfig, err := clusterTLSConfig(ctx, r.Client, &cluster)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("building temporal client tls: %w", err)
+	}
+	sac, err := r.clientFactory()(ctx, frontendAddress(&cluster), tlsConfig)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}
