@@ -5,7 +5,13 @@ on:
     branches: ["main"]
   schedule:
     - cron: "0 4 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Which suite(s) to run
+        type: choice
+        options: [default, mtls, upgrade, all]
+        default: default
 
 permissions:
   contents: read
@@ -20,11 +26,24 @@ jobs:
       combos: ${{ steps.set.outputs.combos }}
     steps:
       - id: set
+        env:
+          EVENT: ${{ github.event_name }}
+          SUITE: ${{ github.event.inputs.suite }}
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo 'combos=[{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"},{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"},{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}]' >> "$GITHUB_OUTPUT"
+          postgres='{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"}'
+          mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
+          upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
+          if [ "$EVENT" = "schedule" ]; then
+            echo "combos=[$postgres,$mtls,$upgrade]" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            case "$SUITE" in
+              mtls)    echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
+              upgrade) echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
+              all)     echo "combos=[$postgres,$mtls,$upgrade]" >> "$GITHUB_OUTPUT" ;;
+              *)       echo "combos=[$postgres]" >> "$GITHUB_OUTPUT" ;;
+            esac
           else
-            echo 'combos=[{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"}]' >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres]" >> "$GITHUB_OUTPUT"
           fi
 
   e2e:
