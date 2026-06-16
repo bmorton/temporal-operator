@@ -22,6 +22,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/plan"
 	"github.com/bmorton/temporal-operator/internal/resources"
 )
 
@@ -39,7 +40,12 @@ func (r *TemporalClusterReconciler) reconcileMonitoring(ctx context.Context, clu
 		return nil
 	}
 
-	return r.apply(ctx, cluster, resources.BuildServiceMonitor(cluster))
+	for _, p := range plan.PlanMonitoring(cluster) {
+		if err := r.apply(ctx, cluster, p.Object); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // serviceMonitorCRDInstalled reports whether the ServiceMonitor kind is known to

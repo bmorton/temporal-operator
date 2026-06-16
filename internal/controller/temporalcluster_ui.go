@@ -20,7 +20,7 @@ import (
 	"context"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
-	"github.com/bmorton/temporal-operator/internal/resources"
+	"github.com/bmorton/temporal-operator/internal/plan"
 )
 
 // reconcileUI deploys temporal-ui when enabled.
@@ -29,20 +29,8 @@ func (r *TemporalClusterReconciler) reconcileUI(ctx context.Context, cluster *te
 		return nil
 	}
 
-	if mTLSEnabled(cluster) {
-		if err := r.apply(ctx, cluster, resources.BuildUIClientCertificate(cluster)); err != nil {
-			return err
-		}
-	}
-
-	if err := r.apply(ctx, cluster, resources.BuildUIDeployment(cluster)); err != nil {
-		return err
-	}
-	if err := r.apply(ctx, cluster, resources.BuildUIService(cluster)); err != nil {
-		return err
-	}
-	if ingress := resources.BuildUIIngress(cluster); ingress != nil {
-		if err := r.apply(ctx, cluster, ingress); err != nil {
+	for _, p := range plan.PlanUI(cluster) {
+		if err := r.apply(ctx, cluster, p.Object); err != nil {
 			return err
 		}
 	}

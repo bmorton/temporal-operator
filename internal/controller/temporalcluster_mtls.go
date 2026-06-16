@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/plan"
 	"github.com/bmorton/temporal-operator/internal/resources"
 )
 
@@ -45,16 +46,14 @@ func (r *TemporalClusterReconciler) reconcileMTLS(ctx context.Context, cluster *
 		return nil
 	}
 
-	internode := resources.BuildInternodeCertificate(cluster)
-	frontend := resources.BuildFrontendCertificate(cluster)
-	if err := r.apply(ctx, cluster, internode); err != nil {
-		return err
-	}
-	if err := r.apply(ctx, cluster, frontend); err != nil {
-		return err
+	for _, p := range plan.PlanMTLS(cluster) {
+		if err := r.apply(ctx, cluster, p.Object); err != nil {
+			return err
+		}
 	}
 
-	ready, failed := r.certificatesStatus(ctx, cluster, internode.Name, frontend.Name)
+	ready, failed := r.certificatesStatus(ctx, cluster,
+		resources.InternodeCertName(cluster.Name), resources.FrontendCertName(cluster.Name))
 	switch {
 	case failed:
 		r.setMTLSReady(cluster, metav1.ConditionFalse, "CertificateIssuanceFailed", "one or more certificates failed to issue")
