@@ -119,6 +119,34 @@ func TestBuildDeploymentWorkerHasNoProbes(t *testing.T) {
 	}
 }
 
+func TestBuildDeploymentMTLSUsesTCPProbes(t *testing.T) {
+	c := builderCluster()
+	svc := EnabledServices(c)[0] // frontend
+	mtls := &MTLSMounts{Enabled: true, InternodeSecret: "tc-internode", FrontendSecret: "tc-frontend-tls"}
+	ctr := BuildDeployment(c, svc, "abc123", "", mtls).Spec.Template.Spec.Containers[0]
+
+	if ctr.StartupProbe == nil || ctr.ReadinessProbe == nil || ctr.LivenessProbe == nil {
+		t.Fatalf("expected probes on frontend under mTLS")
+	}
+	// Kubernetes' native gRPC prober connects without a client certificate and
+	// cannot complete the mutual-TLS handshake on a requireClientAuth port, so
+	// mTLS clusters must use TCP probes instead of gRPC. Otherwise the startup
+	// probe fails forever and the cluster never goes Ready.
+	if ctr.StartupProbe.GRPC != nil || ctr.ReadinessProbe.GRPC != nil || ctr.LivenessProbe.GRPC != nil {
+		t.Errorf("probes must not be gRPC under mTLS")
+	}
+	if ctr.StartupProbe.TCPSocket == nil || ctr.ReadinessProbe.TCPSocket == nil || ctr.LivenessProbe.TCPSocket == nil {
+		t.Errorf("probes must be TCPSocket under mTLS")
+	}
+	// Probe tuning is preserved across the gRPC/TCP switch.
+	if ctr.StartupProbe.FailureThreshold != 30 {
+		t.Errorf("expected startup failureThreshold 30, got %d", ctr.StartupProbe.FailureThreshold)
+	}
+	if ctr.ReadinessProbe.TimeoutSeconds != 3 {
+		t.Errorf("expected readiness timeoutSeconds 3, got %d", ctr.ReadinessProbe.TimeoutSeconds)
+	}
+}
+
 func TestBuildServicesAndPDB(t *testing.T) {
 	c := builderCluster()
 	frontend := EnabledServices(c)[0]

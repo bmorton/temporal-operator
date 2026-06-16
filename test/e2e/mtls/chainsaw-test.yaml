@@ -49,6 +49,17 @@ spec:
         - describe:
             apiVersion: temporal.bmor10.com/v1alpha1
             kind: TemporalCluster
+        - get:
+            apiVersion: v1
+            kind: Pod
+        - describe:
+            apiVersion: v1
+            kind: Pod
+            selector: app.kubernetes.io/instance=temporal-mtls
+        - podLogs:
+            selector: app.kubernetes.io/instance=temporal-mtls
+            tail: 200
+        - events: {}
     - name: client-credentials
       try:
         - apply:
