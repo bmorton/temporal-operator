@@ -28,6 +28,11 @@ import (
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
 
+const (
+	testLabelYes      = `yes`
+	testContainerName = `temporal`
+)
+
 func builderCluster() *temporalv1alpha1.TemporalCluster {
 	return &temporalv1alpha1.TemporalCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "tc", Namespace: "ns"},
@@ -106,13 +111,13 @@ func TestBuildDeploymentAppliesSharedAndPerServicePodTemplate(t *testing.T) {
 	c := builderCluster()
 	c.Spec.Services.Overrides = &temporalv1alpha1.ServiceOverrides{
 		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
-			Labels: map[string]string{"shared": "yes"},
+			Labels: map[string]string{"shared": testLabelYes},
 			Spec:   &runtime.RawExtension{Raw: []byte(`{"serviceAccountName": "shared-sa"}`)},
 		},
 	}
 	c.Spec.Services.Frontend = &temporalv1alpha1.ServiceSpec{
 		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
-			Labels: map[string]string{"perservice": "yes"},
+			Labels: map[string]string{"perservice": testLabelYes},
 			Spec:   &runtime.RawExtension{Raw: []byte(`{"serviceAccountName": "frontend-sa"}`)},
 		},
 	}
@@ -129,7 +134,7 @@ func TestBuildDeploymentAppliesSharedAndPerServicePodTemplate(t *testing.T) {
 		t.Fatalf("BuildDeployment error: %v", err)
 	}
 	tmpl := dep.Spec.Template
-	if tmpl.Labels["shared"] != "yes" || tmpl.Labels["perservice"] != "yes" {
+	if tmpl.Labels["shared"] != testLabelYes || tmpl.Labels["perservice"] != testLabelYes {
 		t.Errorf("expected both shared and per-service labels, got %v", tmpl.Labels)
 	}
 	if tmpl.Spec.ServiceAccountName != "frontend-sa" {
@@ -138,7 +143,7 @@ func TestBuildDeploymentAppliesSharedAndPerServicePodTemplate(t *testing.T) {
 	if tmpl.Labels[LabelComponent] != ServiceFrontend {
 		t.Errorf("selector label dropped: %v", tmpl.Labels)
 	}
-	if len(tmpl.Spec.Containers) != 1 || tmpl.Spec.Containers[0].Name != "temporal" {
+	if len(tmpl.Spec.Containers) != 1 || tmpl.Spec.Containers[0].Name != testContainerName {
 		t.Errorf("temporal container not preserved: %+v", tmpl.Spec.Containers)
 	}
 }
@@ -226,18 +231,18 @@ func TestApplyPodTemplateLabelsAnnotationsAndSpec(t *testing.T) {
 			Annotations: map[string]string{"existing": "keep"},
 		},
 		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{Name: "temporal", Image: "temporalio/server:1.31.1"}},
+			Containers: []corev1.Container{{Name: testContainerName, Image: "temporalio/server:1.31.1"}},
 			Volumes:    []corev1.Volume{{Name: "config"}},
 		},
 	}
 	selector := map[string]string{"app.kubernetes.io/component": "frontend"}
 	override := &temporalv1alpha1.PodTemplateOverride{
 		Labels:      map[string]string{"azure.workload.identity/use": "true"},
-		Annotations: map[string]string{"added": "yes"},
+		Annotations: map[string]string{"added": testLabelYes},
 		Spec: &runtime.RawExtension{Raw: []byte(`{
 			"serviceAccountName": "temporal-azure",
 			"containers": [
-				{"name": "temporal", "volumeMounts": [{"name": "azure-token", "mountPath": "/azure"}]},
+				{"name": "` + testContainerName + `", "volumeMounts": [{"name": "azure-token", "mountPath": "/azure"}]},
 				{"name": "sidecar", "image": "mcr.microsoft.com/azure-cli:latest"}
 			],
 			"volumes": [{"name": "azure-token", "emptyDir": {}}]
@@ -255,7 +260,7 @@ func TestApplyPodTemplateLabelsAnnotationsAndSpec(t *testing.T) {
 	if got.Labels["app.kubernetes.io/component"] != "frontend" {
 		t.Errorf("selector label must be preserved: %v", got.Labels)
 	}
-	if got.Annotations["existing"] != "keep" || got.Annotations["added"] != "yes" {
+	if got.Annotations["existing"] != "keep" || got.Annotations["added"] != testLabelYes {
 		t.Errorf("annotations not merged: %v", got.Annotations)
 	}
 	if got.Spec.ServiceAccountName != "temporal-azure" {
@@ -266,7 +271,7 @@ func TestApplyPodTemplateLabelsAnnotationsAndSpec(t *testing.T) {
 	}
 	var temporal *corev1.Container
 	for i := range got.Spec.Containers {
-		if got.Spec.Containers[i].Name == "temporal" {
+		if got.Spec.Containers[i].Name == testContainerName {
 			temporal = &got.Spec.Containers[i]
 		}
 	}
@@ -281,7 +286,7 @@ func TestApplyPodTemplateLabelsAnnotationsAndSpec(t *testing.T) {
 func TestApplyPodTemplateNilIsNoop(t *testing.T) {
 	base := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"a": "b"}},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "temporal"}}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: testContainerName}}},
 	}
 	got, err := applyPodTemplate(base, nil, map[string]string{"a": "b"})
 	if err != nil {
@@ -298,11 +303,11 @@ func TestApplyPodTemplateDoesNotMutateInputMaps(t *testing.T) {
 			Labels:      map[string]string{"app.kubernetes.io/component": "frontend"},
 			Annotations: map[string]string{"existing": "keep"},
 		},
-		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "temporal"}}},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: testContainerName}}},
 	}
 	override := &temporalv1alpha1.PodTemplateOverride{
 		Labels:      map[string]string{"azure.workload.identity/use": "true"},
-		Annotations: map[string]string{"added": "yes"},
+		Annotations: map[string]string{"added": testLabelYes},
 	}
 	selector := map[string]string{"app.kubernetes.io/component": "frontend", "selector": "required"}
 
@@ -313,7 +318,7 @@ func TestApplyPodTemplateDoesNotMutateInputMaps(t *testing.T) {
 	if got.Labels["azure.workload.identity/use"] != "true" || got.Labels["selector"] != "required" {
 		t.Fatalf("expected returned template to include merged labels, got %v", got.Labels)
 	}
-	if got.Annotations["added"] != "yes" {
+	if got.Annotations["added"] != testLabelYes {
 		t.Fatalf("expected returned template to include merged annotations, got %v", got.Annotations)
 	}
 	if _, ok := base.Labels["azure.workload.identity/use"]; ok {
@@ -330,7 +335,7 @@ func TestApplyPodTemplateDoesNotMutateInputMaps(t *testing.T) {
 func TestApplyPodTemplateOverrideCannotDropSelectorLabel(t *testing.T) {
 	base := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app.kubernetes.io/component": "frontend"}},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "temporal"}}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: testContainerName}}},
 	}
 	selector := map[string]string{"app.kubernetes.io/component": "frontend"}
 	override := &temporalv1alpha1.PodTemplateOverride{
@@ -346,7 +351,7 @@ func TestApplyPodTemplateOverrideCannotDropSelectorLabel(t *testing.T) {
 }
 
 func TestApplyPodTemplateInvalidSpecErrors(t *testing.T) {
-	base := corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "temporal"}}}}
+	base := corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: testContainerName}}}}
 	override := &temporalv1alpha1.PodTemplateOverride{
 		Spec: &runtime.RawExtension{Raw: []byte("{ not json")},
 	}
