@@ -17,10 +17,14 @@ limitations under the License.
 package resources
 
 import (
+	"encoding/json"
+	"fmt"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/temporal"
@@ -124,7 +128,7 @@ type MTLSMounts struct {
 // BuildDeployment builds the Deployment for a single Temporal service. The
 // version overrides the server image tag (used for per-service rollout during
 // upgrades); when empty the cluster's spec version is used.
-func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash, version string, mtls *MTLSMounts) *appsv1.Deployment {
+func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash, version string, mtls *MTLSMounts) (*appsv1.Deployment, error) {
 	replicas := int32(1)
 	var resources corev1.ResourceRequirements
 	var nodeSelector map[string]string
@@ -248,6 +252,37 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 		}
 	}
 
+	podTemplate := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      podLabels,
+			Annotations: podAnnotations,
+		},
+		Spec: corev1.PodSpec{
+			ImagePullSecrets:          cluster.Spec.ImagePullSecrets,
+			NodeSelector:              nodeSelector,
+			Tolerations:               tolerations,
+			Affinity:                  affinity,
+			TopologySpreadConstraints: topologySpread,
+			Containers:                []corev1.Container{container},
+			Volumes:                   volumes,
+		},
+	}
+
+	selector := SelectorLabels(cluster, svc.Name)
+	var err error
+	if cluster.Spec.Services.Overrides != nil {
+		podTemplate, err = applyPodTemplate(podTemplate, cluster.Spec.Services.Overrides.PodTemplate, selector)
+		if err != nil {
+			return nil, fmt.Errorf("applying shared podTemplate for %s: %w", svc.Name, err)
+		}
+	}
+	if svc.Spec != nil {
+		podTemplate, err = applyPodTemplate(podTemplate, svc.Spec.PodTemplate, selector)
+		if err != nil {
+			return nil, fmt.Errorf("applying podTemplate for %s: %w", svc.Name, err)
+		}
+	}
+
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -258,23 +293,62 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: SelectorLabels(cluster, svc.Name)},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      podLabels,
-					Annotations: podAnnotations,
-				},
-				Spec: corev1.PodSpec{
-					ImagePullSecrets:          cluster.Spec.ImagePullSecrets,
-					NodeSelector:              nodeSelector,
-					Tolerations:               tolerations,
-					Affinity:                  affinity,
-					TopologySpreadConstraints: topologySpread,
-					Containers:                []corev1.Container{container},
-					Volumes:                   volumes,
-				},
-			},
+			Template: podTemplate,
 		},
+	}, nil
+}
+
+// applyPodTemplate layers a PodTemplateOverride onto a generated pod template.
+// Labels and annotations are merged (override wins), and the override's partial
+// PodSpec is strategic-merge patched onto the generated PodSpec (containers and
+// volumes merge by name). Selector labels are re-asserted afterward so an
+// override can never drop a label the Deployment selector depends on. A nil
+// override is a no-op.
+func applyPodTemplate(tmpl corev1.PodTemplateSpec, override *temporalv1alpha1.PodTemplateOverride, selectorLabels map[string]string) (corev1.PodTemplateSpec, error) {
+	if override == nil {
+		return tmpl, nil
 	}
+
+	labels := map[string]string{}
+	for k, v := range tmpl.Labels {
+		labels[k] = v
+	}
+	for k, v := range override.Labels {
+		labels[k] = v
+	}
+
+	annotations := map[string]string{}
+	for k, v := range tmpl.Annotations {
+		annotations[k] = v
+	}
+	for k, v := range override.Annotations {
+		annotations[k] = v
+	}
+
+	if override.Spec != nil && len(override.Spec.Raw) > 0 {
+		original, err := json.Marshal(tmpl.Spec)
+		if err != nil {
+			return tmpl, fmt.Errorf("marshaling generated pod spec: %w", err)
+		}
+		patched, err := strategicpatch.StrategicMergePatch(original, override.Spec.Raw, corev1.PodSpec{})
+		if err != nil {
+			return tmpl, fmt.Errorf("applying podTemplate spec patch: %w", err)
+		}
+		var merged corev1.PodSpec
+		if err := json.Unmarshal(patched, &merged); err != nil {
+			return tmpl, fmt.Errorf("unmarshaling patched pod spec: %w", err)
+		}
+		tmpl.Spec = merged
+	}
+
+	// Re-assert selector labels last so an override cannot drop one.
+	for k, v := range selectorLabels {
+		labels[k] = v
+	}
+
+	tmpl.Labels = labels
+	tmpl.Annotations = annotations
+	return tmpl, nil
 }
 
 // intstrFromInt is a small helper for service target ports.

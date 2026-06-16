@@ -1,0 +1,38 @@
+# Temporal UI exposed on AKS via the Application Gateway Ingress Controller (AGIC).
+# Persistence is shown inline; see cluster-azure-postgres-flexible for the
+# Flexible Server setup details (databases, max_connections, TLS).
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: azure-ui
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  ui:
+    enabled: true
+    ingress:
+      enabled: true
+      ingressClassName: azure-application-gateway
+      host: temporal.example.com
+      annotations:
+        appgw.ingress.kubernetes.io/backend-protocol: "http"
+        appgw.ingress.kubernetes.io/request-timeout: "300"
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: REPLACE_ME.postgres.database.azure.com
+        port: 5432
+        database: temporal
+        user: temporaladmin
+        passwordSecretRef: { name: temporal-flexible-store, key: password }
+        tls: { enabled: true }
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: REPLACE_ME.postgres.database.azure.com
+        port: 5432
+        database: temporal_visibility
+        user: temporaladmin
+        passwordSecretRef: { name: temporal-flexible-store, key: password }
+        tls: { enabled: true }

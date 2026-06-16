@@ -13,4 +13,7 @@ services/secrets exist.
 | [`cluster-elasticsearch-visibility`](./cluster-elasticsearch-visibility) | Postgres default + Elasticsearch visibility. |
 | [`cluster-with-namespaces-and-search-attributes`](./cluster-with-namespaces-and-search-attributes) | Declarative namespace + search attribute. |
 | [`cluster-cnpg-integrated`](./cluster-cnpg-integrated) | End-to-end with CloudNativePG. |
+| [`cluster-azure-postgres-flexible`](./cluster-azure-postgres-flexible) | Azure Database for PostgreSQL Flexible Server (password auth). |
+| [`cluster-azure-aks-ingress`](./cluster-azure-aks-ingress) | Temporal UI on AKS via Application Gateway (AGIC). |
+| [`cluster-azure-workload-identity`](./cluster-azure-workload-identity) | **Preview:** passwordless Flexible Server via Azure Workload Identity. |
 | [`cluster-upgrade`](./cluster-upgrade) | Version upgrade walkthrough (1.30 → 1.31). |

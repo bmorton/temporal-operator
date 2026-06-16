@@ -21,9 +21,16 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+)
+
+const (
+	testLabelYes      = `yes`
+	testContainerName = `temporal`
 )
 
 func builderCluster() *temporalv1alpha1.TemporalCluster {
@@ -64,7 +71,10 @@ func TestSelectorLabelsStableAcrossVersion(t *testing.T) {
 func TestBuildDeployment(t *testing.T) {
 	c := builderCluster()
 	svc := EnabledServices(c)[0] // frontend
-	dep := BuildDeployment(c, svc, "abc123", "", nil)
+	dep, err := BuildDeployment(c, svc, "abc123", "", nil)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
 
 	if dep.Name != "tc-frontend" {
 		t.Errorf("unexpected name %q", dep.Name)
@@ -97,6 +107,143 @@ func TestBuildDeployment(t *testing.T) {
 	}
 }
 
+func TestBuildDeploymentAppliesSharedAndPerServicePodTemplate(t *testing.T) {
+	c := builderCluster()
+	c.Spec.Services.Overrides = &temporalv1alpha1.ServiceOverrides{
+		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
+			Labels: map[string]string{"shared": testLabelYes},
+			Spec:   &runtime.RawExtension{Raw: []byte(`{"serviceAccountName": "shared-sa"}`)},
+		},
+	}
+	c.Spec.Services.Frontend = &temporalv1alpha1.ServiceSpec{
+		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
+			Labels: map[string]string{"perservice": testLabelYes},
+			Spec:   &runtime.RawExtension{Raw: []byte(`{"serviceAccountName": "frontend-sa"}`)},
+		},
+	}
+
+	var frontend ServiceInfo
+	for _, s := range EnabledServices(c) {
+		if s.Name == ServiceFrontend {
+			frontend = s
+		}
+	}
+
+	dep, err := BuildDeployment(c, frontend, "abc123", "", nil)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
+	tmpl := dep.Spec.Template
+	if tmpl.Labels["shared"] != testLabelYes || tmpl.Labels["perservice"] != testLabelYes {
+		t.Errorf("expected both shared and per-service labels, got %v", tmpl.Labels)
+	}
+	if tmpl.Spec.ServiceAccountName != "frontend-sa" {
+		t.Errorf("expected per-service serviceAccountName to win, got %q", tmpl.Spec.ServiceAccountName)
+	}
+	if tmpl.Labels[LabelComponent] != ServiceFrontend {
+		t.Errorf("selector label dropped: %v", tmpl.Labels)
+	}
+	if len(tmpl.Spec.Containers) != 1 || tmpl.Spec.Containers[0].Name != testContainerName {
+		t.Errorf("temporal container not preserved: %+v", tmpl.Spec.Containers)
+	}
+}
+
+func TestBuildDeploymentPodTemplateMergesSidecarIntoGeneratedSpec(t *testing.T) {
+	const azureTokenVol = "azure-token"
+	c := builderCluster()
+	c.Spec.Services.Frontend = &temporalv1alpha1.ServiceSpec{
+		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
+			Spec: &runtime.RawExtension{Raw: []byte(`{
+				"containers": [
+					{"name": "temporal", "volumeMounts": [{"name": "azure-token", "mountPath": "/azure"}]},
+					{"name": "azure-token-refresher", "image": "mcr.microsoft.com/azure-cli:latest"}
+				],
+				"volumes": [{"name": "azure-token", "emptyDir": {}}]
+			}`)},
+		},
+	}
+
+	var frontend ServiceInfo
+	for _, s := range EnabledServices(c) {
+		if s.Name == ServiceFrontend {
+			frontend = s
+		}
+	}
+
+	dep, err := BuildDeployment(c, frontend, "abc123", "", nil)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
+	spec := dep.Spec.Template.Spec
+
+	if len(spec.Containers) != 2 {
+		t.Errorf("expected sidecar appended (2 containers), got %d", len(spec.Containers))
+	}
+	if !podHasVolume(spec, azureTokenVol) {
+		t.Errorf("azure-token volume not appended: %+v", spec.Volumes)
+	}
+
+	// The generated temporal container carries config, dynamicconfig, and
+	// processed-config mounts; the override must append azure-token, not clobber
+	// them.
+	temporal := containerByName(spec, testContainerName)
+	if temporal == nil {
+		t.Fatalf("generated temporal container missing after merge: %+v", spec.Containers)
+	}
+	if len(temporal.VolumeMounts) != 4 {
+		t.Errorf("expected generated mounts preserved plus azure-token (4 total), got %d: %+v",
+			len(temporal.VolumeMounts), temporal.VolumeMounts)
+	}
+	if !containerHasMount(*temporal, azureTokenVol, "/azure") {
+		t.Errorf("azure-token mount not merged into temporal container: %+v", temporal.VolumeMounts)
+	}
+}
+
+func containerByName(spec corev1.PodSpec, name string) *corev1.Container {
+	for i := range spec.Containers {
+		if spec.Containers[i].Name == name {
+			return &spec.Containers[i]
+		}
+	}
+	return nil
+}
+
+func podHasVolume(spec corev1.PodSpec, name string) bool {
+	for _, v := range spec.Volumes {
+		if v.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func containerHasMount(ctr corev1.Container, name, path string) bool {
+	for _, vm := range ctr.VolumeMounts {
+		if vm.Name == name && vm.MountPath == path {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBuildDeploymentInvalidPodTemplateSpecErrors(t *testing.T) {
+	c := builderCluster()
+	c.Spec.Services.Worker = &temporalv1alpha1.ServiceSpec{
+		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
+			Spec: &runtime.RawExtension{Raw: []byte(`not-json`)},
+		},
+	}
+	var worker ServiceInfo
+	for _, s := range EnabledServices(c) {
+		if s.Name == ServiceWorker {
+			worker = s
+		}
+	}
+	if _, err := BuildDeployment(c, worker, "abc123", "", nil); err == nil {
+		t.Errorf("expected error for invalid podTemplate spec patch")
+	}
+}
+
 func TestBuildDeploymentWorkerHasNoProbes(t *testing.T) {
 	c := builderCluster()
 	var worker ServiceInfo
@@ -109,7 +256,11 @@ func TestBuildDeploymentWorkerHasNoProbes(t *testing.T) {
 		t.Fatalf("worker service not found in EnabledServices")
 	}
 
-	ctr := BuildDeployment(c, worker, "abc123", "", nil).Spec.Template.Spec.Containers[0]
+	dep, err := BuildDeployment(c, worker, "abc123", "", nil)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
+	ctr := dep.Spec.Template.Spec.Containers[0]
 	// The Temporal worker does not serve a client-facing gRPC endpoint, so it
 	// must not get gRPC health probes (matching the upstream Helm chart).
 	// Otherwise the startup probe fails forever and the cluster never goes Ready.
@@ -123,7 +274,11 @@ func TestBuildDeploymentMTLSUsesTCPProbes(t *testing.T) {
 	c := builderCluster()
 	svc := EnabledServices(c)[0] // frontend
 	mtls := &MTLSMounts{Enabled: true, InternodeSecret: "tc-internode", FrontendSecret: "tc-frontend-tls"}
-	ctr := BuildDeployment(c, svc, "abc123", "", mtls).Spec.Template.Spec.Containers[0]
+	dep, err := BuildDeployment(c, svc, "abc123", "", mtls)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
+	ctr := dep.Spec.Template.Spec.Containers[0]
 
 	if ctr.StartupProbe == nil || ctr.ReadinessProbe == nil || ctr.LivenessProbe == nil {
 		t.Fatalf("expected probes on frontend under mTLS")
@@ -144,6 +299,142 @@ func TestBuildDeploymentMTLSUsesTCPProbes(t *testing.T) {
 	}
 	if ctr.ReadinessProbe.TimeoutSeconds != 3 {
 		t.Errorf("expected readiness timeoutSeconds 3, got %d", ctr.ReadinessProbe.TimeoutSeconds)
+	}
+}
+
+func TestApplyPodTemplateLabelsAnnotationsAndSpec(t *testing.T) {
+	base := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      map[string]string{"app.kubernetes.io/component": "frontend"},
+			Annotations: map[string]string{"existing": "keep"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: testContainerName, Image: "temporalio/server:1.31.1"}},
+			Volumes:    []corev1.Volume{{Name: "config"}},
+		},
+	}
+	selector := map[string]string{"app.kubernetes.io/component": "frontend"}
+	override := &temporalv1alpha1.PodTemplateOverride{
+		Labels:      map[string]string{"azure.workload.identity/use": "true"},
+		Annotations: map[string]string{"added": testLabelYes},
+		Spec: &runtime.RawExtension{Raw: []byte(`{
+			"serviceAccountName": "temporal-azure",
+			"containers": [
+				{"name": "` + testContainerName + `", "volumeMounts": [{"name": "azure-token", "mountPath": "/azure"}]},
+				{"name": "sidecar", "image": "mcr.microsoft.com/azure-cli:latest"}
+			],
+			"volumes": [{"name": "azure-token", "emptyDir": {}}]
+		}`)},
+	}
+
+	got, err := applyPodTemplate(base, override, selector)
+	if err != nil {
+		t.Fatalf("applyPodTemplate returned error: %v", err)
+	}
+
+	if got.Labels["azure.workload.identity/use"] != "true" {
+		t.Errorf("override label missing: %v", got.Labels)
+	}
+	if got.Labels["app.kubernetes.io/component"] != "frontend" {
+		t.Errorf("selector label must be preserved: %v", got.Labels)
+	}
+	if got.Annotations["existing"] != "keep" || got.Annotations["added"] != testLabelYes {
+		t.Errorf("annotations not merged: %v", got.Annotations)
+	}
+	if got.Spec.ServiceAccountName != "temporal-azure" {
+		t.Errorf("serviceAccountName not set: %q", got.Spec.ServiceAccountName)
+	}
+	if len(got.Spec.Containers) != 2 {
+		t.Fatalf("expected sidecar appended, got %d containers", len(got.Spec.Containers))
+	}
+	var temporal *corev1.Container
+	for i := range got.Spec.Containers {
+		if got.Spec.Containers[i].Name == testContainerName {
+			temporal = &got.Spec.Containers[i]
+		}
+	}
+	if temporal == nil || len(temporal.VolumeMounts) != 1 || temporal.VolumeMounts[0].Name != "azure-token" {
+		t.Errorf("temporal container volumeMount not merged: %+v", temporal)
+	}
+	if len(got.Spec.Volumes) != 2 {
+		t.Errorf("expected azure-token volume appended, got %d", len(got.Spec.Volumes))
+	}
+}
+
+func TestApplyPodTemplateNilIsNoop(t *testing.T) {
+	base := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"a": "b"}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: testContainerName}}},
+	}
+	got, err := applyPodTemplate(base, nil, map[string]string{"a": "b"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got.Spec.Containers) != 1 || got.Labels["a"] != "b" {
+		t.Errorf("nil override must be a no-op, got %+v", got)
+	}
+}
+
+func TestApplyPodTemplateDoesNotMutateInputMaps(t *testing.T) {
+	base := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      map[string]string{"app.kubernetes.io/component": "frontend"},
+			Annotations: map[string]string{"existing": "keep"},
+		},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: testContainerName}}},
+	}
+	override := &temporalv1alpha1.PodTemplateOverride{
+		Labels:      map[string]string{"azure.workload.identity/use": "true"},
+		Annotations: map[string]string{"added": testLabelYes},
+	}
+	selector := map[string]string{"app.kubernetes.io/component": "frontend", "selector": "required"}
+
+	got, err := applyPodTemplate(base, override, selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Labels["azure.workload.identity/use"] != "true" || got.Labels["selector"] != "required" {
+		t.Fatalf("expected returned template to include merged labels, got %v", got.Labels)
+	}
+	if got.Annotations["added"] != testLabelYes {
+		t.Fatalf("expected returned template to include merged annotations, got %v", got.Annotations)
+	}
+	if _, ok := base.Labels["azure.workload.identity/use"]; ok {
+		t.Errorf("base labels were mutated: %v", base.Labels)
+	}
+	if _, ok := base.Labels["selector"]; ok {
+		t.Errorf("base labels were mutated by selector re-assertion: %v", base.Labels)
+	}
+	if _, ok := base.Annotations["added"]; ok {
+		t.Errorf("base annotations were mutated: %v", base.Annotations)
+	}
+}
+
+func TestApplyPodTemplateOverrideCannotDropSelectorLabel(t *testing.T) {
+	base := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app.kubernetes.io/component": "frontend"}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: testContainerName}}},
+	}
+	selector := map[string]string{"app.kubernetes.io/component": "frontend"}
+	override := &temporalv1alpha1.PodTemplateOverride{
+		Labels: map[string]string{"app.kubernetes.io/component": "evil"},
+	}
+	got, err := applyPodTemplate(base, override, selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Labels["app.kubernetes.io/component"] != "frontend" {
+		t.Errorf("selector label must win over override, got %q", got.Labels["app.kubernetes.io/component"])
+	}
+}
+
+func TestApplyPodTemplateInvalidSpecErrors(t *testing.T) {
+	base := corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: testContainerName}}}}
+	override := &temporalv1alpha1.PodTemplateOverride{
+		Spec: &runtime.RawExtension{Raw: []byte("{ not json")},
+	}
+	if _, err := applyPodTemplate(base, override, nil); err == nil {
+		t.Errorf("expected error for malformed podTemplate spec patch")
 	}
 }
 

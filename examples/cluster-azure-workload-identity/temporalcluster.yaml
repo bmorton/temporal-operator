@@ -1,0 +1,82 @@
+# PREVIEW: passwordless Flexible Server auth via Azure Workload Identity.
+# This makes the Temporal SERVER pods passwordless. The operator's own
+# reachability probe and the schema Job still need credentials today — see the
+# README and the tracking issue.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: temporal-azure-pwcmd
+type: Opaque
+stringData:
+  # Temporal runs this command per connection to obtain the DB password.
+  # It waits for the sidecar to write the first token, then prints it.
+  command: "sh -c 'until [ -s /azure/pgpass ]; do sleep 1; done; cat /azure/pgpass'"
+---
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: azure-wi
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  ui:
+    enabled: true
+  services:
+    overrides:
+      podTemplate:
+        labels:
+          azure.workload.identity/use: "true"
+        spec:
+          serviceAccountName: temporal-azure
+          containers:
+            # Patch the generated server container (merged by name) to mount the
+            # shared token volume.
+            - name: temporal
+              volumeMounts:
+                - name: azure-token
+                  mountPath: /azure
+            # Sidecar refreshes an Entra access token for Flexible Server.
+            - name: azure-token-refresher
+              image: mcr.microsoft.com/azure-cli:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  az login --service-principal \
+                    -u "$AZURE_CLIENT_ID" \
+                    --tenant "$AZURE_TENANT_ID" \
+                    --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")" \
+                    --allow-no-subscriptions
+                  while true; do
+                    az account get-access-token --resource-type oss-rdbms \
+                      --query accessToken -o tsv > /azure/pgpass.tmp
+                    mv /azure/pgpass.tmp /azure/pgpass
+                    sleep 1800
+                  done
+              volumeMounts:
+                - name: azure-token
+                  mountPath: /azure
+          volumes:
+            - name: azure-token
+              emptyDir: {}
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: REPLACE_ME.postgres.database.azure.com
+        port: 5432
+        database: temporal
+        # The Postgres role created for the managed identity via
+        # pgaadauth_create_principal (usually the identity's display name).
+        user: temporal-identity
+        passwordCommandSecretRef: { name: temporal-azure-pwcmd, key: command }
+        tls: { enabled: true }
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: REPLACE_ME.postgres.database.azure.com
+        port: 5432
+        database: temporal_visibility
+        user: temporal-identity
+        passwordCommandSecretRef: { name: temporal-azure-pwcmd, key: command }
+        tls: { enabled: true }
