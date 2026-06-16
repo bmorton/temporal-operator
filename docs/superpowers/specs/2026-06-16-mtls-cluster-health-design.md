@@ -126,6 +126,29 @@ both; regenerate manifests.
   (worker + internode actually connect) and that a `TemporalSearchAttribute`
   registers against the mTLS cluster.
 
+### CI: on-demand e2e suite selection
+Today `.github/workflows/e2e.yml` only runs the mtls suite on the nightly
+`schedule` event; `pull_request` and `workflow_dispatch` run only
+`postgres/lifecycle`. Add a `workflow_dispatch` input so the mtls suite (and the
+others) can be triggered on demand to validate this fix:
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Which suite(s) to run
+        type: choice
+        options: [default, mtls, upgrade, all]
+        default: default
+```
+Update the `Compute matrix` step so:
+- `schedule` → full matrix (unchanged).
+- `workflow_dispatch` → the combo(s) selected by `inputs.suite` (`default` =
+  postgres/lifecycle; `all` = full matrix).
+- `pull_request` → postgres/lifecycle (unchanged).
+
+Trigger with `gh workflow run E2E -f suite=mtls` (or `-f suite=all`).
+
 ## Risks
 
 - Reusing the internode cert as the operator/system-worker client identity means
