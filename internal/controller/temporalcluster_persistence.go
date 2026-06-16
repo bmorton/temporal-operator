@@ -40,9 +40,6 @@ import (
 // or migrating datastore.
 const persistenceRequeueAfter = 30 * time.Second
 
-// postgresSchemaDir is the on-image schema directory for the postgres12 plugin.
-const postgresSchemaDir = "v12"
-
 // Datastore backend kinds.
 const (
 	kindCassandra     = "cassandra"
@@ -246,7 +243,7 @@ func (r *TemporalClusterReconciler) ensureSchemaJob(ctx context.Context, cluster
 			CassandraSpec:    t.spec.Cassandra,
 			Store:            t.store,
 			Action:           action,
-			SchemaVersionDir: postgresSchemaDir,
+			SchemaVersionDir: resources.PostgresSchemaDir,
 		})
 		if err := controllerutil.SetControllerReference(cluster, built, r.Scheme); err != nil {
 			return jobPending, err

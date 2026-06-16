@@ -23,10 +23,6 @@ import (
 	"github.com/bmorton/temporal-operator/internal/resources"
 )
 
-// postgresSchemaDir mirrors the controller's on-image schema directory for the
-// postgres12 plugin.
-const postgresSchemaDir = "v12"
-
 // PlanSchemaJobs returns the initial setup-schema Job for the default and
 // visibility stores. The operator additionally runs update-schema Jobs based on
 // live schema introspection; the preview shows the from-scratch setup case,
@@ -47,7 +43,7 @@ func PlanSchemaJobs(cluster *temporalv1alpha1.TemporalCluster) []PlannedObject {
 			CassandraSpec:    s.store.Cassandra,
 			Store:            s.name,
 			Action:           resources.ActionSetup,
-			SchemaVersionDir: postgresSchemaDir,
+			SchemaVersionDir: resources.PostgresSchemaDir,
 		}))
 	}
 	return tag(PhasePersistenceSchema, objs...)

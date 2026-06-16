@@ -49,6 +49,10 @@ const (
 	ActionUpdate SchemaAction = "update"
 )
 
+// PostgresSchemaDir is the on-image schema directory for the postgres12 plugin
+// (used as the BuildSchemaJob SchemaVersionDir for SQL postgres stores).
+const PostgresSchemaDir = "v12"
+
 const (
 	schemaJobBackoffLimit   int32 = 3
 	schemaJobTTLAfterFinish int32 = 600
