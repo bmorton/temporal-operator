@@ -38,9 +38,18 @@ err() { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; }
 
 cleanup() {
   local code=$?
-  if [ -s "$CIDFILE" ]; then
-    log "Destroying nsc cluster $(cat "$CIDFILE")"
-    nsc destroy "$(cat "$CIDFILE")" --force \
+  local id=""
+  [ -s "$CIDFILE" ] && id="$(cat "$CIDFILE")"
+  # Fallback: if nsc create was interrupted before writing the cidfile, find the
+  # cluster by its unique run=$TAG label so we never leak a billable instance.
+  if [ -z "$id" ] && [ -n "${CREATE_ATTEMPTED:-}" ]; then
+    id="$(nsc list --all -o json 2>/dev/null \
+      | jq -r --arg t "$TAG" '.[] | select(.labels.run == $t) | .cluster_id' 2>/dev/null \
+      | head -n1 || true)"
+  fi
+  if [ -n "$id" ]; then
+    log "Destroying nsc cluster $id"
+    nsc destroy "$id" --force \
       || err "nsc destroy failed; run 'make nsc-clean' to purge orphaned clusters"
   fi
   rm -rf "$WORKDIR"
@@ -61,7 +70,7 @@ if [ ! -x "$CHAINSAW" ]; then
 fi
 
 # --- Resolve registry & build/push operator image (remote builder) ----------
-REG="$(nsc workspace describe 2>/dev/null | awk -F': ' '/Registry URL/ {print $2; exit}')"
+REG="$(nsc workspace describe 2>/dev/null | awk -F': ' '/Registry URL/ {print $2; exit}' | tr -d '[:space:]')" || true
 [ -n "$REG" ] || { err "Could not determine nscr.io registry from 'nsc workspace describe'."; exit 1; }
 IMAGE="$REG/temporal-operator:$TAG"
 log "Building and pushing operator image: $IMAGE"
@@ -69,6 +78,7 @@ nsc build -f Dockerfile -t "$IMAGE" --push
 
 # --- Create ephemeral Kubernetes cluster ------------------------------------
 log "Creating ephemeral Kubernetes $NSC_K8S_VERSION cluster (auto-expires after $NSC_DURATION)"
+CREATE_ATTEMPTED=1
 nsc create \
   --enable="kubernetes:$NSC_K8S_VERSION" \
   --ephemeral \
