@@ -28,3 +28,8 @@ docs/resources/
 .hugo_build.lock
 docs/content/reference/.crd-reference-body.md
 .worktrees
+
+# Generated WebAssembly resource-preview assets (rebuilt on every docs deploy)
+docs/static/preview/temporal-operator-preview.wasm
+docs/static/preview/wasm_exec.js
+docs/static/preview/examples/

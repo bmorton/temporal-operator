@@ -29,6 +29,7 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/persistence"
+	"github.com/bmorton/temporal-operator/internal/plan"
 	"github.com/bmorton/temporal-operator/internal/resources"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
@@ -48,42 +49,24 @@ func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, clust
 	if err != nil {
 		return err
 	}
-	configHash := resources.ConfigHash(rendered.config)
-	mtls := r.mtlsMounts(ctx, cluster)
 
-	dynamicCM := resources.BuildDynamicConfigMap(cluster, rendered.dynamicConfig)
-	configSecret := resources.BuildConfigSecret(cluster, rendered.config)
-	if err := r.apply(ctx, cluster, configSecret); err != nil {
+	planned, err := plan.PlanServices(cluster, plan.ServicesInput{
+		RenderedConfig:        rendered.config,
+		RenderedDynamicConfig: rendered.dynamicConfig,
+		ConfigHash:            resources.ConfigHash(rendered.config),
+		ServiceVersions:       serviceVersions,
+		MTLS:                  r.mtlsMounts(ctx, cluster),
+	})
+	if err != nil {
 		return err
 	}
-	if err := r.apply(ctx, cluster, dynamicCM); err != nil {
-		return err
-	}
-
-	services := resources.EnabledServices(cluster)
-	for _, svc := range services {
-		version := serviceVersions[svc.Name]
-		dep, err := resources.BuildDeployment(cluster, svc, configHash, version, mtls)
-		if err != nil {
+	for _, p := range planned {
+		if err := r.apply(ctx, cluster, p.Object); err != nil {
 			return err
-		}
-		if err := r.apply(ctx, cluster, dep); err != nil {
-			return err
-		}
-		if err := r.apply(ctx, cluster, resources.BuildHeadlessService(cluster, svc)); err != nil {
-			return err
-		}
-		if err := r.apply(ctx, cluster, resources.BuildPodDisruptionBudget(cluster, svc)); err != nil {
-			return err
-		}
-		if svc.Name == resources.ServiceFrontend {
-			if err := r.apply(ctx, cluster, resources.BuildFrontendService(cluster, svc)); err != nil {
-				return err
-			}
 		}
 	}
 
-	return r.rollupServiceStatus(ctx, cluster, services)
+	return r.rollupServiceStatus(ctx, cluster, resources.EnabledServices(cluster))
 }
 
 type renderedConfig struct {

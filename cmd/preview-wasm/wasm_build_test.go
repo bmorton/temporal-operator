@@ -1,3 +1,5 @@
+//go:build !js
+
 /*
 Copyright 2026 Brian Morton.
 
@@ -14,25 +16,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package main
 
 import (
-	"context"
-
-	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
-	"github.com/bmorton/temporal-operator/internal/plan"
+	"os/exec"
+	"testing"
 )
 
-// reconcileUI deploys temporal-ui when enabled.
-func (r *TemporalClusterReconciler) reconcileUI(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
-	if cluster.Spec.UI == nil || !cluster.Spec.UI.Enabled {
-		return nil
+// TestWASMCompiles guards against changes that break the js/wasm build of the
+// preview shim, which would silently break the docs site.
+func TestWASMCompiles(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", t.TempDir()+"/preview.wasm", ".")
+	cmd.Env = append(cmd.Environ(), "GOOS=js", "GOARCH=wasm")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("js/wasm build failed: %v\n%s", err, out)
 	}
-
-	for _, p := range plan.PlanUI(cluster) {
-		if err := r.apply(ctx, cluster, p.Object); err != nil {
-			return err
-		}
-	}
-	return nil
 }

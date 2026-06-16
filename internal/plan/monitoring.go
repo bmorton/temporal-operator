@@ -14,25 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package plan
 
 import (
-	"context"
-
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
-	"github.com/bmorton/temporal-operator/internal/plan"
+	"github.com/bmorton/temporal-operator/internal/resources"
 )
 
-// reconcileUI deploys temporal-ui when enabled.
-func (r *TemporalClusterReconciler) reconcileUI(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
-	if cluster.Spec.UI == nil || !cluster.Spec.UI.Enabled {
+// PlanMonitoring returns the ServiceMonitor when it is enabled in the spec. The
+// controller additionally gates creation on the ServiceMonitor CRD being
+// installed; that is a runtime concern and stays in the controller.
+func PlanMonitoring(cluster *temporalv1alpha1.TemporalCluster) []PlannedObject {
+	if cluster.Spec.Metrics == nil || cluster.Spec.Metrics.ServiceMonitor == nil || !cluster.Spec.Metrics.ServiceMonitor.Enabled {
 		return nil
 	}
-
-	for _, p := range plan.PlanUI(cluster) {
-		if err := r.apply(ctx, cluster, p.Object); err != nil {
-			return err
-		}
-	}
-	return nil
+	return tag(PhaseMonitoring, resources.BuildServiceMonitor(cluster))
 }

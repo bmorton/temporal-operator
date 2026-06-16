@@ -34,6 +34,11 @@ const (
 	FrontendCertMountPath = "/etc/temporal/certs/frontend"
 )
 
+// MTLSEnabled reports whether the cluster requests cert-manager-issued mTLS.
+func MTLSEnabled(cluster *temporalv1alpha1.TemporalCluster) bool {
+	return cluster.Spec.MTLS != nil && cluster.Spec.MTLS.Provider == "cert-manager"
+}
+
 // InternodeCertName returns the internode Certificate (and its secret) name.
 func InternodeCertName(clusterName string) string {
 	return clusterName + "-internode"

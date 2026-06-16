@@ -49,6 +49,10 @@ const (
 	ActionUpdate SchemaAction = "update"
 )
 
+// PostgresSchemaDir is the on-image schema directory for the postgres12 plugin
+// (used as the BuildSchemaJob SchemaVersionDir for SQL postgres stores).
+const PostgresSchemaDir = "v12"
+
 const (
 	schemaJobBackoffLimit   int32 = 3
 	schemaJobTTLAfterFinish int32 = 600
@@ -213,6 +217,7 @@ func BuildSchemaJob(p SchemaJobParams) *batchv1.Job {
 	}
 
 	return &batchv1.Job{
+		TypeMeta: metav1.TypeMeta{APIVersion: "batch/v1", Kind: "Job"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: p.Cluster.Namespace,

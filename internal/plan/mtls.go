@@ -14,25 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package plan
 
 import (
-	"context"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
-	"github.com/bmorton/temporal-operator/internal/plan"
+	"github.com/bmorton/temporal-operator/internal/resources"
 )
 
-// reconcileUI deploys temporal-ui when enabled.
-func (r *TemporalClusterReconciler) reconcileUI(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
-	if cluster.Spec.UI == nil || !cluster.Spec.UI.Enabled {
+// PlanMTLS returns the internode and frontend Certificates when cert-manager
+// mTLS is enabled, and nothing otherwise.
+func PlanMTLS(cluster *temporalv1alpha1.TemporalCluster) []PlannedObject {
+	if !resources.MTLSEnabled(cluster) {
 		return nil
 	}
-
-	for _, p := range plan.PlanUI(cluster) {
-		if err := r.apply(ctx, cluster, p.Object); err != nil {
-			return err
-		}
-	}
-	return nil
+	return tag(PhaseMTLS,
+		client.Object(resources.BuildInternodeCertificate(cluster)),
+		client.Object(resources.BuildFrontendCertificate(cluster)),
+	)
 }
