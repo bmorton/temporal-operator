@@ -213,6 +213,7 @@ func BuildSchemaJob(p SchemaJobParams) *batchv1.Job {
 	}
 
 	return &batchv1.Job{
+		TypeMeta: metav1.TypeMeta{APIVersion: "batch/v1", Kind: "Job"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: p.Cluster.Namespace,
