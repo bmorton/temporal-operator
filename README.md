@@ -2,9 +2,10 @@
 
 [//]: # (status-badges)
 <!-- Badges: CI | Release | Go Report Card | License -->
-![CI](https://img.shields.io/badge/ci-pending-lightgrey)
-![Release](https://img.shields.io/badge/release-unreleased-lightgrey)
-![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+[![CI](https://github.com/bmorton/temporal-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/bmorton/temporal-operator/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/bmorton/temporal-operator)](https://github.com/bmorton/temporal-operator/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bmorton/temporal-operator)](https://goreportcard.com/report/github.com/bmorton/temporal-operator)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 
 A modern Kubernetes operator for [Temporal](https://temporal.io), written in Go
 with the Operator SDK / Kubebuilder. It manages the full lifecycle of Temporal
@@ -29,9 +30,12 @@ image on GitHub Container Registry.
 
 ```sh
 helm install temporal-operator \
-  oci://ghcr.io/bmorton/charts/temporal-operator --version 0.1.0 \
+  oci://ghcr.io/bmorton/charts/temporal-operator \
   --namespace temporal-operator-system --create-namespace
 ```
+
+Omitting `--version` installs the latest release; pin a specific version (for
+example `--version 0.2.1`) for reproducible deploys.
 
 The chart defaults to the matching operator image
 (`ghcr.io/bmorton/temporal-operator`) at the chart's `appVersion`, so no extra
@@ -49,8 +53,8 @@ for configurable values.
 
 ## Documentation
 
-See the documentation site (coming soon). Until then, the
-[`examples/`](./examples) directory contains sample custom resources.
+See the [documentation site](https://bmorton.github.io/temporal-operator/). The
+[`examples/`](./examples) directory also contains sample custom resources.
 
 ## Contributing
 
@@ -58,6 +62,17 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). This project follows the
 [Contributor Covenant](./CODE_OF_CONDUCT.md) code of conduct, requires
 [Conventional Commits](https://www.conventionalcommits.org/), and uses the
 [Developer Certificate of Origin](https://developercertificate.org/) (DCO).
+
+## Acknowledgments
+
+This project is heavily inspired by and indebted to
+[alexandrevilain/temporal-operator](https://github.com/alexandrevilain/temporal-operator) —
+it simply wouldn't exist without that work.
+
+temporal-operator was built from the ground up as a personal project to explore
+building a Kubernetes operator end to end, to automate as much of a project's
+lifecycle as is reasonable and helpful, and to sharpen my skills working with
+agentic tooling.
 
 ## License
 

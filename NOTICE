@@ -1,0 +1,7 @@
+temporal-operator
+Copyright 2026 Brian Morton
+
+This project is heavily inspired by and derived from temporal-operator by
+Alexandre Vilain (https://github.com/alexandrevilain/temporal-operator),
+licensed under the Apache License, Version 2.0. It would not exist without
+that work.
