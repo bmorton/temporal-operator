@@ -270,6 +270,22 @@ $(CHAINSAW): $(LOCALBIN)
 chainsaw-test: chainsaw ## Run Chainsaw e2e tests against the current kube context.
 	"$(CHAINSAW)" test --test-dir test/e2e --config .chainsaw.yaml
 
+.PHONY: chainsaw-test-nsc
+chainsaw-test-nsc: chainsaw ## Run a Chainsaw suite on an ephemeral nsc cluster. Override with SUITE=, NSC_DURATION=, NSC_K8S_VERSION=.
+	CHAINSAW="$(CHAINSAW)" ./hack/nsc-e2e.sh
+
+.PHONY: nsc-clean
+nsc-clean: ## Destroy ALL nsc clusters labeled app=temporal-operator-e2e (leaves the builder instance untouched).
+	@ids="$$(nsc list --all -o json | jq -r '(. // []) | .[] | select(.labels.app == "temporal-operator-e2e") | .cluster_id')"; \
+	if [ -z "$$ids" ]; then \
+		echo "No temporal-operator-e2e clusters to clean up."; \
+	else \
+		for id in $$ids; do \
+			echo "Destroying $$id"; \
+			nsc destroy "$$id" --force; \
+		done; \
+	fi
+
 .PHONY: crd-ref-docs
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
 $(CRD_REF_DOCS): $(LOCALBIN)
