@@ -35,7 +35,7 @@ import (
 
 // mTLSEnabled reports whether cert-manager-driven mTLS is configured.
 func mTLSEnabled(cluster *temporalv1alpha1.TemporalCluster) bool {
-	return cluster.Spec.MTLS != nil && cluster.Spec.MTLS.Provider == "cert-manager"
+	return resources.MTLSEnabled(cluster)
 }
 
 // reconcileMTLS applies the internode and frontend Certificates and sets the

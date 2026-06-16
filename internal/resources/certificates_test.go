@@ -37,6 +37,21 @@ func mtlsCluster() *temporalv1alpha1.TemporalCluster {
 	}
 }
 
+func TestMTLSEnabled(t *testing.T) {
+	c := &temporalv1alpha1.TemporalCluster{}
+	if MTLSEnabled(c) {
+		t.Errorf("expected mTLS disabled when spec.MTLS is nil")
+	}
+	c.Spec.MTLS = &temporalv1alpha1.MTLSSpec{Provider: "cert-manager"}
+	if !MTLSEnabled(c) {
+		t.Errorf("expected mTLS enabled for cert-manager provider")
+	}
+	c.Spec.MTLS = &temporalv1alpha1.MTLSSpec{Provider: "other"}
+	if MTLSEnabled(c) {
+		t.Errorf("expected mTLS disabled for non cert-manager provider")
+	}
+}
+
 func TestBuildInternodeCertificateIncludesServerNameSAN(t *testing.T) {
 	cert := BuildInternodeCertificate(mtlsCluster())
 	if !slices.Contains(cert.Spec.DNSNames, "test-internode") {
