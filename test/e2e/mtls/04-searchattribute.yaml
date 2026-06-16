@@ -1,0 +1,12 @@
+# A search attribute registered against the mTLS cluster's namespace.
+# Exercises the operator's search-attribute controller over mTLS.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalSearchAttribute
+metadata:
+  name: mtls-customer-id
+spec:
+  clusterRef:
+    name: temporal-mtls
+  namespace: mtls-test
+  name: CustomerId
+  type: Keyword
