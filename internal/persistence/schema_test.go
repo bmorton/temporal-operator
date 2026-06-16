@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
 func TestBuildPostgresDSN(t *testing.T) {
@@ -85,5 +86,27 @@ func TestSchemaSatisfies(t *testing.T) {
 func TestNormalizeSchemaVersion(t *testing.T) {
 	if NormalizeSchemaVersion(" v1.12 ") != "1.12" {
 		t.Errorf("unexpected normalization")
+	}
+}
+
+// TestMinSchemaESSatisfiableByAllowedVersions guards against an unreachable
+// Elasticsearch schema floor. The ElasticsearchDatastoreSpec.Version CRD enum
+// allows only v7 and v8; if any supported Temporal version's MinSchemaES exceeds
+// those (e.g. a stray "v9"), no OpenSearch/Elasticsearch visibility cluster can
+// ever reach SchemaReady. esBackend.SchemaVersion reports the configured ES
+// version, so MinSchemaES must be satisfiable by every allowed enum value.
+func TestMinSchemaESSatisfiableByAllowedVersions(t *testing.T) {
+	allowedESVersions := []string{"v7", "v8"}
+	for _, v := range temporal.SupportedVersions() {
+		info, err := temporal.LookupVersion(v)
+		if err != nil {
+			t.Fatalf("LookupVersion(%q): %v", v, err)
+		}
+		for _, esVersion := range allowedESVersions {
+			if !SchemaSatisfies(esVersion, info.MinSchemaES) {
+				t.Errorf("Temporal %s: allowed ES version %q does not satisfy MinSchemaES %q",
+					v, esVersion, info.MinSchemaES)
+			}
+		}
 	}
 }
