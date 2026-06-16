@@ -100,6 +100,13 @@ global:
                 serverName: {{ .MTLS.FrontendServerName | quote }}
                 rootCaFiles:
                     - {{ .MTLS.InternodeClientCA }}
+        systemWorker:
+            certFile: {{ .MTLS.SystemWorkerCert }}
+            keyFile: {{ .MTLS.SystemWorkerKey }}
+            client:
+                serverName: {{ .MTLS.SystemWorkerName | quote }}
+                rootCaFiles:
+                    - {{ .MTLS.SystemWorkerCA }}
 {{- end }}
 {{- if .Metrics.Enabled }}
     metrics:

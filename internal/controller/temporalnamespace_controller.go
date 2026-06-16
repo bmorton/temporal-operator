@@ -69,7 +69,11 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{RequeueAfter: namespaceDriftRequeue}, r.statusUpdate(ctx, &ns)
 	}
 
-	tc, err := r.clientFactory()(ctx, frontendAddress(&cluster), nil)
+	tlsConfig, err := clusterTLSConfig(ctx, r.Client, &cluster)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("building temporal client tls: %w", err)
+	}
+	tc, err := r.clientFactory()(ctx, frontendAddress(&cluster), tlsConfig)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}

@@ -62,6 +62,32 @@ func grpcProbe(port int32) *corev1.Probe {
 	}
 }
 
+// tcpProbe checks that a service's gRPC port accepts TCP connections.
+func tcpProbe(port int32) *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{Port: intstrFromInt(port)},
+		},
+	}
+}
+
+// serviceProbe returns the health probe for a request-serving Temporal service.
+// With mTLS enabled the gRPC port enforces client auth, which Kubernetes' native
+// gRPC prober cannot satisfy (it dials without a client certificate, so the
+// mutual-TLS handshake never completes and the probe times out). In that case
+// we fall back to a TCP probe, which succeeds once the listener is up.
+//
+// A TCP probe is a weaker signal than the gRPC health check (it only confirms
+// the port accepts connections). This is documented as a known limitation; see
+// docs/content/operations/_index.md ("mTLS health probes"). A future change may
+// adopt a grpc-health-probe exec probe or a service mesh instead.
+func serviceProbe(port int32, mtlsEnabled bool) *corev1.Probe {
+	if mtlsEnabled {
+		return tcpProbe(port)
+	}
+	return grpcProbe(port)
+}
+
 func defaultTopologySpread(cluster *temporalv1alpha1.TemporalCluster, component string) []corev1.TopologySpreadConstraint {
 	return []corev1.TopologySpreadConstraint{
 		{
@@ -157,16 +183,18 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 	// does not answer gRPC health checks (this is unreliable before Temporal
 	// 1.31 and the upstream Temporal Helm chart omits worker probes entirely).
 	// Probing it would fail its startup probe forever and the cluster would
-	// never report Ready. Only the request-serving services get gRPC probes.
+	// never report Ready. Only the request-serving services get probes.
 	if svc.Name != ServiceWorker {
-		startup := grpcProbe(svc.Ports.GRPCPort)
+		mtlsEnabled := mtls != nil && mtls.Enabled
+
+		startup := serviceProbe(svc.Ports.GRPCPort, mtlsEnabled)
 		startup.FailureThreshold = 30
 		startup.PeriodSeconds = 5
 
-		readiness := grpcProbe(svc.Ports.GRPCPort)
+		readiness := serviceProbe(svc.Ports.GRPCPort, mtlsEnabled)
 		readiness.TimeoutSeconds = 3
 
-		container.LivenessProbe = grpcProbe(svc.Ports.GRPCPort)
+		container.LivenessProbe = serviceProbe(svc.Ports.GRPCPort, mtlsEnabled)
 		container.ReadinessProbe = readiness
 		container.StartupProbe = startup
 	}

@@ -49,9 +49,40 @@ spec:
         - describe:
             apiVersion: temporal.bmor10.com/v1alpha1
             kind: TemporalCluster
+        - get:
+            apiVersion: v1
+            kind: Pod
+        - describe:
+            apiVersion: v1
+            kind: Pod
+            selector: app.kubernetes.io/instance=temporal-mtls
+        - podLogs:
+            selector: app.kubernetes.io/instance=temporal-mtls
+            tail: 200
+        - events: {}
     - name: client-credentials
       try:
         - apply:
             file: 02-client.yaml
         - assert:
             file: 02-assert.yaml
+    - name: register-namespace
+      try:
+        - apply:
+            file: 03-namespace.yaml
+        - assert:
+            file: 03-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalNamespace
+    - name: register-search-attribute
+      try:
+        - apply:
+            file: 04-searchattribute.yaml
+        - assert:
+            file: 04-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalSearchAttribute

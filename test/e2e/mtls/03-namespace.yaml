@@ -1,0 +1,12 @@
+# Register a Temporal namespace against the mTLS cluster. Exercises the
+# operator's namespace controller over mTLS. The operator runs
+# `temporal-server start` (not auto-setup), so no namespace exists by default.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: mtls-test
+spec:
+  clusterRef:
+    name: temporal-mtls
+  retentionPeriod: "168h"
+  description: "mTLS e2e namespace"
