@@ -148,6 +148,84 @@ func TestBuildDeploymentAppliesSharedAndPerServicePodTemplate(t *testing.T) {
 	}
 }
 
+func TestBuildDeploymentPodTemplateMergesSidecarIntoGeneratedSpec(t *testing.T) {
+	const azureTokenVol = "azure-token"
+	c := builderCluster()
+	c.Spec.Services.Frontend = &temporalv1alpha1.ServiceSpec{
+		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
+			Spec: &runtime.RawExtension{Raw: []byte(`{
+				"containers": [
+					{"name": "temporal", "volumeMounts": [{"name": "azure-token", "mountPath": "/azure"}]},
+					{"name": "azure-token-refresher", "image": "mcr.microsoft.com/azure-cli:latest"}
+				],
+				"volumes": [{"name": "azure-token", "emptyDir": {}}]
+			}`)},
+		},
+	}
+
+	var frontend ServiceInfo
+	for _, s := range EnabledServices(c) {
+		if s.Name == ServiceFrontend {
+			frontend = s
+		}
+	}
+
+	dep, err := BuildDeployment(c, frontend, "abc123", "", nil)
+	if err != nil {
+		t.Fatalf("BuildDeployment error: %v", err)
+	}
+	spec := dep.Spec.Template.Spec
+
+	if len(spec.Containers) != 2 {
+		t.Errorf("expected sidecar appended (2 containers), got %d", len(spec.Containers))
+	}
+	if !podHasVolume(spec, azureTokenVol) {
+		t.Errorf("azure-token volume not appended: %+v", spec.Volumes)
+	}
+
+	// The generated temporal container carries config, dynamicconfig, and
+	// processed-config mounts; the override must append azure-token, not clobber
+	// them.
+	temporal := containerByName(spec, testContainerName)
+	if temporal == nil {
+		t.Fatalf("generated temporal container missing after merge: %+v", spec.Containers)
+	}
+	if len(temporal.VolumeMounts) != 4 {
+		t.Errorf("expected generated mounts preserved plus azure-token (4 total), got %d: %+v",
+			len(temporal.VolumeMounts), temporal.VolumeMounts)
+	}
+	if !containerHasMount(*temporal, azureTokenVol, "/azure") {
+		t.Errorf("azure-token mount not merged into temporal container: %+v", temporal.VolumeMounts)
+	}
+}
+
+func containerByName(spec corev1.PodSpec, name string) *corev1.Container {
+	for i := range spec.Containers {
+		if spec.Containers[i].Name == name {
+			return &spec.Containers[i]
+		}
+	}
+	return nil
+}
+
+func podHasVolume(spec corev1.PodSpec, name string) bool {
+	for _, v := range spec.Volumes {
+		if v.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func containerHasMount(ctr corev1.Container, name, path string) bool {
+	for _, vm := range ctr.VolumeMounts {
+		if vm.Name == name && vm.MountPath == path {
+			return true
+		}
+	}
+	return false
+}
+
 func TestBuildDeploymentInvalidPodTemplateSpecErrors(t *testing.T) {
 	c := builderCluster()
 	c.Spec.Services.Worker = &temporalv1alpha1.ServiceSpec{
