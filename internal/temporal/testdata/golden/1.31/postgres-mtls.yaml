@@ -46,7 +46,7 @@ global:
                 clientCaFiles:
                     - /etc/temporal/certs/internode/ca.crt
             client:
-                serverName: ""
+                serverName: "test-internode"
                 rootCaFiles:
                     - /etc/temporal/certs/internode/ca.crt
         frontend:
@@ -57,7 +57,7 @@ global:
                 clientCaFiles:
                     - /etc/temporal/certs/internode/ca.crt
             client:
-                serverName: ""
+                serverName: "test-frontend.default.svc.cluster.local"
                 rootCaFiles:
                     - /etc/temporal/certs/internode/ca.crt
     metrics:

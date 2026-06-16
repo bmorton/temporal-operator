@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -146,5 +147,30 @@ func TestRenderConfigGolden(t *testing.T) {
 				t.Errorf("rendered config does not match golden %s\n--- got ---\n%s", golden, out)
 			}
 		})
+	}
+}
+
+func TestRenderConfigMTLSServerNames(t *testing.T) {
+	c := baseCluster()
+	c.Spec.MTLS = &temporalv1alpha1.MTLSSpec{
+		Provider:  "cert-manager",
+		IssuerRef: &temporalv1alpha1.IssuerReference{Name: "ca"},
+	}
+	out, err := RenderClusterConfig(c, BuildOptions{
+		BindOnIP:                "0.0.0.0",
+		BroadcastAddress:        "10.0.0.1",
+		DefaultStorePassword:    "default-pw",
+		VisibilityStorePassword: "visibility-pw",
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	for _, want := range []string{
+		`serverName: "test-internode"`,
+		`serverName: "test-frontend.default.svc.cluster.local"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rendered config missing %q\n%s", want, out)
+		}
 	}
 }

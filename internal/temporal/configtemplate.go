@@ -325,6 +325,8 @@ func buildMTLS(cluster *temporalv1alpha1.TemporalCluster) MTLSConfig {
 	if cluster.Spec.MTLS.RefreshInterval != nil {
 		refresh = cluster.Spec.MTLS.RefreshInterval.Duration.String()
 	}
+	internodeServerName := cluster.Name + "-internode"
+	frontendServerName := fmt.Sprintf("%s-frontend.%s.svc.cluster.local", cluster.Name, cluster.Namespace)
 	return MTLSConfig{
 		Enabled:             true,
 		RefreshInterval:     refresh,
@@ -332,8 +334,10 @@ func buildMTLS(cluster *temporalv1alpha1.TemporalCluster) MTLSConfig {
 		InternodeServerCert: internodeCertDir + "/tls.crt",
 		InternodeServerKey:  internodeCertDir + "/tls.key",
 		InternodeClientCA:   internodeCertDir + "/ca.crt",
+		InternodeServerName: internodeServerName,
 		FrontendServerCert:  frontendCertDir + "/tls.crt",
 		FrontendServerKey:   frontendCertDir + "/tls.key",
+		FrontendServerName:  frontendServerName,
 	}
 }
 
