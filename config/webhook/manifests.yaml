@@ -77,6 +77,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-temporal-bmor10-com-v1alpha1-temporalschedule
+  failurePolicy: Fail
+  name: vtemporalschedule-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - temporal.bmor10.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - temporalschedules
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-temporal-bmor10-com-v1alpha1-temporalsearchattribute
   failurePolicy: Fail
   name: vtemporalsearchattribute-v1alpha1.kb.io
