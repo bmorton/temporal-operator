@@ -228,6 +228,34 @@ var _ = Describe("TemporalSchedule reconciler", func() {
 		Expect(fake.updated).To(ContainElement(s.Name))
 	})
 
+	It("unpauses the schedule when it drifts to paused out-of-band", func() {
+		c := newCluster(fmt.Sprintf("cluster-%d", counter))
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
+		markClusterReady(c)
+
+		s := newSchedule(fmt.Sprintf("sched-%d", counter), c.Name)
+		Expect(k8sClient.Create(ctx, s)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, s) })
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: s.Name, Namespace: testNamespace}}
+		_, err := reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.created).To(ContainElement(s.Name))
+
+		// Simulate out-of-band pause drift without changing the CR spec:
+		// the spec hash remains the same, so the controller takes reconcilePause.
+		fake.store[fake.key("orders", s.Name)].Paused = true
+
+		_, err = reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.unpaused).To(ContainElement(s.Name))
+		Expect(fake.store[fake.key("orders", s.Name)].Paused).To(BeFalse())
+	})
+
 	It("deletes the schedule when AllowDeletion is true and the CR is deleted", func() {
 		c := newCluster(fmt.Sprintf("cluster-%d", counter))
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())
