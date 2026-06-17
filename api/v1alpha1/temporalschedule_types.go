@@ -210,7 +210,7 @@ type TemporalScheduleStatus struct {
 	// +optional
 	NextActionTimes []metav1.Time `json:"nextActionTimes,omitempty"`
 	// +optional
-	RunningWorkflows int `json:"runningWorkflows,omitempty"`
+	RunningWorkflows int32 `json:"runningWorkflows,omitempty"`
 	// +optional
 	LastUpdated *metav1.Time `json:"lastUpdated,omitempty"`
 	// +listType=map

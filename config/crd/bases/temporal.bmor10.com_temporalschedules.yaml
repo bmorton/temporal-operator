@@ -606,6 +606,7 @@ spec:
               paused:
                 type: boolean
               runningWorkflows:
+                format: int32
                 type: integer
               scheduleID:
                 type: string
