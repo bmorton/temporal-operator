@@ -99,4 +99,35 @@ var _ = Describe("TemporalSchedule Webhook", func() {
 		newS.Spec.Namespace = "other-namespace"
 		Expect(validator.ValidateUpdate(ctx, oldS, newS)).Error().To(HaveOccurred())
 	})
+
+	It("rejects backoffCoefficient less than one", func() {
+		s := valid()
+		s.Spec.Action.StartWorkflow.RetryPolicy = &temporalv1alpha1.RetryPolicySpec{BackoffCoefficient: "0.5"}
+		Expect(validator.ValidateCreate(ctx, s)).Error().To(HaveOccurred())
+	})
+
+	It("rejects a backoffCoefficient that does not parse", func() {
+		s := valid()
+		s.Spec.Action.StartWorkflow.RetryPolicy = &temporalv1alpha1.RetryPolicySpec{BackoffCoefficient: "notanumber"}
+		Expect(validator.ValidateCreate(ctx, s)).Error().To(HaveOccurred())
+	})
+
+	It("admits a valid backoffCoefficient", func() {
+		s := valid()
+		s.Spec.Action.StartWorkflow.RetryPolicy = &temporalv1alpha1.RetryPolicySpec{BackoffCoefficient: "2.0"}
+		Expect(validator.ValidateCreate(ctx, s)).Error().NotTo(HaveOccurred())
+	})
+
+	It("rejects invalid workflowIDReusePolicy", func() {
+		s := valid()
+		s.Spec.Action.StartWorkflow.WorkflowIDReusePolicy = "Bogus"
+		Expect(validator.ValidateCreate(ctx, s)).Error().To(HaveOccurred())
+	})
+
+	It("admits equivalent default and explicit scheduleID on update", func() {
+		oldS := valid()
+		newS := valid()
+		newS.Spec.ScheduleID = "sched-1"
+		Expect(validator.ValidateUpdate(ctx, oldS, newS)).Error().NotTo(HaveOccurred())
+	})
 })
