@@ -6,6 +6,7 @@ resources:
 - bases/temporal.bmor10.com_temporalnamespaces.yaml
 - bases/temporal.bmor10.com_temporalsearchattributes.yaml
 - bases/temporal.bmor10.com_temporalclusterclients.yaml
+- bases/temporal.bmor10.com_temporalschedules.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

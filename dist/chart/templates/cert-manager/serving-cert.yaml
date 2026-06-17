@@ -1,18 +1,20 @@
-{{- if .Values.certManager.enable }}
+{{- if .Values.certManager.enabled }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-    labels:
-        app.kubernetes.io/managed-by: {{ .Release.Service }}
-        app.kubernetes.io/name: temporal-operator
-    name: temporal-operator-serving-cert
-    namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "temporal-operator.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: {{ include "temporal-operator.resourceName" (dict "suffix" "serving-cert" "context" $) }}
+  namespace: {{ .Release.Namespace }}
 spec:
-    dnsNames:
-        - temporal-operator-webhook-service.{{ .Release.Namespace }}.svc
-        - temporal-operator-webhook-service.{{ .Release.Namespace }}.svc.cluster.local
-    issuerRef:
-        kind: Issuer
-        name: {{ include "chart.name" . }}-selfsigned-issuer
-    secretName: webhook-server-cert
+  dnsNames:
+  - {{ include "temporal-operator.resourceName" (dict "suffix" "webhook-service" "context" $) }}.{{ .Release.Namespace }}.svc
+  - {{ include "temporal-operator.resourceName" (dict "suffix" "webhook-service" "context" $) }}.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ include "temporal-operator.resourceName" (dict "suffix" "selfsigned-issuer" "context" $) }}
+  secretName: webhook-server-cert
 {{- end }}
