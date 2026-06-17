@@ -17,6 +17,8 @@ limitations under the License.
 package temporal
 
 import (
+	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"time"
@@ -26,6 +28,12 @@ import (
 	schedulepb "go.temporal.io/api/schedule/v1"
 	taskqueuepb "go.temporal.io/api/taskqueue/v1"
 	workflowpb "go.temporal.io/api/workflow/v1"
+	workflowservice "go.temporal.io/api/workflowservice/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -301,4 +309,132 @@ func toProtoSchedule(p ScheduleParams) (*schedulepb.Schedule, error) {
 			RemainingActions: p.State.RemainingActions,
 		},
 	}, nil
+}
+
+// ScheduleClient manages schedules in a Temporal cluster.
+type ScheduleClient interface {
+	Describe(ctx context.Context, namespace, scheduleID string) (*ScheduleInfo, error)
+	Create(ctx context.Context, params ScheduleParams) error
+	Update(ctx context.Context, params ScheduleParams) error
+	Pause(ctx context.Context, namespace, scheduleID, notes string) error
+	Unpause(ctx context.Context, namespace, scheduleID, notes string) error
+	Delete(ctx context.Context, namespace, scheduleID string) error
+	Close() error
+}
+
+// ScheduleClientFactory builds a ScheduleClient connected to a frontend address.
+// A nil tlsConfig means an insecure connection.
+type ScheduleClientFactory func(ctx context.Context, address string, tlsConfig *tls.Config) (ScheduleClient, error)
+
+// identity identifies this operator in Temporal mutation requests.
+const scheduleIdentity = "temporal-operator"
+
+type grpcScheduleClient struct {
+	conn     *grpc.ClientConn
+	workflow workflowservice.WorkflowServiceClient
+}
+
+// NewScheduleClient dials the frontend and returns a ScheduleClient.
+func NewScheduleClient(_ context.Context, address string, tlsConfig *tls.Config) (ScheduleClient, error) {
+	creds := insecure.NewCredentials()
+	if tlsConfig != nil {
+		creds = credentials.NewTLS(tlsConfig)
+	}
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(creds))
+	if err != nil {
+		return nil, err
+	}
+	return &grpcScheduleClient{
+		conn:     conn,
+		workflow: workflowservice.NewWorkflowServiceClient(conn),
+	}, nil
+}
+
+func (c *grpcScheduleClient) Describe(ctx context.Context, namespace, scheduleID string) (*ScheduleInfo, error) {
+	resp, err := c.workflow.DescribeSchedule(ctx, &workflowservice.DescribeScheduleRequest{
+		Namespace:  namespace,
+		ScheduleId: scheduleID,
+	})
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, ErrScheduleNotFound
+		}
+		return nil, err
+	}
+	info := &ScheduleInfo{
+		Paused: resp.GetSchedule().GetState().GetPaused(),
+		Notes:  resp.GetSchedule().GetState().GetNotes(),
+	}
+	for _, t := range resp.GetInfo().GetFutureActionTimes() {
+		info.NextActionTimes = append(info.NextActionTimes, t.AsTime())
+	}
+	info.RunningWorkflows = len(resp.GetInfo().GetRunningWorkflows())
+	return info, nil
+}
+
+func (c *grpcScheduleClient) Create(ctx context.Context, params ScheduleParams) error {
+	sched, err := toProtoSchedule(params)
+	if err != nil {
+		return err
+	}
+	_, err = c.workflow.CreateSchedule(ctx, &workflowservice.CreateScheduleRequest{
+		Namespace:  params.Namespace,
+		ScheduleId: params.ScheduleID,
+		Schedule:   sched,
+		Identity:   scheduleIdentity,
+	})
+	return err
+}
+
+func (c *grpcScheduleClient) Update(ctx context.Context, params ScheduleParams) error {
+	sched, err := toProtoSchedule(params)
+	if err != nil {
+		return err
+	}
+	_, err = c.workflow.UpdateSchedule(ctx, &workflowservice.UpdateScheduleRequest{
+		Namespace:  params.Namespace,
+		ScheduleId: params.ScheduleID,
+		Schedule:   sched,
+		Identity:   scheduleIdentity,
+	})
+	return err
+}
+
+func (c *grpcScheduleClient) Pause(ctx context.Context, namespace, scheduleID, notes string) error {
+	return c.patch(ctx, namespace, scheduleID, &schedulepb.SchedulePatch{Pause: pauseNotes(notes, "paused by temporal-operator")})
+}
+
+func (c *grpcScheduleClient) Unpause(ctx context.Context, namespace, scheduleID, notes string) error {
+	return c.patch(ctx, namespace, scheduleID, &schedulepb.SchedulePatch{Unpause: pauseNotes(notes, "unpaused by temporal-operator")})
+}
+
+func (c *grpcScheduleClient) patch(ctx context.Context, namespace, scheduleID string, p *schedulepb.SchedulePatch) error {
+	_, err := c.workflow.PatchSchedule(ctx, &workflowservice.PatchScheduleRequest{
+		Namespace:  namespace,
+		ScheduleId: scheduleID,
+		Patch:      p,
+		Identity:   scheduleIdentity,
+	})
+	return err
+}
+
+func (c *grpcScheduleClient) Delete(ctx context.Context, namespace, scheduleID string) error {
+	_, err := c.workflow.DeleteSchedule(ctx, &workflowservice.DeleteScheduleRequest{
+		Namespace:  namespace,
+		ScheduleId: scheduleID,
+		Identity:   scheduleIdentity,
+	})
+	if err != nil && status.Code(err) == codes.NotFound {
+		return ErrScheduleNotFound
+	}
+	return err
+}
+
+func (c *grpcScheduleClient) Close() error { return c.conn.Close() }
+
+func pauseNotes(notes, fallback string) string {
+	if notes != "" {
+		return notes
+	}
+	return fallback
 }
