@@ -279,5 +279,5 @@ type TemporalClusterList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&TemporalCluster{}, &TemporalClusterList{})
+	registerType(&TemporalCluster{}, &TemporalClusterList{})
 }
