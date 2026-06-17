@@ -81,7 +81,7 @@ func (r *TemporalClusterReconciler) reconcileUpgrade(ctx context.Context, cluste
 			Rollbackable: true,
 			StartedAt:    &now,
 		}
-		r.event(cluster, "Normal", "UpgradeStarted", "upgrade from "+current+" to "+target+" started")
+		r.event(cluster, "UpgradeStarted", "upgrade from "+current+" to "+target+" started")
 	}
 
 	r.advanceUpgrade(ctx, cluster)
@@ -143,7 +143,7 @@ func (r *TemporalClusterReconciler) advanceUpgrade(ctx context.Context, cluster 
 
 	advance := func(next string) {
 		up.Phase = next
-		r.event(cluster, "Normal", "UpgradePhase", "upgrade entered phase "+next)
+		r.event(cluster, "UpgradePhase", "upgrade entered phase "+next)
 	}
 
 	switch up.Phase {
@@ -163,7 +163,7 @@ func (r *TemporalClusterReconciler) advanceUpgrade(ctx context.Context, cluster 
 		advance(upgradeComplete)
 	case upgradeComplete:
 		cluster.Status.Version = up.ToVersion
-		r.event(cluster, "Normal", "UpgradeComplete", "upgrade to "+up.ToVersion+" complete")
+		r.event(cluster, "UpgradeComplete", "upgrade to "+up.ToVersion+" complete")
 		cluster.Status.Upgrade = nil
 	default:
 		r.advanceRollingPhase(ctx, cluster, advance)
@@ -229,9 +229,11 @@ func (r *TemporalClusterReconciler) serviceRolledOut(ctx context.Context, cluste
 	return dep.Status.UpdatedReplicas == desired && dep.Status.ReadyReplicas == desired
 }
 
-func (r *TemporalClusterReconciler) event(cluster *temporalv1alpha1.TemporalCluster, eventType, reason, message string) {
+func (r *TemporalClusterReconciler) event(cluster *temporalv1alpha1.TemporalCluster, reason, message string) {
 	if r.Recorder != nil {
-		r.Recorder.Event(cluster, eventType, reason, message)
+		// The events.k8s.io recorder requires an action verb; reuse the reason,
+		// which already reads as a machine-readable verb for our events.
+		r.Recorder.Eventf(cluster, nil, "Normal", reason, reason, message)
 	}
 }
 
