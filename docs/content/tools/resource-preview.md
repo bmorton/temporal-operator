@@ -8,8 +8,8 @@ weight = 10
 The Resource Preview tool runs the operator's own object planner — compiled to
 WebAssembly — entirely in your browser. Paste a `TemporalCluster` custom
 resource and it shows every Kubernetes object the operator would create, grouped
-into tabs by kind, after applying the same defaulting and validation the
-operator's admission webhooks perform.
+into collapsible cards by kind, after applying the same defaulting and validation
+the operator's admission webhooks perform.
 
 Because the tool is built from the operator's source on every docs deploy, the
 preview stays in lockstep with the operator and never drifts.
