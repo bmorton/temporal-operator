@@ -111,5 +111,5 @@ type TemporalNamespaceList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&TemporalNamespace{}, &TemporalNamespaceList{})
+	registerType(&TemporalNamespace{}, &TemporalNamespaceList{})
 }

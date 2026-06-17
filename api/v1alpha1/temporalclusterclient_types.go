@@ -83,5 +83,5 @@ type TemporalClusterClientList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&TemporalClusterClient{}, &TemporalClusterClientList{})
+	registerType(&TemporalClusterClient{}, &TemporalClusterClientList{})
 }

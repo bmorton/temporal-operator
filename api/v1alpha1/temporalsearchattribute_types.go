@@ -97,5 +97,5 @@ type TemporalSearchAttributeList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&TemporalSearchAttribute{}, &TemporalSearchAttributeList{})
+	registerType(&TemporalSearchAttribute{}, &TemporalSearchAttributeList{})
 }
