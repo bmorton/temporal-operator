@@ -1,0 +1,131 @@
+{{- $css := resources.Get "css/preview.css" | css.TailwindCSS | fingerprint -}}
+{{- $js := resources.Get "js/preview.js" | fingerprint -}}
+{{- $wasmHash := "" -}}
+{{- with site.Data.preview }}{{ $wasmHash = .wasmHash }}{{ end -}}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Resource Preview — temporal-operator</title>
+  <link rel="stylesheet" href="{{ $css.RelPermalink }}" />
+  <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
+  <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" disabled />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="{{ "preview/wasm_exec.js" | relURL }}"></script>
+  <script defer src="{{ $js.RelPermalink }}"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"></script>
+  <script>
+    window.PREVIEW_WASM_URL = {{ printf "%s?v=%s" (relURL "preview/temporal-operator-preview.wasm") $wasmHash }};
+  </script>
+</head>
+<body class="min-h-screen bg-base-100 text-base-content">
+  <div x-data="previewApp()" class="flex flex-col min-h-screen">
+    <!-- Header -->
+    <header class="border-b border-base-300 px-4 py-3 flex items-center gap-3">
+      <h1 class="text-lg font-semibold">Resource Preview <span class="badge badge-sm badge-warning align-middle">alpha</span></h1>
+      <p class="hidden sm:block text-sm opacity-70">Paste a <code>TemporalCluster</code> and see every object the operator would create. Runs entirely in your browser.</p>
+      <button class="btn btn-ghost btn-sm ml-auto" @click="toggleTheme()" :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'">
+        <span x-text="theme === 'dark' ? '☀️' : '🌙'"></span>
+      </button>
+    </header>
+
+    <!-- Panes -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,420px)_1fr] gap-4 p-4">
+      <!-- Input pane -->
+      <section class="flex flex-col gap-3 min-h-0">
+        <div class="flex gap-2">
+          <select class="select select-bordered select-sm flex-1" x-model="selectedExample" @change="loadExample()">
+            <option value="">Load example…</option>
+            <template x-for="ex in examples" :key="ex.file">
+              <option :value="ex.file" x-text="ex.name"></option>
+            </template>
+          </select>
+          <button class="btn btn-primary btn-sm" @click="preview()" :disabled="generating || wasmState === 'loading'">
+            <span x-show="generating || wasmState === 'loading'" class="loading loading-spinner loading-xs"></span>
+            <span x-text="(generating || wasmState === 'loading') ? 'Working…' : 'Preview →'"></span>
+          </button>
+        </div>
+        <textarea
+          class="textarea textarea-bordered font-mono text-xs flex-1 min-h-[300px] resize-none"
+          spellcheck="false"
+          placeholder="apiVersion: temporal.bmor10.com/v1alpha1&#10;kind: TemporalCluster&#10;..."
+          x-model="input"
+          @focus.once="loadWasm()"></textarea>
+        <!-- wasm loading indicator -->
+        <div x-show="wasmState === 'loading'" class="text-xs opacity-70">
+          <span>Loading WebAssembly…</span>
+          <progress class="progress progress-primary w-full mt-1" :value="wasmProgress < 0 ? undefined : wasmProgress" max="100"></progress>
+        </div>
+      </section>
+
+      <!-- Output pane -->
+      <section class="flex flex-col gap-3 min-h-0">
+        <!-- error banner -->
+        <div x-show="error" x-cloak role="alert" class="alert alert-error text-sm">
+          <span x-text="error"></span>
+        </div>
+
+        <!-- global controls -->
+        <div x-show="groups.length" x-cloak class="flex flex-wrap items-center gap-2">
+          <button class="btn btn-xs" @click="expandAll(true)">Expand all</button>
+          <button class="btn btn-xs" @click="expandAll(false)">Collapse all</button>
+          <div class="dropdown">
+            <div tabindex="0" role="button" class="btn btn-xs">Kinds ▾</div>
+            <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-10 w-56 p-2 shadow">
+              <template x-for="kind in allKinds()" :key="kind">
+                <li>
+                  <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" class="checkbox checkbox-xs" :checked="!hiddenKinds[kind]" @change="toggleKind(kind)" />
+                    <span x-text="kind"></span>
+                  </label>
+                </li>
+              </template>
+            </ul>
+          </div>
+          <button class="btn btn-xs ml-auto" @click="copyAll()">Copy all</button>
+          <button class="btn btn-xs" @click="downloadAll()">Download all</button>
+        </div>
+
+        <!-- empty state -->
+        <div x-show="!groups.length && !error" x-cloak class="opacity-60 text-sm">
+          Generated resources will appear here, grouped by kind.
+        </div>
+
+        <!-- grouped cards -->
+        <div class="flex flex-col gap-4 overflow-auto min-h-0">
+          <template x-for="group in visibleGroups()" :key="group.kind">
+            <div>
+              <h2 class="text-sm font-semibold mb-2">
+                <span x-text="group.kind"></span>
+                <span class="opacity-60" x-text="'(' + group.items.length + ')'"></span>
+              </h2>
+              <div class="flex flex-col gap-2">
+                <template x-for="item in group.items" :key="item.id">
+                  <div class="card card-compact bg-base-200 border border-base-300">
+                    <div class="card-body p-0">
+                      <button class="flex items-center gap-2 px-3 py-2 text-left" @click="toggleItem(item)">
+                        <span class="badge badge-sm" :class="badgeClass(group.kind)" x-text="group.kind"></span>
+                        <span class="font-mono text-sm" x-text="item.name"></span>
+                        <span x-show="item.namespace" class="text-xs opacity-60" x-text="'ns: ' + item.namespace"></span>
+                        <span class="ml-auto opacity-50" x-text="item.open ? '▾' : '▸'"></span>
+                      </button>
+                      <div x-show="item.open" x-cloak class="border-t border-base-300">
+                        <div class="flex justify-end px-2 pt-2">
+                          <button class="btn btn-ghost btn-xs" @click="copyOne(item)">Copy</button>
+                        </div>
+                        <pre class="preview-code px-3 pb-3 text-xs"><code class="language-yaml" :id="'code-' + item.id" x-text="item.yaml"></code></pre>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+    </main>
+  </div>
+  <style>[x-cloak]{display:none !important;}</style>
+</body>
+</html>
