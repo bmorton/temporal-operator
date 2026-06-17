@@ -66,12 +66,19 @@ function previewApp() {
       const reader = resp.body.getReader();
       const chunks = [];
       let received = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        this.wasmProgress = Math.round((received / total) * 100);
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          this.wasmProgress = Math.round((received / total) * 100);
+        }
+      } catch (e) {
+        await reader.cancel().catch(() => {});
+        throw e;
+      } finally {
+        reader.releaseLock();
       }
       const out = new Uint8Array(received);
       let pos = 0;
@@ -187,19 +194,27 @@ function previewApp() {
     },
 
     async copyOne(item) {
-      await navigator.clipboard.writeText(item.yaml);
+      try {
+        await navigator.clipboard.writeText(item.yaml);
+      } catch (e) {
+        this.error = "Copy failed: " + e;
+      }
     },
 
     multiDocYAML() {
       const docs = [];
-      for (const g of this.visibleGroups()) {
+      for (const g of this.groups) {
         for (const item of g.items) docs.push(item.yaml.trimEnd());
       }
       return docs.join("\n---\n") + "\n";
     },
 
     async copyAll() {
-      await navigator.clipboard.writeText(this.multiDocYAML());
+      try {
+        await navigator.clipboard.writeText(this.multiDocYAML());
+      } catch (e) {
+        this.error = "Copy failed: " + e;
+      }
     },
 
     downloadAll() {
