@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/persistence"
@@ -41,7 +41,7 @@ import (
 type TemporalClusterReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 
 	// BackendFactory builds datastore backends and is injectable for testing;
 	// when nil the default real implementation is used.
