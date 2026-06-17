@@ -1055,7 +1055,7 @@ func (r *TemporalScheduleReconciler) reconcileSchedule(ctx context.Context, sche
 	sched.Status.Created = true
 	sched.Status.Paused = info.Paused
 	sched.Status.Notes = info.Notes
-	sched.Status.RunningWorkflows = info.RunningWorkflows
+	sched.Status.RunningWorkflows = int32(info.RunningWorkflows)
 	sched.Status.NextActionTimes = nil
 	for _, t := range info.NextActionTimes {
 		sched.Status.NextActionTimes = append(sched.Status.NextActionTimes, metav1.NewTime(t))
