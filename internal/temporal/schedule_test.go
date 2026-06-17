@@ -111,3 +111,101 @@ func TestToProtoSchedule_IntervalAndStructuredCalendar(t *testing.T) {
 		t.Errorf("hour step = %d, want 1", got.GetSpec().GetStructuredCalendar()[0].GetHour()[0].GetStep())
 	}
 }
+
+func ptr[T any](v T) *T {
+	return &v
+}
+
+func TestToProtoSchedule_UnknownReusePolicy(t *testing.T) {
+	p := baseParams()
+	p.Action.IDReusePolicy = "Bogus"
+	if _, err := toProtoSchedule(p); err == nil {
+		t.Fatal("expected error for unknown workflow id reuse policy")
+	}
+}
+
+func TestToProtoSchedule_RetryPolicyMapping(t *testing.T) {
+	p := baseParams()
+	p.Action.Retry = &RetryParams{
+		InitialInterval:        ptr(time.Second),
+		BackoffCoefficient:     2.5,
+		MaximumInterval:        ptr(time.Minute),
+		MaximumAttempts:        5,
+		NonRetryableErrorTypes: []string{"BadInput"},
+	}
+
+	got, err := toProtoSchedule(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	retry := got.GetAction().GetStartWorkflow().GetRetryPolicy()
+	if retry == nil {
+		t.Fatal("retry policy = nil, want non-nil")
+	}
+	if retry.GetBackoffCoefficient() != 2.5 {
+		t.Errorf("backoff coefficient = %v, want 2.5", retry.GetBackoffCoefficient())
+	}
+	if retry.GetMaximumAttempts() != 5 {
+		t.Errorf("maximum attempts = %d, want 5", retry.GetMaximumAttempts())
+	}
+	if retry.GetInitialInterval().AsDuration() != time.Second {
+		t.Errorf("initial interval = %v, want %v", retry.GetInitialInterval().AsDuration(), time.Second)
+	}
+	if retry.GetMaximumInterval().AsDuration() != time.Minute {
+		t.Errorf("maximum interval = %v, want %v", retry.GetMaximumInterval().AsDuration(), time.Minute)
+	}
+	gotTypes := retry.GetNonRetryableErrorTypes()
+	if len(gotTypes) != 1 || gotTypes[0] != "BadInput" {
+		t.Errorf("non-retryable error types = %v, want [BadInput]", gotTypes)
+	}
+}
+
+func TestToProtoSchedule_MemoAndSearchAttributesEncoding(t *testing.T) {
+	p := baseParams()
+	p.Action.Memo = map[string][]byte{"team": []byte(`"payments"`)}
+	p.Action.SearchAttributes = map[string][]byte{"CustomKeyword": []byte(`"abc"`)}
+
+	got, err := toProtoSchedule(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	wf := got.GetAction().GetStartWorkflow()
+	memoField := wf.GetMemo().GetFields()["team"]
+	if memoField == nil {
+		t.Fatal("memo field team = nil, want non-nil")
+	}
+	if string(memoField.GetMetadata()["encoding"]) != jsonPlainEncoding {
+		t.Errorf("memo encoding = %q, want %q", memoField.GetMetadata()["encoding"], jsonPlainEncoding)
+	}
+	if string(memoField.GetData()) != `"payments"` {
+		t.Errorf("memo data = %q, want %q", memoField.GetData(), `"payments"`)
+	}
+
+	searchAttr := wf.GetSearchAttributes().GetIndexedFields()["CustomKeyword"]
+	if searchAttr == nil {
+		t.Fatal("search attribute CustomKeyword = nil, want non-nil")
+	}
+	if string(searchAttr.GetMetadata()["encoding"]) != jsonPlainEncoding {
+		t.Errorf("search attribute encoding = %q, want %q", searchAttr.GetMetadata()["encoding"], jsonPlainEncoding)
+	}
+	if string(searchAttr.GetData()) != `"abc"` {
+		t.Errorf("search attribute data = %q, want %q", searchAttr.GetData(), `"abc"`)
+	}
+}
+
+func TestToProtoSchedule_EmptyMemoAndSearchAttributesStayNil(t *testing.T) {
+	got, err := toProtoSchedule(baseParams())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	wf := got.GetAction().GetStartWorkflow()
+	if wf.GetMemo() != nil {
+		t.Errorf("memo = %v, want nil", wf.GetMemo())
+	}
+	if wf.GetSearchAttributes() != nil {
+		t.Errorf("search attributes = %v, want nil", wf.GetSearchAttributes())
+	}
+}
