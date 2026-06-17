@@ -23,6 +23,7 @@ kubeconfig
 *.local.yaml
 
 # Hugo docs site
+docs/node_modules/
 docs/public/
 docs/resources/
 .hugo_build.lock
@@ -33,3 +34,4 @@ docs/content/reference/.crd-reference-body.md
 docs/static/preview/temporal-operator-preview.wasm
 docs/static/preview/wasm_exec.js
 docs/static/preview/examples/
+docs/data/preview.json

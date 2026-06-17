@@ -18,6 +18,12 @@ GOOS=js GOARCH=wasm go build -ldflags="-s -w" \
 echo "Copying wasm_exec.js..."
 cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" "${out_dir}/wasm_exec.js"
 
+echo "Writing cache-busting hash..."
+data_dir="${repo_root}/docs/data"
+mkdir -p "${data_dir}"
+wasm_hash="$(sha256sum "${out_dir}/temporal-operator-preview.wasm" | cut -c1-16)"
+printf '{"wasmHash":"%s"}\n' "${wasm_hash}" > "${data_dir}/preview.json"
+
 echo "Staging example TemporalCluster manifests..."
 {
   printf '['

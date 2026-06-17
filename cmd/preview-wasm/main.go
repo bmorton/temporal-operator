@@ -18,7 +18,8 @@ limitations under the License.
 
 // Command preview-wasm exposes the operator's object planner to the browser. It
 // registers a global temporalPreview(kind, yaml) function that returns a JSON
-// string describing every object the operator would create.
+// string {resources:[{kind,apiVersion,name,namespace,phase,yaml}], error}
+// describing every object the operator would create.
 package main
 
 import (
@@ -39,26 +40,33 @@ import (
 	webhookv1alpha1 "github.com/bmorton/temporal-operator/internal/webhook/v1alpha1"
 )
 
-type previewObject struct {
-	Kind  string `json:"kind"`
-	Name  string `json:"name"`
-	Phase string `json:"phase"`
-	YAML  string `json:"yaml"`
+type previewResource struct {
+	Kind       string `json:"kind"`
+	APIVersion string `json:"apiVersion"`
+	Name       string `json:"name"`
+	Namespace  string `json:"namespace"`
+	Phase      string `json:"phase"`
+	YAML       string `json:"yaml"`
 }
 
 type previewResult struct {
-	Objects []previewObject `json:"objects"`
-	Errors  []string        `json:"errors"`
+	Resources []previewResource `json:"resources"`
+	Error     string            `json:"error,omitempty"`
 }
 
-func result(objs []previewObject, errs ...string) string {
+func ok(objs []previewResource) string {
 	if objs == nil {
-		objs = []previewObject{}
+		objs = []previewResource{}
 	}
-	if errs == nil {
-		errs = []string{}
-	}
-	b, _ := json.Marshal(previewResult{Objects: objs, Errors: errs})
+	b, _ := json.Marshal(previewResult{Resources: objs})
+	return string(b)
+}
+
+func fail(format string, args ...any) string {
+	b, _ := json.Marshal(previewResult{
+		Resources: []previewResource{},
+		Error:     fmt.Sprintf(format, args...),
+	})
 	return string(b)
 }
 
@@ -67,7 +75,7 @@ func result(objs []previewObject, errs ...string) string {
 func previewTemporalCluster(yamlSrc string) string {
 	cluster, err := decodeTemporalCluster(yamlSrc)
 	if err != nil {
-		return result(nil, err.Error())
+		return fail("%s", err.Error())
 	}
 	if cluster.Namespace == "" {
 		cluster.Namespace = "default"
@@ -76,33 +84,36 @@ func previewTemporalCluster(yamlSrc string) string {
 	ctx := context.Background()
 	defaulter := &webhookv1alpha1.TemporalClusterCustomDefaulter{}
 	if err := defaulter.Default(ctx, cluster); err != nil {
-		return result(nil, fmt.Sprintf("defaulting failed: %v", err))
+		return fail("defaulting failed: %v", err)
 	}
 
 	validator := &webhookv1alpha1.TemporalClusterCustomValidator{}
 	if _, err := validator.ValidateCreate(ctx, cluster); err != nil {
-		return result(nil, fmt.Sprintf("validation failed: %v", err))
+		return fail("validation failed: %v", err)
 	}
 
 	planned, err := plan.PlanFromSpec(cluster)
 	if err != nil {
-		return result(nil, err.Error())
+		return fail("%s", err.Error())
 	}
 
-	objs := make([]previewObject, 0, len(planned))
+	objs := make([]previewResource, 0, len(planned))
 	for _, p := range planned {
 		rendered, err := renderObject(p.Object)
 		if err != nil {
-			return result(nil, fmt.Sprintf("rendering %s: %v", p.Object.GetName(), err))
+			return fail("rendering %s: %v", p.Object.GetName(), err)
 		}
-		objs = append(objs, previewObject{
-			Kind:  p.Object.GetObjectKind().GroupVersionKind().Kind,
-			Name:  p.Object.GetName(),
-			Phase: string(p.Phase),
-			YAML:  rendered,
+		gvk := p.Object.GetObjectKind().GroupVersionKind()
+		objs = append(objs, previewResource{
+			Kind:       gvk.Kind,
+			APIVersion: gvk.GroupVersion().String(),
+			Name:       p.Object.GetName(),
+			Namespace:  p.Object.GetNamespace(),
+			Phase:      string(p.Phase),
+			YAML:       rendered,
 		})
 	}
-	return result(objs)
+	return ok(objs)
 }
 
 // decodeTemporalCluster scans the (possibly multi-document) YAML input and
@@ -155,7 +166,7 @@ func renderObject(obj client.Object) (string, error) {
 
 func temporalPreview(_ js.Value, args []js.Value) any {
 	if len(args) < 2 {
-		return result(nil, "temporalPreview(kind, yaml) requires two arguments")
+		return fail("temporalPreview(kind, yaml) requires two arguments")
 	}
 	kind := args[0].String()
 	src := args[1].String()
@@ -163,7 +174,7 @@ func temporalPreview(_ js.Value, args []js.Value) any {
 	case "TemporalCluster":
 		return previewTemporalCluster(src)
 	default:
-		return result(nil, fmt.Sprintf("kind %q is not supported yet", kind))
+		return fail("kind %q is not supported yet", kind)
 	}
 }
 
