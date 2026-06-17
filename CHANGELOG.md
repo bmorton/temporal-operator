@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/bmorton/temporal-operator/compare/v0.3.0...v0.4.0) (2026-06-17)
+
+
+### Features
+
+* Azure-friendly operator (phase 1) — podTemplate overrides, examples, docs ([#48](https://github.com/bmorton/temporal-operator/issues/48)) ([b5b16e4](https://github.com/bmorton/temporal-operator/commit/b5b16e4dfc0de233c975db53c39d29282b354377))
+* in-browser resource preview tool (WebAssembly) ([#50](https://github.com/bmorton/temporal-operator/issues/50)) ([3944eb8](https://github.com/bmorton/temporal-operator/commit/3944eb83ab7bd25c58df28a107947e5ae43ce053))
+* **preview:** redesign the resource preview page ([#52](https://github.com/bmorton/temporal-operator/issues/52)) ([dc5f4c5](https://github.com/bmorton/temporal-operator/commit/dc5f4c5c38d87e8fd0bc39b93562a4dc8bb2ba69))
+
+
+### Bug Fixes
+
+* **preview:** re-highlight YAML on subsequent renders ([#55](https://github.com/bmorton/temporal-operator/issues/55)) ([c18460c](https://github.com/bmorton/temporal-operator/commit/c18460caa1898231990a33cbc8ca6dbb6da3a383))
+
 ## [0.3.0](https://github.com/bmorton/temporal-operator/compare/v0.2.1...v0.3.0) (2026-06-16)
 
 
