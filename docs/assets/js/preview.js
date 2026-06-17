@@ -13,6 +13,7 @@ function previewApp() {
     groups: [], // [{ kind, items: [{ id, name, namespace, phase, yaml, open, highlighted }] }]
     hiddenKinds: {}, // { [kind]: true } when filtered out
     theme: "light",
+    uid: 0, // monotonic id source; keeps card ids unique across renders
 
     async init() {
       this.theme = localStorage.getItem("preview-theme") || "light";
@@ -112,10 +113,9 @@ function previewApp() {
 
     groupByKind(resources) {
       const byKind = {};
-      let seq = 0;
       for (const r of resources) {
         (byKind[r.kind] = byKind[r.kind] || []).push({
-          id: seq++,
+          id: this.uid++,
           name: r.name,
           namespace: r.namespace,
           phase: r.phase,
@@ -158,6 +158,9 @@ function previewApp() {
       this.$nextTick(() => {
         const el = document.getElementById("code-" + item.id);
         if (el) {
+          // Clear highlight.js's marker in case Alpine reused this element,
+          // otherwise highlightElement() refuses to re-highlight it.
+          delete el.dataset.highlighted;
           window.hljs.highlightElement(el);
           item.highlighted = true;
         }
