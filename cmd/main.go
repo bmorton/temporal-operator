@@ -183,8 +183,12 @@ func main() {
 	}
 
 	if err := (&controller.TemporalClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		// GetEventRecorderFor is deprecated in controller-runtime v0.23 in favor of
+		// the new events API (GetEventRecorder); we retain the legacy record.EventRecorder
+		// recorder used by the reconciler.
+		//nolint:staticcheck // SA1019: legacy event recorder retained intentionally.
 		Recorder: mgr.GetEventRecorderFor("temporalcluster-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalCluster")

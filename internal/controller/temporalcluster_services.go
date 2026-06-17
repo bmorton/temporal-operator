@@ -110,6 +110,10 @@ func (r *TemporalClusterReconciler) apply(ctx context.Context, cluster *temporal
 	if err := controllerutil.SetControllerReference(cluster, obj, r.Scheme); err != nil {
 		return err
 	}
+	// client.Apply (the legacy server-side apply patch type) is deprecated in
+	// controller-runtime v0.23 in favor of Client.Apply with generated apply
+	// configurations, which are not available for these unstructured objects.
+	//nolint:staticcheck // SA1019: legacy server-side apply patch retained intentionally.
 	return r.Patch(ctx, obj, client.Apply, servicesFieldOwner, client.ForceOwnership)
 }
 

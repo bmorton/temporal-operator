@@ -20,10 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -34,7 +32,7 @@ var temporalsearchattributelog = logf.Log.WithName("temporalsearchattribute-reso
 
 // SetupTemporalSearchAttributeWebhookWithManager registers the webhook for TemporalSearchAttribute in the manager.
 func SetupTemporalSearchAttributeWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&temporalv1alpha1.TemporalSearchAttribute{}).
+	return ctrl.NewWebhookManagedBy(mgr, &temporalv1alpha1.TemporalSearchAttribute{}).
 		WithValidator(&TemporalSearchAttributeCustomValidator{}).
 		Complete()
 }
@@ -54,14 +52,10 @@ type TemporalSearchAttributeCustomValidator struct {
 	// TODO(user): Add more fields as needed for validation
 }
 
-var _ webhook.CustomValidator = &TemporalSearchAttributeCustomValidator{}
+var _ admission.Validator[*temporalv1alpha1.TemporalSearchAttribute] = &TemporalSearchAttributeCustomValidator{}
 
-// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TemporalSearchAttribute.
-func (v *TemporalSearchAttributeCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	temporalsearchattribute, ok := obj.(*temporalv1alpha1.TemporalSearchAttribute)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalSearchAttribute object but got %T", obj)
-	}
+// ValidateCreate implements admission.Validator so a webhook will be registered for the type TemporalSearchAttribute.
+func (v *TemporalSearchAttributeCustomValidator) ValidateCreate(_ context.Context, temporalsearchattribute *temporalv1alpha1.TemporalSearchAttribute) (admission.Warnings, error) {
 	temporalsearchattributelog.Info("Validation for TemporalSearchAttribute upon creation", "name", temporalsearchattribute.GetName())
 
 	if temporalsearchattribute.Spec.ClusterRef.Name == "" {
@@ -73,16 +67,8 @@ func (v *TemporalSearchAttributeCustomValidator) ValidateCreate(_ context.Contex
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TemporalSearchAttribute.
-func (v *TemporalSearchAttributeCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	newSA, ok := newObj.(*temporalv1alpha1.TemporalSearchAttribute)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalSearchAttribute object for the newObj but got %T", newObj)
-	}
-	oldSA, ok := oldObj.(*temporalv1alpha1.TemporalSearchAttribute)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalSearchAttribute object for the oldObj but got %T", oldObj)
-	}
+// ValidateUpdate implements admission.Validator so a webhook will be registered for the type TemporalSearchAttribute.
+func (v *TemporalSearchAttributeCustomValidator) ValidateUpdate(_ context.Context, oldSA, newSA *temporalv1alpha1.TemporalSearchAttribute) (admission.Warnings, error) {
 	temporalsearchattributelog.Info("Validation for TemporalSearchAttribute upon update", "name", newSA.GetName())
 
 	if newSA.Spec.ClusterRef.Name == "" {
@@ -94,12 +80,8 @@ func (v *TemporalSearchAttributeCustomValidator) ValidateUpdate(_ context.Contex
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TemporalSearchAttribute.
-func (v *TemporalSearchAttributeCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	temporalsearchattribute, ok := obj.(*temporalv1alpha1.TemporalSearchAttribute)
-	if !ok {
-		return nil, fmt.Errorf("expected a TemporalSearchAttribute object but got %T", obj)
-	}
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type TemporalSearchAttribute.
+func (v *TemporalSearchAttributeCustomValidator) ValidateDelete(_ context.Context, temporalsearchattribute *temporalv1alpha1.TemporalSearchAttribute) (admission.Warnings, error) {
 	temporalsearchattributelog.Info("Validation for TemporalSearchAttribute upon deletion", "name", temporalsearchattribute.GetName())
 
 	// TODO(user): fill in your validation logic upon object deletion.
