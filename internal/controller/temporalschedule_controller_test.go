@@ -306,6 +306,36 @@ var _ = Describe("TemporalSchedule reconciler", func() {
 		Expect(fake.deleted).NotTo(ContainElement(s.Name))
 	})
 
+	It("removes the finalizer when the cluster is deleted before the schedule", func() {
+		c := newCluster(fmt.Sprintf("cluster-%d", counter))
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		markClusterReady(c)
+
+		s := newSchedule(fmt.Sprintf("sched-%d", counter), c.Name)
+		Expect(k8sClient.Create(ctx, s)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: s.Name, Namespace: testNamespace}}
+		_, err := reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.created).To(ContainElement(s.Name))
+
+		// Simulate user deleting the TemporalCluster first.
+		Expect(k8sClient.Delete(ctx, c)).To(Succeed())
+
+		// Now delete the schedule — it has a finalizer so it becomes Terminating.
+		Expect(k8sClient.Delete(ctx, s)).To(Succeed())
+
+		// Reconcile: cluster is gone, so the finalizer must be removed and the
+		// object fully released (no stuck Terminating state).
+		_, err = reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = k8sClient.Get(ctx, types.NamespacedName{Name: s.Name, Namespace: testNamespace}, &temporalv1alpha1.TemporalSchedule{})
+		Expect(err).To(HaveOccurred(), "schedule should be gone after finalizer is removed")
+	})
+
 	It("sets ClusterNotReady when the cluster is not ready", func() {
 		c := newCluster(fmt.Sprintf("cluster-%d", counter))
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())

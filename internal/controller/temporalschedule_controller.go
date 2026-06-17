@@ -67,16 +67,25 @@ func (r *TemporalScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	var cluster temporalv1alpha1.TemporalCluster
 	clusterKey := types.NamespacedName{Namespace: sched.Namespace, Name: sched.Spec.ClusterRef.Name}
 	if err := r.Get(ctx, clusterKey, &cluster); err != nil {
+		if !sched.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sched)
+		}
 		r.setReady(&sched, metav1.ConditionFalse, "ClusterNotFound", "referenced TemporalCluster not found")
 		return ctrl.Result{RequeueAfter: scheduleDriftRequeue}, r.statusUpdate(ctx, &sched)
 	}
 
 	tlsConfig, err := clusterTLSConfig(ctx, r.Client, &cluster)
 	if err != nil {
+		if !sched.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sched)
+		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client tls: %w", err)
 	}
 	sc, err := r.clientFactory()(ctx, frontendAddress(&cluster), tlsConfig)
 	if err != nil {
+		if !sched.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sched)
+		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}
 	defer func() { _ = sc.Close() }()
@@ -180,6 +189,20 @@ func (r *TemporalScheduleReconciler) reconcileDelete(ctx context.Context, sched 
 			}
 			log.Info("deleted temporal schedule", "scheduleID", id)
 		}
+		controllerutil.RemoveFinalizer(sched, scheduleFinalizer)
+		if err := r.Update(ctx, sched); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeFinalizerAndForget removes the schedule finalizer and returns a clean
+// result. It is used when the TemporalCluster (or its TLS/client) is
+// unreachable during deletion — there is nothing to clean up remotely, so we
+// just unblock GC.
+func (r *TemporalScheduleReconciler) removeFinalizerAndForget(ctx context.Context, sched *temporalv1alpha1.TemporalSchedule) error {
+	if controllerutil.ContainsFinalizer(sched, scheduleFinalizer) {
 		controllerutil.RemoveFinalizer(sched, scheduleFinalizer)
 		if err := r.Update(ctx, sched); err != nil {
 			return err
