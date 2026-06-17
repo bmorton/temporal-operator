@@ -36,3 +36,18 @@ updates:
       include: "scope"
     cooldown:
       default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/docs"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    groups:
+      docs-dependencies:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 7
