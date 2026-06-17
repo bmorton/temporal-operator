@@ -53,7 +53,7 @@ jobs:
           fail: false
 
   preview-wasm:
-    name: Preview wasm compiles
+    name: Preview wasm + docs build
     runs-on: namespace-profile-temporal-operator
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -65,6 +65,20 @@ jobs:
           go-version: "1.26.x"
       - name: Build preview WebAssembly
         run: make preview-wasm
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      - name: Install docs CSS tooling
+        run: npm ci
+        working-directory: docs
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@2752ce1d29631191ea3f27c23495fa06139a5b78 # v3.2.1
+        with:
+          hugo-version: "0.140.2"
+          extended: true
+      - name: Build site (no deploy)
+        run: PATH="$PWD/docs/node_modules/.bin:$PATH" hugo --source docs --minify
 
   build-deploy:
     name: Build and deploy site

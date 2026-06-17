@@ -72,7 +72,7 @@ function previewApp() {
           if (done) break;
           chunks.push(value);
           received += value.length;
-          this.wasmProgress = Math.round((received / total) * 100);
+          this.wasmProgress = Math.min(100, Math.round((received / total) * 100));
         }
       } catch (e) {
         await reader.cancel().catch(() => {});
