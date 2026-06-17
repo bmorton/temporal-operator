@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* Scan the templates and app JS that emit class names (Tailwind v4 purge). */
+@source "../../layouts/**/*.html";
+@source "../../assets/js/**/*.js";
+
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark;
+}
+
+/* Make code blocks scroll horizontally on mobile instead of overflowing. */
+.preview-code {
+  overflow-x: auto;
+}
+.preview-code code {
+  white-space: pre;
+}

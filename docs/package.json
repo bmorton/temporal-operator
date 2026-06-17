@@ -1,0 +1,10 @@
+{
+  "name": "temporal-operator-docs",
+  "private": true,
+  "description": "Build-time CSS tooling for the Hugo docs site (Tailwind + daisyUI).",
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.1",
+    "daisyui": "5.5.23",
+    "tailwindcss": "4.3.1"
+  }
+}

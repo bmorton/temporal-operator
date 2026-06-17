@@ -23,6 +23,7 @@ kubeconfig
 *.local.yaml
 
 # Hugo docs site
+docs/node_modules/
 docs/public/
 docs/resources/
 .hugo_build.lock
