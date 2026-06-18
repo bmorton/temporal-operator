@@ -1,0 +1,26 @@
+# Structured calendar: weekdays, every hour from 09:00-17:00 (UTC).
+# Field-level control without cron syntax. Ranges are inclusive [start,end].
+#
+# Requires 00-shared.yaml (cluster "app" + namespace "scheduling").
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalSchedule
+metadata:
+  name: business-hours-sync
+spec:
+  clusterRef: { name: app }
+  namespace: scheduling
+  allowDeletion: true
+  schedule:
+    timezoneName: "UTC"
+    structuredCalendar:
+      - comment: "hourly on the hour, weekdays 9-17"
+        hour:
+          - { start: 9, end: 17 }
+        minute:
+          - { start: 0, end: 0 }
+        dayOfWeek:
+          - { start: 1, end: 5 }   # Mon(1)..Fri(5); 0 and 7 are Sunday
+  action:
+    startWorkflow:
+      workflowType: SyncInventory
+      taskQueue: inventory
