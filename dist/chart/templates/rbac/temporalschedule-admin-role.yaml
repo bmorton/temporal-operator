@@ -1,0 +1,22 @@
+{{- if .Values.rbacHelpers.enable }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    labels:
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/name: temporal-operator
+    name: temporal-operator-temporalschedule-admin-role
+rules:
+    - apiGroups:
+        - temporal.bmor10.com
+      resources:
+        - temporalschedules
+      verbs:
+        - '*'
+    - apiGroups:
+        - temporal.bmor10.com
+      resources:
+        - temporalschedules/status
+      verbs:
+        - get
+{{- end }}

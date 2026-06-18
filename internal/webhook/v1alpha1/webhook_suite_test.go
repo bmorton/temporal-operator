@@ -118,6 +118,9 @@ var _ = BeforeSuite(func() {
 	err = SetupTemporalSearchAttributeWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = SetupTemporalScheduleWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:webhook
 
 	go func() {

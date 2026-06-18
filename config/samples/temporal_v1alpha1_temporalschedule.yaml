@@ -1,0 +1,23 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalSchedule
+metadata:
+  name: nightly-report
+spec:
+  clusterRef:
+    name: temporal-sample
+  namespace: orders
+  schedule:
+    calendars:
+      - "0 9 * * MON-FRI"
+    timezoneName: "America/New_York"
+  action:
+    startWorkflow:
+      workflowType: GenerateReport
+      taskQueue: reports
+      args:
+        - { "format": "pdf", "limit": 100 }
+  policies:
+    overlapPolicy: Skip
+    catchupWindow: 1h
+  state:
+    paused: false

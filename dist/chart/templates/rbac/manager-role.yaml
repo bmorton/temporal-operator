@@ -103,6 +103,7 @@ rules:
         - temporalclusterclients
         - temporalclusters
         - temporalnamespaces
+        - temporalschedules
         - temporalsearchattributes
       verbs:
         - create
@@ -118,6 +119,7 @@ rules:
         - temporalclusterclients/finalizers
         - temporalclusters/finalizers
         - temporalnamespaces/finalizers
+        - temporalschedules/finalizers
         - temporalsearchattributes/finalizers
       verbs:
         - update
@@ -127,6 +129,7 @@ rules:
         - temporalclusterclients/status
         - temporalclusters/status
         - temporalnamespaces/status
+        - temporalschedules/status
         - temporalsearchattributes/status
       verbs:
         - get

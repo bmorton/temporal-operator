@@ -1,0 +1,621 @@
+{{- if .Values.crd.enable }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: temporalschedules.temporal.bmor10.com
+spec:
+  group: temporal.bmor10.com
+  names:
+    kind: TemporalSchedule
+    listKind: TemporalScheduleList
+    plural: temporalschedules
+    shortNames:
+    - tsch
+    singular: temporalschedule
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterRef.name
+      name: Cluster
+      type: string
+    - jsonPath: .spec.namespace
+      name: Namespace
+      type: string
+    - jsonPath: .status.paused
+      name: Paused
+      type: boolean
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: TemporalSchedule is the Schema for the temporalschedules API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TemporalScheduleSpec defines the desired state of TemporalSchedule.
+            properties:
+              action:
+                description: Action describes what to do when the schedule fires.
+                properties:
+                  startWorkflow:
+                    description: StartWorkflowAction starts a workflow when the schedule
+                      fires.
+                    properties:
+                      args:
+                        description: Args are JSON-serializable workflow inputs (one
+                          json/plain payload each).
+                        items:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        type: array
+                      memo:
+                        additionalProperties:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      retryPolicy:
+                        description: RetryPolicySpec is the retry policy for the started
+                          workflow.
+                        properties:
+                          backoffCoefficient:
+                            description: BackoffCoefficient is a decimal string (e.g.
+                              "2.0") parsed to float64.
+                            type: string
+                          initialInterval:
+                            type: string
+                          maximumAttempts:
+                            format: int32
+                            type: integer
+                          maximumInterval:
+                            type: string
+                          nonRetryableErrorTypes:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      searchAttributes:
+                        additionalProperties:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      taskQueue:
+                        type: string
+                      workflowExecutionTimeout:
+                        type: string
+                      workflowID:
+                        type: string
+                      workflowIDReusePolicy:
+                        enum:
+                        - AllowDuplicate
+                        - AllowDuplicateFailedOnly
+                        - RejectDuplicate
+                        - TerminateIfRunning
+                        type: string
+                      workflowRunTimeout:
+                        type: string
+                      workflowTaskTimeout:
+                        type: string
+                      workflowType:
+                        type: string
+                    required:
+                    - taskQueue
+                    - workflowType
+                    type: object
+                required:
+                - startWorkflow
+                type: object
+              allowDeletion:
+                description: |-
+                  AllowDeletion permits the operator to delete the Temporal schedule when
+                  the CR is deleted. When false, the schedule is left in place.
+                type: boolean
+              clusterRef:
+                description: ClusterRef references the TemporalCluster that hosts
+                  this schedule.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              namespace:
+                description: Namespace is the Temporal namespace the schedule lives
+                  in.
+                type: string
+              policies:
+                description: Policies tunes overlap/catchup/pause-on-failure behavior.
+                properties:
+                  catchupWindow:
+                    type: string
+                  keepOriginalWorkflowID:
+                    type: boolean
+                  overlapPolicy:
+                    enum:
+                    - Skip
+                    - BufferOne
+                    - BufferAll
+                    - CancelOther
+                    - TerminateOther
+                    - AllowAll
+                    type: string
+                  pauseOnFailure:
+                    type: boolean
+                type: object
+              schedule:
+                description: Schedule describes when the action fires.
+                properties:
+                  calendars:
+                    description: Calendars holds cron strings (5/6/7 field, or @daily
+                      etc).
+                    items:
+                      type: string
+                    type: array
+                  endTime:
+                    description: EndTime bounds the schedule end (inclusive).
+                    format: date-time
+                    type: string
+                  excludeStructuredCalendar:
+                    description: ExcludeStructuredCalendar subtracts matching times.
+                    items:
+                      description: StructuredCalendarSpec describes calendar times
+                        as field ranges.
+                      properties:
+                        comment:
+                          type: string
+                        dayOfMonth:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        dayOfWeek:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        hour:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        minute:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        month:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        second:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        year:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                      type: object
+                    type: array
+                  intervals:
+                    description: Intervals fire every Every (plus optional Offset/phase).
+                    items:
+                      description: IntervalSpec matches times of epoch + n*Every +
+                        Offset.
+                      properties:
+                        every:
+                          type: string
+                        offset:
+                          type: string
+                      required:
+                      - every
+                      type: object
+                    type: array
+                  jitter:
+                    description: Jitter randomizes each action time by 0..Jitter.
+                    type: string
+                  startTime:
+                    description: StartTime bounds the schedule start (inclusive).
+                    format: date-time
+                    type: string
+                  structuredCalendar:
+                    description: StructuredCalendar gives field-level control without
+                      cron syntax.
+                    items:
+                      description: StructuredCalendarSpec describes calendar times
+                        as field ranges.
+                      properties:
+                        comment:
+                          type: string
+                        dayOfMonth:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        dayOfWeek:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        hour:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        minute:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        month:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        second:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                        year:
+                          items:
+                            description: CalendarRange is an inclusive [Start,End]
+                              range with an optional Step.
+                            properties:
+                              end:
+                                format: int32
+                                type: integer
+                              start:
+                                format: int32
+                                type: integer
+                              step:
+                                default: 1
+                                format: int32
+                                type: integer
+                            required:
+                            - start
+                            type: object
+                          type: array
+                      type: object
+                    type: array
+                  timezoneName:
+                    description: TimezoneName interprets calendar specs (IANA name;
+                      defaults to UTC).
+                    type: string
+                type: object
+              scheduleID:
+                description: |-
+                  ScheduleID is the Temporal schedule ID. Defaults to metadata.name.
+                  Immutable once set.
+                type: string
+              state:
+                description: State controls pause and action-limit state.
+                properties:
+                  limitedActions:
+                    type: boolean
+                  notes:
+                    type: string
+                  paused:
+                    type: boolean
+                  remainingActions:
+                    format: int64
+                    type: integer
+                type: object
+            required:
+            - action
+            - clusterRef
+            - namespace
+            - schedule
+            type: object
+          status:
+            description: TemporalScheduleStatus defines the observed state of TemporalSchedule.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              created:
+                type: boolean
+              lastAppliedSpecHash:
+                description: LastAppliedSpecHash detects spec changes across operator
+                  restarts.
+                type: string
+              lastUpdated:
+                format: date-time
+                type: string
+              nextActionTimes:
+                description: NextActionTimes is a small window of upcoming action
+                  times.
+                items:
+                  format: date-time
+                  type: string
+                type: array
+              notes:
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              paused:
+                type: boolean
+              runningWorkflows:
+                format: int32
+                type: integer
+              scheduleID:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+{{- end }}
