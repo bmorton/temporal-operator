@@ -52,7 +52,7 @@ package layouts
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import ui "github.com/bmorton/temporal-operator/internal/ui"
+import ui "github.com/bmorton/temporal-operator/internal/ui/model"
 
 // View carries per-request layout data.
 type View struct {

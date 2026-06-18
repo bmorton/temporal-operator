@@ -52,7 +52,7 @@ package components
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import ui "github.com/bmorton/temporal-operator/internal/ui"
+import ui "github.com/bmorton/temporal-operator/internal/ui/model"
 
 func badgeClass(s ui.BadgeState) string {
 	return "badge " + string(s)

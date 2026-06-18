@@ -16,11 +16,10 @@ limitations under the License.
 
 package ui
 
+import "github.com/bmorton/temporal-operator/internal/ui/model"
+
 // JoinPath joins the UI base path with a sub-path (which must start with "/"),
 // avoiding a duplicate leading slash that would produce a protocol-relative URL.
 func JoinPath(basePath, sub string) string {
-	if basePath == "" || basePath == "/" {
-		return sub
-	}
-	return basePath + sub
+	return model.JoinPath(basePath, sub)
 }

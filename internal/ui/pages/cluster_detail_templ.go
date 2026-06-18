@@ -55,9 +55,9 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"strconv"
 
-	ui "github.com/bmorton/temporal-operator/internal/ui"
 	"github.com/bmorton/temporal-operator/internal/ui/components"
 	"github.com/bmorton/temporal-operator/internal/ui/layouts"
+	ui "github.com/bmorton/temporal-operator/internal/ui/model"
 )
 
 // DetailBody is the htmx-polled fragment.

@@ -55,7 +55,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"strconv"
 
-	ui "github.com/bmorton/temporal-operator/internal/ui"
+	ui "github.com/bmorton/temporal-operator/internal/ui/model"
 )
 
 func replicaText(r ui.ServiceRow) string {

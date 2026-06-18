@@ -16,87 +16,39 @@ limitations under the License.
 
 package ui
 
+import "github.com/bmorton/temporal-operator/internal/ui/model"
+
 // BadgeState is the visual state of a status badge.
-type BadgeState string
+type BadgeState = model.BadgeState
 
 const (
-	BadgeOK      BadgeState = "ok"
-	BadgeWarn    BadgeState = "warn"
-	BadgeError   BadgeState = "error"
-	BadgePending BadgeState = "pending"
-	BadgeUnknown BadgeState = "unknown"
+	BadgeOK      = model.BadgeOK
+	BadgeWarn    = model.BadgeWarn
+	BadgeError   = model.BadgeError
+	BadgePending = model.BadgePending
+	BadgeUnknown = model.BadgeUnknown
 )
 
 // ClusterSummary is one row/card on the overview.
-type ClusterSummary struct {
-	Namespace   string
-	Name        string
-	Version     string
-	Shards      int32
-	Phase       string
-	Ready       BadgeState
-	Persistence BadgeState
-	MTLSEnabled bool
-	MTLS        BadgeState
-	Upgrading   bool
-	Age         string
-}
+type ClusterSummary = model.ClusterSummary
 
 // ServiceRow reports readiness of one Temporal service.
-type ServiceRow struct {
-	Name    string
-	Ready   int32
-	Desired int32
-	Version string
-	State   BadgeState
-}
+type ServiceRow = model.ServiceRow
 
 // ConditionRow is one status condition.
-type ConditionRow struct {
-	Type    string
-	Status  string
-	Reason  string
-	Message string
-	State   BadgeState
-}
+type ConditionRow = model.ConditionRow
 
 // PersistenceInfo summarizes datastore state.
-type PersistenceInfo struct {
-	Reachable   BadgeState
-	SchemaReady BadgeState
-}
+type PersistenceInfo = model.PersistenceInfo
 
 // EndpointsInfo holds resolved endpoints.
-type EndpointsInfo struct {
-	Frontend string
-	UI       string
-	Metrics  string
-}
+type EndpointsInfo = model.EndpointsInfo
 
 // UpgradeInfo describes an in-flight upgrade.
-type UpgradeInfo struct {
-	Active       bool
-	FromVersion  string
-	ToVersion    string
-	Phase        string
-	Rollbackable bool
-}
+type UpgradeInfo = model.UpgradeInfo
 
 // RelatedResource is a satellite CRD tied to a cluster.
-type RelatedResource struct {
-	Kind   string
-	Name   string
-	Ready  BadgeState
-	Detail string
-}
+type RelatedResource = model.RelatedResource
 
 // ClusterDetail is the full per-cluster view.
-type ClusterDetail struct {
-	ClusterSummary
-	Conditions  []ConditionRow
-	Services    []ServiceRow
-	Persistence PersistenceInfo
-	Endpoints   EndpointsInfo
-	Upgrade     UpgradeInfo
-	Related     []RelatedResource
-}
+type ClusterDetail = model.ClusterDetail

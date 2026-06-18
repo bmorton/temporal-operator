@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	ui "github.com/bmorton/temporal-operator/internal/ui"
+	ui "github.com/bmorton/temporal-operator/internal/ui/model"
 )
 
 func TestConditionListEscapesInput(t *testing.T) {

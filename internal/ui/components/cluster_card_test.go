@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/a-h/templ"
-	ui "github.com/bmorton/temporal-operator/internal/ui"
+	ui "github.com/bmorton/temporal-operator/internal/ui/model"
 )
 
 func renderComponent(t *testing.T, c templ.Component) string {

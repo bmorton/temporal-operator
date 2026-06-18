@@ -52,7 +52,7 @@ package components
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import ui "github.com/bmorton/temporal-operator/internal/ui"
+import ui "github.com/bmorton/temporal-operator/internal/ui/model"
 
 func EndpointsPanel(e ui.EndpointsInfo) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
