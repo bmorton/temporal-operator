@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -36,7 +35,7 @@ var _ = Describe("TemporalSchedule Webhook", func() {
 		return &temporalv1alpha1.TemporalSchedule{
 			ObjectMeta: metav1.ObjectMeta{Name: "sched-1"},
 			Spec: temporalv1alpha1.TemporalScheduleSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: "cluster"},
+				ClusterRef: temporalv1alpha1.ClusterReference{Name: "cluster"},
 				Namespace:  "orders",
 				Schedule:   temporalv1alpha1.ScheduleSpec{Calendars: []string{"0 9 * * *"}},
 				Action: temporalv1alpha1.ScheduleActionSpec{

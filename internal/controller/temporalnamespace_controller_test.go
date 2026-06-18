@@ -23,7 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -121,7 +120,7 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 		ns := &temporalv1alpha1.TemporalNamespace{
 			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
 			Spec: temporalv1alpha1.TemporalNamespaceSpec{
-				ClusterRef:  corev1.LocalObjectReference{Name: cluster},
+				ClusterRef:  temporalv1alpha1.ClusterReference{Name: cluster},
 				Description: "orders namespace",
 			},
 		}
@@ -145,7 +144,7 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 		nsName := fmt.Sprintf("drift-%d", counter)
 		ns := &temporalv1alpha1.TemporalNamespace{
 			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
-			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: cluster}, Description: "v1"},
+			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: cluster}, Description: "v1"},
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, ns) })
@@ -169,7 +168,7 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 		nsName := fmt.Sprintf("del-%d", counter)
 		ns := &temporalv1alpha1.TemporalNamespace{
 			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
-			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: cluster}, AllowDeletion: true},
+			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: cluster}, AllowDeletion: true},
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 
@@ -190,7 +189,7 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 		nsName := fmt.Sprintf("keep-%d", counter)
 		ns := &temporalv1alpha1.TemporalNamespace{
 			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
-			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: cluster}},
+			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: cluster}},
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 
@@ -207,7 +206,7 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 		nsName := fmt.Sprintf("stranded-%d", counter)
 		ns := &temporalv1alpha1.TemporalNamespace{
 			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
-			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: cluster}},
+			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: cluster}},
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 

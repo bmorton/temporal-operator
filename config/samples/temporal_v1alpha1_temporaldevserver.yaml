@@ -1,0 +1,23 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalDevServer
+metadata:
+  name: temporaldevserver-sample
+spec:
+  version: "latest"
+  namespaces:
+    - orders
+  ui:
+    enabled: true
+  storage:
+    type: Ephemeral
+---
+# A namespace managed against the dev server via the polymorphic clusterRef.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: managed-on-devserver
+spec:
+  clusterRef:
+    name: temporaldevserver-sample
+    kind: TemporalDevServer
+  retentionPeriod: "24h"

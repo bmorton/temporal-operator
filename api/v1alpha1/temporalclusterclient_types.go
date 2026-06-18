@@ -23,8 +23,9 @@ import (
 
 // TemporalClusterClientSpec defines the desired state of TemporalClusterClient.
 type TemporalClusterClientSpec struct {
-	// ClusterRef references the TemporalCluster to generate client credentials for.
-	ClusterRef corev1.LocalObjectReference `json:"clusterRef"`
+	// ClusterRef references the cluster to generate client credentials for.
+	// Client credentials are only available for mTLS-enabled TemporalClusters.
+	ClusterRef ClusterReference `json:"clusterRef"`
 
 	// SecretName is the name of the Secret to write generated client credentials into.
 	// Defaults to the resource name when empty.

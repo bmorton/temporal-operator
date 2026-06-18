@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -62,24 +61,19 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	var cluster temporalv1alpha1.TemporalCluster
-	clusterKey := types.NamespacedName{Namespace: ns.Namespace, Name: ns.Spec.ClusterRef.Name}
-	if err := r.Get(ctx, clusterKey, &cluster); err != nil {
-		if !ns.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &ns)
-		}
-		r.setReady(&ns, metav1.ConditionFalse, "ClusterNotFound", "referenced TemporalCluster not found")
-		return ctrl.Result{RequeueAfter: namespaceDriftRequeue}, r.statusUpdate(ctx, &ns)
-	}
-
-	tlsConfig, err := clusterTLSConfig(ctx, r.Client, &cluster)
+	target, err := resolveTarget(ctx, r.Client, ns.Namespace, ns.Spec.ClusterRef)
 	if err != nil {
 		if !ns.DeletionTimestamp.IsZero() {
 			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &ns)
 		}
-		return ctrl.Result{}, fmt.Errorf("building temporal client tls: %w", err)
+		if errors.Is(err, ErrTargetNotFound) {
+			r.setReady(&ns, metav1.ConditionFalse, "ClusterNotFound", "referenced Temporal target not found")
+			return ctrl.Result{RequeueAfter: namespaceDriftRequeue}, r.statusUpdate(ctx, &ns)
+		}
+		return ctrl.Result{}, err
 	}
-	tc, err := r.clientFactory()(ctx, frontendAddress(&cluster), tlsConfig)
+
+	tc, err := r.clientFactory()(ctx, target.Address, target.TLSConfig)
 	if err != nil {
 		if !ns.DeletionTimestamp.IsZero() {
 			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &ns)
@@ -100,8 +94,8 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		}
 	}
 
-	if !meta.IsStatusConditionTrue(cluster.Status.Conditions, temporalv1alpha1.ConditionReady) {
-		r.setReady(&ns, metav1.ConditionFalse, "ClusterNotReady", "waiting for the TemporalCluster to become ready")
+	if !target.Ready {
+		r.setReady(&ns, metav1.ConditionFalse, "ClusterNotReady", "waiting for the Temporal target to become ready")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, r.statusUpdate(ctx, &ns)
 	}
 

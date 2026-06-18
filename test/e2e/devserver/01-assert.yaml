@@ -1,0 +1,6 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalDevServer
+metadata:
+  name: dev
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"

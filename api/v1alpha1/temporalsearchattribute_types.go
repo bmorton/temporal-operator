@@ -17,14 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TemporalSearchAttributeSpec defines the desired state of TemporalSearchAttribute.
 type TemporalSearchAttributeSpec struct {
-	// ClusterRef references the TemporalCluster this search attribute belongs to.
-	ClusterRef corev1.LocalObjectReference `json:"clusterRef"`
+	// ClusterRef references the TemporalCluster or TemporalDevServer this search attribute belongs to.
+	ClusterRef ClusterReference `json:"clusterRef"`
 
 	// Namespace is the Temporal namespace to register the attribute in.
 	Namespace string `json:"namespace"`

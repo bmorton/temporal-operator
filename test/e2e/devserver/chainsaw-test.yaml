@@ -1,0 +1,35 @@
+# Chainsaw test: stand up a disposable TemporalDevServer and register a
+# TemporalNamespace against it via the polymorphic clusterRef (kind:
+# TemporalDevServer). Unlike the cluster suites this needs no external
+# database — the dev server uses embedded SQLite.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: devserver
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+    # The verification script runs `kubectl run` with the admin-tools image,
+    # which may be pulled inside the cluster at runtime; the 5s default
+    # exec timeout is far too short for that.
+    exec: 2m
+  steps:
+    - name: dev-server
+      try:
+        - apply:
+            file: 01-devserver.yaml
+        - assert:
+            file: 01-assert.yaml
+    - name: register-namespace
+      try:
+        - apply:
+            file: 02-namespace.yaml
+        - assert:
+            file: 02-assert.yaml
+        - script:
+            content: |
+              kubectl run -n $NAMESPACE tctl-describe --rm -i --restart=Never \
+                --image=temporalio/admin-tools:1.31.1 -- \
+                temporal operator namespace describe \
+                --address dev-devserver:7233 orders

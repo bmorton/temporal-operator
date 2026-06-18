@@ -7,6 +7,7 @@ rules:
         - ""
       resources:
         - configmaps
+        - persistentvolumeclaims
         - secrets
         - services
       verbs:
@@ -102,6 +103,7 @@ rules:
       resources:
         - temporalclusterclients
         - temporalclusters
+        - temporaldevservers
         - temporalnamespaces
         - temporalschedules
         - temporalsearchattributes
@@ -118,6 +120,7 @@ rules:
       resources:
         - temporalclusterclients/finalizers
         - temporalclusters/finalizers
+        - temporaldevservers/finalizers
         - temporalnamespaces/finalizers
         - temporalschedules/finalizers
         - temporalsearchattributes/finalizers
@@ -128,6 +131,7 @@ rules:
       resources:
         - temporalclusterclients/status
         - temporalclusters/status
+        - temporaldevservers/status
         - temporalnamespaces/status
         - temporalschedules/status
         - temporalsearchattributes/status
