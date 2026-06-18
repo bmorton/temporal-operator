@@ -58,6 +58,12 @@ func (r *TemporalClusterClientReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if cc.Spec.ClusterRef.Kind == temporalv1alpha1.ClusterKindTemporalDevServer {
+		r.setReady(&cc, metav1.ConditionFalse, "DevServerUnsupported",
+			"client credentials are only available for mTLS-enabled TemporalClusters")
+		return ctrl.Result{}, r.statusUpdate(ctx, &cc)
+	}
+
 	var cluster temporalv1alpha1.TemporalCluster
 	clusterKey := types.NamespacedName{Namespace: cc.Namespace, Name: cc.Spec.ClusterRef.Name}
 	if err := r.Get(ctx, clusterKey, &cluster); err != nil {

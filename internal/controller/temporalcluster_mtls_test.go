@@ -226,4 +226,28 @@ var _ = Describe("TemporalClusterClient reconciler", func() {
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Reason).To(Equal("ClusterMTLSDisabled"))
 	})
+
+	It("reports not-ready when the clusterRef targets a TemporalDevServer", func() {
+		counter++
+		ccName := fmt.Sprintf("client-devserver-%d", counter)
+		cc := &temporalv1alpha1.TemporalClusterClient{
+			ObjectMeta: metav1.ObjectMeta{Name: ccName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalClusterClientSpec{
+				ClusterRef: temporalv1alpha1.ClusterReference{
+					Name: "some-dev-server",
+					Kind: temporalv1alpha1.ClusterKindTemporalDevServer,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, cc)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, cc) })
+
+		reconcileClient(ccName)
+
+		got := &temporalv1alpha1.TemporalClusterClient{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ccName, Namespace: "default"}, got)).To(Succeed())
+		cond := meta.FindStatusCondition(got.Status.Conditions, temporalv1alpha1.ConditionReady)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Reason).To(Equal("DevServerUnsupported"))
+	})
 })
