@@ -1,0 +1,12 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalMigration
+metadata:
+  name: orders-migration
+  namespace: temporal-system
+spec:
+  source:
+    address: old-temporal-frontend.legacy.svc.cluster.local:7233
+  targetRef:
+    name: orders
+  # Flip to true to begin routing new workflows to the target cluster.
+  cutover: false

@@ -48,6 +48,7 @@ for configurable values.
 |---|---|---|
 | `TemporalCluster` | `tc` | A complete Temporal server deployment. |
 | `TemporalDevServer` | `tds` | A disposable single-pod dev server (SQLite); for development/CI, not production. |
+| `TemporalMigration` | `tm` | Gradually migrate traffic from an external Temporal cluster to a managed one. |
 | `TemporalNamespace` | `tns` | A namespace within a managed cluster. |
 | `TemporalSearchAttribute` | `tsa` | A custom search attribute registration. |
 | `TemporalSchedule` | `tsch` | A declarative Temporal schedule (cron or interval). |

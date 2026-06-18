@@ -1,0 +1,25 @@
+# Temporal cluster migration via the upgrade proxy.
+#
+# Workflow:
+#   1. Apply this manifest with cutover: false. The proxy starts in passthrough
+#      mode and forwards 100% of traffic to the external source cluster.
+#   2. Repoint your clients (and workers) at status.proxyEndpoint.
+#   3. Run your workers against BOTH the source and target clusters for the
+#      duration of the migration.
+#   4. Patch cutover: true (kubectl patch temporalmigration orders-migration \
+#      --type merge -p '{"spec":{"cutover":true}}'). New workflows now start on
+#      the target; existing workflows keep draining on the source.
+#   5. Watch status.draining until status.phase becomes Complete.
+#   6. Repoint clients/workers directly at the target cluster frontend, then
+#      delete this TemporalMigration (the proxy is garbage-collected).
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalMigration
+metadata:
+  name: orders-migration
+  namespace: temporal-system
+spec:
+  source:
+    address: old-temporal-frontend.legacy.svc.cluster.local:7233
+  targetRef:
+    name: orders
+  cutover: false
