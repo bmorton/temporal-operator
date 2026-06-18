@@ -60,6 +60,29 @@ The [Resource Preview](https://bmorton.github.io/temporal-operator/tools/resourc
 tool runs in your browser (no install) and shows every Kubernetes object the
 operator would create for a pasted `TemporalCluster`.
 
+## Operator UI
+
+The operator ships an optional, read-only web UI that shows an overview of every
+TemporalCluster it manages and a per-cluster detail view (services, persistence,
+mTLS, endpoints, conditions, in-flight upgrades, and related namespaces, clients
+and search attributes).
+
+It is **disabled by default**. Enable it by setting `--ui-bind-address` (for
+example `:8082`) and front it with a forward-auth proxy (e.g. Authelia) — the
+operator does not authenticate users itself. See `examples/ui/` for a worked
+example.
+
+Because the Service routes directly to the pod, set `--ui-require-auth` (and
+optionally a NetworkPolicy; see `examples/ui/`) so direct in-cluster access
+cannot bypass the proxy.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--ui-bind-address` | _(empty)_ | UI listen address (e.g. `:8082`). Empty disables the UI. |
+| `--ui-refresh-interval` | `5s` | htmx auto-refresh interval. |
+| `--ui-base-path` | `/` | Serve the UI under a sub-path. |
+| `--ui-require-auth` | `false` | Return 401 when no trusted user header is present. |
+
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md). This project follows the

@@ -1,0 +1,24 @@
+# Example: front the operator UI with Authelia forward-auth (nginx ingress).
+# Adjust host, namespace, and Authelia URLs for your environment.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: temporal-operator-ui
+  namespace: temporal-operator-system
+  annotations:
+    nginx.ingress.kubernetes.io/auth-url: "https://auth.example.com/api/verify"
+    nginx.ingress.kubernetes.io/auth-signin: "https://auth.example.com/?rd=$target_url"
+    nginx.ingress.kubernetes.io/auth-response-headers: "Remote-User,Remote-Groups,Remote-Email,Remote-Name"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: temporal-operator.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: operator-ui
+                port:
+                  number: 8082
