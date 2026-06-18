@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	commonpb "go.temporal.io/api/common/v1"
 	enumspb "go.temporal.io/api/enums/v1"
 	schedulepb "go.temporal.io/api/schedule/v1"
@@ -382,6 +383,7 @@ func (c *grpcScheduleClient) Create(ctx context.Context, params ScheduleParams) 
 		ScheduleId: params.ScheduleID,
 		Schedule:   sched,
 		Identity:   scheduleIdentity,
+		RequestId:  uuid.NewString(),
 	})
 	return err
 }
@@ -396,6 +398,7 @@ func (c *grpcScheduleClient) Update(ctx context.Context, params ScheduleParams) 
 		ScheduleId: params.ScheduleID,
 		Schedule:   sched,
 		Identity:   scheduleIdentity,
+		RequestId:  uuid.NewString(),
 	})
 	return err
 }
