@@ -1,0 +1,61 @@
+/*
+Copyright 2026 Brian Morton.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package layouts
+
+import ui "github.com/bmorton/temporal-operator/internal/ui"
+
+// View carries per-request layout data.
+type View struct {
+	Title       string
+	BasePath    string
+	AssetVer    string
+	User        string
+	RefreshSecs int
+}
+
+func (v View) asset(name string) string {
+	return ui.JoinPath(v.BasePath, "/static/"+name) + "?v=" + v.AssetVer
+}
+
+templ Base(v View) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ v.Title } · temporal-operator</title>
+			<link rel="stylesheet" href={ v.asset("app.css") }/>
+			<script src={ v.asset("htmx.min.js") } defer></script>
+			<script src={ v.asset("alpine.min.js") } defer></script>
+		</head>
+		<body>
+			<header class="app">
+				<a class="brand" href={ ui.JoinPath(v.BasePath, "/") }>temporal-operator</a>
+				<span class="muted">
+					if v.User != "" {
+						Signed in as { v.User }
+					} else {
+						Not authenticated
+					}
+				</span>
+			</header>
+			<main>
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
