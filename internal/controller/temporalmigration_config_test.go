@@ -25,15 +25,20 @@ import (
 	"github.com/bmorton/temporal-operator/internal/proxy"
 )
 
+const (
+	testMigrationNamespace = "temporal-system"
+	testSourceAddress      = "old:7233"
+)
+
 func TestRenderProxyConfigPassthrough(t *testing.T) {
 	m := &temporalv1alpha1.TemporalMigration{}
 	m.Name = "mig"
-	m.Namespace = "temporal-system"
-	m.Spec.Source.Address = "old:7233"
+	m.Namespace = testMigrationNamespace
+	m.Spec.Source.Address = testSourceAddress
 	m.Spec.Cutover = false
 	cluster := &temporalv1alpha1.TemporalCluster{}
 	cluster.Name = "newcluster"
-	cluster.Namespace = "temporal-system"
+	cluster.Namespace = testMigrationNamespace
 
 	cfg, mounts, err := renderProxyConfig(m, cluster)
 	if err != nil {
@@ -42,7 +47,7 @@ func TestRenderProxyConfigPassthrough(t *testing.T) {
 	if cfg.Mode != proxy.ModePassthrough {
 		t.Errorf("mode = %q, want passthrough", cfg.Mode)
 	}
-	if cfg.Source.Address != "old:7233" {
+	if cfg.Source.Address != testSourceAddress {
 		t.Errorf("source = %q", cfg.Source.Address)
 	}
 	if cfg.Target.Address == "" {
@@ -56,8 +61,8 @@ func TestRenderProxyConfigPassthrough(t *testing.T) {
 func TestRenderProxyConfigCutoverWithSourceTLS(t *testing.T) {
 	m := &temporalv1alpha1.TemporalMigration{}
 	m.Name = "mig"
-	m.Namespace = "temporal-system"
-	m.Spec.Source.Address = "old:7233"
+	m.Namespace = testMigrationNamespace
+	m.Spec.Source.Address = testSourceAddress
 	m.Spec.Source.TLS = &temporalv1alpha1.SourceTLSSpec{
 		Enabled:   true,
 		SecretRef: &corev1.LocalObjectReference{Name: "old-tls"},
@@ -65,7 +70,7 @@ func TestRenderProxyConfigCutoverWithSourceTLS(t *testing.T) {
 	m.Spec.Cutover = true
 	cluster := &temporalv1alpha1.TemporalCluster{}
 	cluster.Name = "newcluster"
-	cluster.Namespace = "temporal-system"
+	cluster.Namespace = testMigrationNamespace
 
 	cfg, mounts, err := renderProxyConfig(m, cluster)
 	if err != nil {
