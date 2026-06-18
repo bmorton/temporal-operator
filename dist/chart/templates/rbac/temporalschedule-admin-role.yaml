@@ -5,20 +5,18 @@ metadata:
     labels:
         app.kubernetes.io/managed-by: {{ .Release.Service }}
         app.kubernetes.io/name: temporal-operator
-    name: temporal-operator-temporalnamespace-viewer-role
+    name: temporal-operator-temporalschedule-admin-role
 rules:
     - apiGroups:
         - temporal.bmor10.com
       resources:
-        - temporalnamespaces
+        - temporalschedules
       verbs:
-        - get
-        - list
-        - watch
+        - '*'
     - apiGroups:
         - temporal.bmor10.com
       resources:
-        - temporalnamespaces/status
+        - temporalschedules/status
       verbs:
         - get
 {{- end }}

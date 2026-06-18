@@ -1,14 +1,12 @@
-{{- if .Values.certManager.enabled }}
+{{- if .Values.certManager.enable }}
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
-  labels:
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "temporal-operator.name" . }}
-    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-  name: {{ include "temporal-operator.resourceName" (dict "suffix" "selfsigned-issuer" "context" $) }}
-  namespace: {{ .Release.Namespace }}
+    labels:
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/name: temporal-operator
+    name: temporal-operator-selfsigned-issuer
+    namespace: {{ .Release.Namespace }}
 spec:
-  selfSigned: {}
+    selfSigned: {}
 {{- end }}
