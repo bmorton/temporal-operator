@@ -4,6 +4,6 @@ kind: TemporalDevServer
 metadata:
   name: dev
 spec:
-  version: "latest"
+  version: "1.31.1"
   ui:
     enabled: true
