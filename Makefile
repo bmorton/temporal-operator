@@ -155,8 +155,8 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	"$(KUSTOMIZE)" build config/default > dist/install.yaml
 
 .PHONY: helm-chart
-helm-chart: ## (Re)generate the Helm chart under dist/chart from kustomize output.
-	kubebuilder edit --plugins=helm/v2-alpha
+helm-chart: kubebuilder ## (Re)generate the Helm chart under dist/chart from kustomize output.
+	$(KUBEBUILDER) edit --plugins=helm/v2-alpha
 
 .PHONY: helm-lint
 helm-lint: ## Lint the Helm chart (requires helm).
@@ -218,6 +218,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 CHAINSAW ?= $(LOCALBIN)/chainsaw
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
+KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.7.1
@@ -321,8 +322,13 @@ kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(LOCALBIN)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,$(KIND_VERSION))
 
+.PHONY: kubebuilder
+kubebuilder: $(KUBEBUILDER) ## Build kubebuilder (version pinned in hack/tools/go.mod) into ./bin.
+$(KUBEBUILDER): $(LOCALBIN) hack/tools/go.mod
+	cd hack/tools && GOBIN="$(LOCALBIN)" go install sigs.k8s.io/kubebuilder/v4
+
 .PHONY: install-tools
-install-tools: controller-gen kustomize envtest golangci-lint chainsaw crd-ref-docs kind ## Install all pinned developer tooling into ./bin.
+install-tools: controller-gen kustomize envtest golangci-lint chainsaw crd-ref-docs kind kubebuilder ## Install all pinned developer tooling into ./bin.
 	@echo "Developer tooling installed in $(LOCALBIN)."
 
 .PHONY: kind-up
