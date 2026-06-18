@@ -24,14 +24,15 @@ import (
 )
 
 func TestAssetVersionDeterministic(t *testing.T) {
-	if computeAssetVersion() == "" {
+	version := computeAssetVersion()
+	if version == "" {
 		t.Fatal("asset version empty")
 	}
-	if computeAssetVersion() != computeAssetVersion() {
+	if version != computeAssetVersion() {
 		t.Fatal("asset version not deterministic")
 	}
-	if len(computeAssetVersion()) != 12 {
-		t.Errorf("asset version length = %d, want 12", len(computeAssetVersion()))
+	if len(version) != 12 {
+		t.Errorf("asset version length = %d, want 12", len(version))
 	}
 }
 

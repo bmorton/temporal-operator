@@ -139,7 +139,7 @@ func TestGetClusterRelatedClientsAndAttributes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var kinds []string
+	kinds := make([]string, 0, len(got.Related))
 	for _, r := range got.Related {
 		kinds = append(kinds, r.Kind)
 	}

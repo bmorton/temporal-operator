@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+const opsBasePath = "/ops"
+
 func TestDefaultOptions(t *testing.T) {
 	o := DefaultOptions()
 	if o.BindAddress != ":8082" {
@@ -51,7 +53,7 @@ func TestNormalizePreservesExplicitValues(t *testing.T) {
 	o := Options{
 		BindAddress:     ":9000",
 		RefreshInterval: 30 * time.Second,
-		BasePath:        "/ops",
+		BasePath:        opsBasePath,
 		UserHeader:      "X-User",
 		GroupsHeader:    "X-Groups",
 		EmailHeader:     "X-Email",
@@ -62,8 +64,8 @@ func TestNormalizePreservesExplicitValues(t *testing.T) {
 	if o.RefreshInterval != 30*time.Second {
 		t.Errorf("RefreshInterval = %v, want 30s", o.RefreshInterval)
 	}
-	if o.BasePath != "/ops" {
-		t.Errorf("BasePath = %q, want /ops", o.BasePath)
+	if o.BasePath != opsBasePath {
+		t.Errorf("BasePath = %q, want %s", o.BasePath, opsBasePath)
 	}
 	if o.UserHeader != "X-User" || o.GroupsHeader != "X-Groups" || o.EmailHeader != "X-Email" {
 		t.Errorf("headers not preserved: %+v", o)
@@ -72,8 +74,8 @@ func TestNormalizePreservesExplicitValues(t *testing.T) {
 
 func TestNormalizeAddsLeadingSlash(t *testing.T) {
 	o := Options{BasePath: "ops"}.Normalize()
-	if o.BasePath != "/ops" {
-		t.Errorf("BasePath = %q, want /ops", o.BasePath)
+	if o.BasePath != opsBasePath {
+		t.Errorf("BasePath = %q, want %s", o.BasePath, opsBasePath)
 	}
 	d := DefaultOptions()
 	def := Options{}.Normalize()
@@ -84,8 +86,8 @@ func TestNormalizeAddsLeadingSlash(t *testing.T) {
 
 func TestNormalizeTrimsTrailingSlash(t *testing.T) {
 	o := Options{BasePath: "/ops/"}.Normalize()
-	if o.BasePath != "/ops" {
-		t.Errorf("BasePath = %q, want /ops", o.BasePath)
+	if o.BasePath != opsBasePath {
+		t.Errorf("BasePath = %q, want %s", o.BasePath, opsBasePath)
 	}
 }
 
