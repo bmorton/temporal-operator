@@ -149,4 +149,37 @@ var _ = Describe("TemporalSearchAttribute reconciler", func() {
 		err := k8sClient.Get(ctx, types.NamespacedName{Name: saName, Namespace: "default"}, &temporalv1alpha1.TemporalSearchAttribute{})
 		Expect(err).To(HaveOccurred())
 	})
+
+	It("removes the finalizer when the cluster is deleted before the search attribute", func() {
+		cluster := readyCluster()
+		saName := fmt.Sprintf("strandedattr-%d", counter)
+		sa := &temporalv1alpha1.TemporalSearchAttribute{
+			ObjectMeta: metav1.ObjectMeta{Name: saName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalSearchAttributeSpec{
+				ClusterRef: corev1.LocalObjectReference{Name: cluster},
+				Namespace:  "default",
+				Name:       "StrandedId",
+				Type:       "Keyword",
+			},
+		}
+		Expect(k8sClient.Create(ctx, sa)).To(Succeed())
+
+		reconcileSA(saName) // adds finalizer
+		reconcileSA(saName) // add + visible
+
+		// Simulate the user deleting the TemporalCluster first.
+		c := &temporalv1alpha1.TemporalCluster{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cluster, Namespace: "default"}, c)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, c)).To(Succeed())
+
+		// Now delete the search attribute — the finalizer keeps it Terminating.
+		Expect(k8sClient.Delete(ctx, sa)).To(Succeed())
+
+		// Reconcile: the cluster is gone, so the finalizer must be removed and
+		// the object fully released (no stuck Terminating state).
+		reconcileSA(saName)
+
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: saName, Namespace: "default"}, &temporalv1alpha1.TemporalSearchAttribute{})
+		Expect(err).To(HaveOccurred(), "search attribute should be gone after finalizer is removed")
+	})
 })

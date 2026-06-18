@@ -201,4 +201,32 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 
 		Expect(fake.deleted).NotTo(ContainElement(nsName))
 	})
+
+	It("removes the finalizer when the cluster is deleted before the namespace", func() {
+		cluster := readyCluster()
+		nsName := fmt.Sprintf("stranded-%d", counter)
+		ns := &temporalv1alpha1.TemporalNamespace{
+			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
+			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: cluster}},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+
+		reconcileNS(nsName) // adds finalizer
+		reconcileNS(nsName) // registers
+
+		// Simulate the user deleting the TemporalCluster first.
+		c := &temporalv1alpha1.TemporalCluster{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cluster, Namespace: "default"}, c)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, c)).To(Succeed())
+
+		// Now delete the namespace — the finalizer keeps it Terminating.
+		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+
+		// Reconcile: the cluster is gone, so the finalizer must be removed and
+		// the object fully released (no stuck Terminating state).
+		reconcileNS(nsName)
+
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: nsName, Namespace: "default"}, &temporalv1alpha1.TemporalNamespace{})
+		Expect(err).To(HaveOccurred(), "namespace should be gone after finalizer is removed")
+	})
 })

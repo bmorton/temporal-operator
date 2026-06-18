@@ -51,8 +51,6 @@ type TemporalSearchAttributeReconciler struct {
 
 // Reconcile registers or removes a custom search attribute.
 func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-
 	var sa temporalv1alpha1.TemporalSearchAttribute
 	if err := r.Get(ctx, req.NamespacedName, &sa); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -61,16 +59,25 @@ func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req c
 	var cluster temporalv1alpha1.TemporalCluster
 	clusterKey := types.NamespacedName{Namespace: sa.Namespace, Name: sa.Spec.ClusterRef.Name}
 	if err := r.Get(ctx, clusterKey, &cluster); err != nil {
+		if !sa.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sa)
+		}
 		r.setReady(&sa, metav1.ConditionFalse, "ClusterNotFound", "referenced TemporalCluster not found")
 		return ctrl.Result{RequeueAfter: time.Minute}, r.statusUpdate(ctx, &sa)
 	}
 
 	tlsConfig, err := clusterTLSConfig(ctx, r.Client, &cluster)
 	if err != nil {
+		if !sa.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sa)
+		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client tls: %w", err)
 	}
 	sac, err := r.clientFactory()(ctx, frontendAddress(&cluster), tlsConfig)
 	if err != nil {
+		if !sa.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sa)
+		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}
 	defer func() { _ = sac.Close() }()
@@ -91,23 +98,13 @@ func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req c
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, r.statusUpdate(ctx, &sa)
 	}
 
-	existing, err := sac.List(ctx, sa.Spec.Namespace)
+	registered, err := r.ensureRegistered(ctx, &sa, sac)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("listing search attributes: %w", err)
+		return ctrl.Result{}, err
 	}
-
-	if _, ok := existing[sa.Spec.Name]; !ok {
-		if err := sac.Add(ctx, sa.Spec.Namespace, sa.Spec.Name, sa.Spec.Type); err != nil {
-			return ctrl.Result{}, fmt.Errorf("adding search attribute: %w", err)
-		}
-		log.Info("registered search attribute", "namespace", sa.Spec.Namespace, "name", sa.Spec.Name)
-
-		// Registration triggers a system workflow; the attribute may not be
-		// immediately visible. Requeue to confirm.
-		if !r.attributeVisible(ctx, sac, &sa) {
-			r.setReady(&sa, metav1.ConditionFalse, temporalv1alpha1.ReasonReconciling, "waiting for the search attribute to become visible")
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, r.statusUpdate(ctx, &sa)
-		}
+	if !registered {
+		r.setReady(&sa, metav1.ConditionFalse, temporalv1alpha1.ReasonReconciling, "waiting for the search attribute to become visible")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, r.statusUpdate(ctx, &sa)
 	}
 
 	now := metav1.Now()
@@ -117,6 +114,29 @@ func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req c
 	}
 	r.setReady(&sa, metav1.ConditionTrue, "Registered", "search attribute is registered")
 	return ctrl.Result{}, r.statusUpdate(ctx, &sa)
+}
+
+// ensureRegistered adds the search attribute if it is not already present and
+// reports whether it is visible yet. Registration triggers a system workflow,
+// so a freshly added attribute may not be immediately visible; when it is not,
+// the caller should requeue.
+func (r *TemporalSearchAttributeReconciler) ensureRegistered(ctx context.Context, sa *temporalv1alpha1.TemporalSearchAttribute, sac temporal.SearchAttributeClient) (bool, error) {
+	existing, err := sac.List(ctx, sa.Spec.Namespace)
+	if err != nil {
+		return false, fmt.Errorf("listing search attributes: %w", err)
+	}
+	if _, ok := existing[sa.Spec.Name]; ok {
+		return true, nil
+	}
+
+	if err := sac.Add(ctx, sa.Spec.Namespace, sa.Spec.Name, sa.Spec.Type); err != nil {
+		return false, fmt.Errorf("adding search attribute: %w", err)
+	}
+	logf.FromContext(ctx).Info("registered search attribute", "namespace", sa.Spec.Namespace, "name", sa.Spec.Name)
+
+	// Registration triggers a system workflow; the attribute may not be
+	// immediately visible. The caller requeues to confirm.
+	return r.attributeVisible(ctx, sac, sa), nil
 }
 
 func (r *TemporalSearchAttributeReconciler) attributeVisible(ctx context.Context, sac temporal.SearchAttributeClient, sa *temporalv1alpha1.TemporalSearchAttribute) bool {
@@ -137,6 +157,20 @@ func (r *TemporalSearchAttributeReconciler) reconcileDelete(ctx context.Context,
 			}
 			log.Info("removed search attribute", "namespace", sa.Spec.Namespace, "name", sa.Spec.Name)
 		}
+		controllerutil.RemoveFinalizer(sa, searchAttributeFinalizer)
+		if err := r.Update(ctx, sa); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeFinalizerAndForget removes the search-attribute finalizer and returns a
+// clean result. It is used when the TemporalCluster (or its TLS/client) is
+// unreachable during deletion — there is nothing to clean up remotely, so we
+// just unblock GC.
+func (r *TemporalSearchAttributeReconciler) removeFinalizerAndForget(ctx context.Context, sa *temporalv1alpha1.TemporalSearchAttribute) error {
+	if controllerutil.ContainsFinalizer(sa, searchAttributeFinalizer) {
 		controllerutil.RemoveFinalizer(sa, searchAttributeFinalizer)
 		if err := r.Update(ctx, sa); err != nil {
 			return err

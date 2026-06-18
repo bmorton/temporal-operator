@@ -65,16 +65,25 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	var cluster temporalv1alpha1.TemporalCluster
 	clusterKey := types.NamespacedName{Namespace: ns.Namespace, Name: ns.Spec.ClusterRef.Name}
 	if err := r.Get(ctx, clusterKey, &cluster); err != nil {
+		if !ns.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &ns)
+		}
 		r.setReady(&ns, metav1.ConditionFalse, "ClusterNotFound", "referenced TemporalCluster not found")
 		return ctrl.Result{RequeueAfter: namespaceDriftRequeue}, r.statusUpdate(ctx, &ns)
 	}
 
 	tlsConfig, err := clusterTLSConfig(ctx, r.Client, &cluster)
 	if err != nil {
+		if !ns.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &ns)
+		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client tls: %w", err)
 	}
 	tc, err := r.clientFactory()(ctx, frontendAddress(&cluster), tlsConfig)
 	if err != nil {
+		if !ns.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &ns)
+		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}
 	defer func() { _ = tc.Close() }()
@@ -146,6 +155,20 @@ func (r *TemporalNamespaceReconciler) reconcileDelete(ctx context.Context, ns *t
 			}
 			log.Info("deleted temporal namespace", "namespace", namespaceParams(ns).Name)
 		}
+		controllerutil.RemoveFinalizer(ns, namespaceFinalizer)
+		if err := r.Update(ctx, ns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeFinalizerAndForget removes the namespace finalizer and returns a clean
+// result. It is used when the TemporalCluster (or its TLS/client) is
+// unreachable during deletion — there is nothing to clean up remotely, so we
+// just unblock GC.
+func (r *TemporalNamespaceReconciler) removeFinalizerAndForget(ctx context.Context, ns *temporalv1alpha1.TemporalNamespace) error {
+	if controllerutil.ContainsFinalizer(ns, namespaceFinalizer) {
 		controllerutil.RemoveFinalizer(ns, namespaceFinalizer)
 		if err := r.Update(ctx, ns); err != nil {
 			return err
