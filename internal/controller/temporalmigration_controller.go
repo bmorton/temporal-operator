@@ -57,6 +57,9 @@ type TemporalMigrationReconciler struct {
 	// required before declaring Complete. Defaults to 3.
 	DrainStableThreshold int
 
+	// zeroStreak tracks consecutive all-zero drain observations per migration.
+	// It is in-memory only (reset on operator restart) and assumes the
+	// controller runs with MaxConcurrentReconciles=1, so access is serialized.
 	zeroStreak map[types.NamespacedName]int
 }
 
