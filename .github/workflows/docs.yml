@@ -42,6 +42,7 @@ jobs:
             docs/**/*.md
             examples/**/*.md
             !docs/content/reference/**
+            !docs/content/examples/**
             !docs/api/**
             !docs/themes/**
             !docs/superpowers/**
@@ -49,7 +50,7 @@ jobs:
       - name: Check links
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
         with:
-          args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md --exclude-path docs/content/reference --exclude-path docs/api --exclude-path docs/themes --exclude-path docs/superpowers
+          args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md --exclude-path docs/content/reference --exclude-path docs/content/examples --exclude-path docs/api --exclude-path docs/themes --exclude-path docs/superpowers
           fail: false
 
   preview-wasm:
@@ -78,6 +79,8 @@ jobs:
         with:
           hugo-version: "0.140.2"
           extended: true
+      - name: Generate examples docs
+        run: make docs-examples
       - name: Build site (no deploy)
         run: PATH="$PWD/docs/node_modules/.bin:$PATH" hugo --source docs --minify
 
@@ -122,6 +125,8 @@ jobs:
         with:
           hugo-version: "0.140.2"
           extended: true
+      - name: Generate examples docs
+        run: make docs-examples
       - name: Build site
         env:
           BASE_URL: ${{ steps.pages.outputs.base_url }}
