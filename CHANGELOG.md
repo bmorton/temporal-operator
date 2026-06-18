@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/bmorton/temporal-operator/compare/v0.4.0...v0.5.0) (2026-06-18)
+
+
+### Features
+
+* add TemporalSchedule CRD ([#57](https://github.com/bmorton/temporal-operator/issues/57)) ([1ea4778](https://github.com/bmorton/temporal-operator/commit/1ea47784319c6161cae4fa1de31ef72da5b623bb))
+
 ## [0.4.0](https://github.com/bmorton/temporal-operator/compare/v0.3.0...v0.4.0) (2026-06-17)
 
 
