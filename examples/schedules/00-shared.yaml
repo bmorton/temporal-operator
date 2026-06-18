@@ -1,0 +1,32 @@
+# Shared prerequisites for the schedule examples in this directory.
+#
+# Every schedule here points at this cluster (clusterRef.name: app) and runs in
+# this namespace (namespace: scheduling). Apply this file first, then any of the
+# per-schedule files.
+#
+# Reusing an existing cluster/namespace? Skip this file and update clusterRef /
+# namespace in the schedule files to match your environment. The operator does
+# NOT auto-create Temporal namespaces, so the namespace must be registered by a
+# TemporalNamespace before a schedule can use it.
+---
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: app
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql: { pluginName: postgres12, host: postgres.default.svc, port: 5432, database: temporal, user: temporal, passwordSecretRef: { name: temporal-store, key: password } }
+    visibilityStore:
+      sql: { pluginName: postgres12, host: postgres.default.svc, port: 5432, database: temporal_visibility, user: temporal, passwordSecretRef: { name: temporal-store, key: password } }
+---
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: scheduling
+spec:
+  clusterRef: { name: app }
+  retentionPeriod: "168h"
+  description: "Namespace for schedule examples"
