@@ -113,6 +113,8 @@ func devServerVolume(dev *temporalv1alpha1.TemporalDevServer) corev1.Volume {
 	}
 }
 
+func devServerFSGroup() *int64 { v := int64(1000); return &v }
+
 // BuildDevServerDeployment builds the single-replica Deployment that runs
 // `temporal server start-dev`.
 func BuildDevServerDeployment(dev *temporalv1alpha1.TemporalDevServer) *appsv1.Deployment {
@@ -156,6 +158,7 @@ func BuildDevServerDeployment(dev *temporalv1alpha1.TemporalDevServer) *appsv1.D
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
+					SecurityContext:  &corev1.PodSecurityContext{FSGroup: devServerFSGroup()},
 					ImagePullSecrets: dev.Spec.ImagePullSecrets,
 					NodeSelector:     dev.Spec.NodeSelector,
 					Tolerations:      dev.Spec.Tolerations,

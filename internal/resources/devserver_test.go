@@ -98,6 +98,15 @@ func TestBuildDevServerEphemeralVolume(t *testing.T) {
 	}
 }
 
+func TestBuildDevServerPodSecurityContext(t *testing.T) {
+	dev := devServerFixture()
+	dep := BuildDevServerDeployment(dev)
+	sc := dep.Spec.Template.Spec.SecurityContext
+	if sc == nil || sc.FSGroup == nil || *sc.FSGroup != 1000 {
+		t.Fatalf("expected pod SecurityContext.FSGroup=1000, got %+v", sc)
+	}
+}
+
 func TestBuildDevServerPersistentVolume(t *testing.T) {
 	dev := devServerFixture()
 	dev.Spec.Storage = &temporalv1alpha1.DevServerStorageSpec{Type: "Persistent"}
