@@ -175,7 +175,7 @@ var _ = Describe("TemporalClusterClient reconciler", func() {
 		cc := &temporalv1alpha1.TemporalClusterClient{
 			ObjectMeta: metav1.ObjectMeta{Name: ccName, Namespace: "default"},
 			Spec: temporalv1alpha1.TemporalClusterClientSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: cluster},
+				ClusterRef: temporalv1alpha1.ClusterReference{Name: cluster},
 				SecretName: ccName + "-creds",
 			},
 		}
@@ -213,7 +213,7 @@ var _ = Describe("TemporalClusterClient reconciler", func() {
 		ccName := fmt.Sprintf("client-nomtls-%d", counter)
 		cc := &temporalv1alpha1.TemporalClusterClient{
 			ObjectMeta: metav1.ObjectMeta{Name: ccName, Namespace: "default"},
-			Spec:       temporalv1alpha1.TemporalClusterClientSpec{ClusterRef: corev1.LocalObjectReference{Name: clusterName}},
+			Spec:       temporalv1alpha1.TemporalClusterClientSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: clusterName}},
 		}
 		Expect(k8sClient.Create(ctx, cc)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, cc) })

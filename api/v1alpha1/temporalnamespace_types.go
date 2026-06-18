@@ -17,14 +17,14 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TemporalNamespaceSpec defines the desired state of TemporalNamespace.
 type TemporalNamespaceSpec struct {
-	// ClusterRef references the TemporalCluster that owns this namespace.
-	ClusterRef corev1.LocalObjectReference `json:"clusterRef"`
+	// ClusterRef references the TemporalCluster or TemporalDevServer that owns
+	// this namespace.
+	ClusterRef ClusterReference `json:"clusterRef"`
 
 	// RetentionPeriod is how long closed workflows are retained.
 	// +kubebuilder:default="72h"

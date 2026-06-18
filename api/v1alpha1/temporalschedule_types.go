@@ -17,15 +17,14 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // TemporalScheduleSpec defines the desired state of TemporalSchedule.
 type TemporalScheduleSpec struct {
-	// ClusterRef references the TemporalCluster that hosts this schedule.
-	ClusterRef corev1.LocalObjectReference `json:"clusterRef"`
+	// ClusterRef references the TemporalCluster or TemporalDevServer that hosts this schedule.
+	ClusterRef ClusterReference `json:"clusterRef"`
 
 	// Namespace is the Temporal namespace the schedule lives in.
 	Namespace string `json:"namespace"`

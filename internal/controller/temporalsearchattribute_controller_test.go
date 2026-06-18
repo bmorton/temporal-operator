@@ -23,7 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -102,7 +101,7 @@ var _ = Describe("TemporalSearchAttribute reconciler", func() {
 		sa := &temporalv1alpha1.TemporalSearchAttribute{
 			ObjectMeta: metav1.ObjectMeta{Name: saName, Namespace: "default"},
 			Spec: temporalv1alpha1.TemporalSearchAttributeSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: cluster},
+				ClusterRef: temporalv1alpha1.ClusterReference{Name: cluster},
 				Namespace:  "default",
 				Name:       "CustomerId",
 				Type:       "Keyword",
@@ -129,7 +128,7 @@ var _ = Describe("TemporalSearchAttribute reconciler", func() {
 		sa := &temporalv1alpha1.TemporalSearchAttribute{
 			ObjectMeta: metav1.ObjectMeta{Name: saName, Namespace: "default"},
 			Spec: temporalv1alpha1.TemporalSearchAttributeSpec{
-				ClusterRef:    corev1.LocalObjectReference{Name: cluster},
+				ClusterRef:    temporalv1alpha1.ClusterReference{Name: cluster},
 				Namespace:     "default",
 				Name:          "OrderId",
 				Type:          "Keyword",
@@ -156,7 +155,7 @@ var _ = Describe("TemporalSearchAttribute reconciler", func() {
 		sa := &temporalv1alpha1.TemporalSearchAttribute{
 			ObjectMeta: metav1.ObjectMeta{Name: saName, Namespace: "default"},
 			Spec: temporalv1alpha1.TemporalSearchAttributeSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: cluster},
+				ClusterRef: temporalv1alpha1.ClusterReference{Name: cluster},
 				Namespace:  "default",
 				Name:       "StrandedId",
 				Type:       "Keyword",
