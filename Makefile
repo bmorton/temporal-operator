@@ -309,12 +309,16 @@ docs-crd-reference: crd-ref-docs ## Generate the Hugo CRD reference page (docs/c
 	@rm -f docs/content/reference/.crd-reference-body.md docs/content/reference/crds.md
 	@echo "Generated docs/content/reference/_index.md"
 
+.PHONY: docs-examples
+docs-examples: ## Generate the Hugo examples pages from examples/ (git-ignored).
+	./hack/build-examples-docs.sh
+
 .PHONY: docs-serve
-docs-serve: ## Serve the documentation site locally at http://localhost:1313 (requires Hugo Extended).
+docs-serve: docs-examples ## Serve the documentation site locally at http://localhost:1313 (requires Hugo Extended).
 	hugo server --source docs
 
 .PHONY: docs-build
-docs-build: ## Build the documentation site into docs/public (requires Hugo Extended).
+docs-build: docs-examples ## Build the documentation site into docs/public (requires Hugo Extended).
 	hugo --source docs --minify
 
 .PHONY: kind

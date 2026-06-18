@@ -28,6 +28,7 @@ docs/public/
 docs/resources/
 .hugo_build.lock
 docs/content/reference/.crd-reference-body.md
+docs/content/examples/
 .worktrees
 
 # Generated WebAssembly resource-preview assets (rebuilt on every docs deploy)
