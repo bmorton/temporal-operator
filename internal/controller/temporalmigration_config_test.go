@@ -27,20 +27,22 @@ import (
 
 const (
 	testMigrationNamespace = "temporal-system"
+	testMigrationName      = "mig"
+	testClusterName        = "newcluster"
 	testSourceAddress      = "old:7233"
 )
 
 func TestRenderProxyConfigPassthrough(t *testing.T) {
 	m := &temporalv1alpha1.TemporalMigration{}
-	m.Name = "mig"
+	m.Name = testMigrationName
 	m.Namespace = testMigrationNamespace
 	m.Spec.Source.Address = testSourceAddress
 	m.Spec.Cutover = false
 	cluster := &temporalv1alpha1.TemporalCluster{}
-	cluster.Name = "newcluster"
+	cluster.Name = testClusterName
 	cluster.Namespace = testMigrationNamespace
 
-	cfg, mounts, err := renderProxyConfig(m, cluster)
+	cfg, mounts, err := renderProxyConfig(m, cluster, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +62,7 @@ func TestRenderProxyConfigPassthrough(t *testing.T) {
 
 func TestRenderProxyConfigCutoverWithSourceTLS(t *testing.T) {
 	m := &temporalv1alpha1.TemporalMigration{}
-	m.Name = "mig"
+	m.Name = testMigrationName
 	m.Namespace = testMigrationNamespace
 	m.Spec.Source.Address = testSourceAddress
 	m.Spec.Source.TLS = &temporalv1alpha1.SourceTLSSpec{
@@ -69,10 +71,10 @@ func TestRenderProxyConfigCutoverWithSourceTLS(t *testing.T) {
 	}
 	m.Spec.Cutover = true
 	cluster := &temporalv1alpha1.TemporalCluster{}
-	cluster.Name = "newcluster"
+	cluster.Name = testClusterName
 	cluster.Namespace = testMigrationNamespace
 
-	cfg, mounts, err := renderProxyConfig(m, cluster)
+	cfg, mounts, err := renderProxyConfig(m, cluster, &sourceTLSFiles{HasCA: true, HasClientCert: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,38 @@ func TestRenderProxyConfigCutoverWithSourceTLS(t *testing.T) {
 	if cfg.Source.TLS == nil || cfg.Source.TLS.CAFile == "" {
 		t.Errorf("source TLS not rendered: %+v", cfg.Source.TLS)
 	}
+	if cfg.Source.TLS.CertFile == "" {
+		t.Errorf("source client cert not rendered: %+v", cfg.Source.TLS)
+	}
 	if len(mounts) != 1 || mounts[0].SecretName != "old-tls" {
 		t.Errorf("expected one source-tls mount, got %+v", mounts)
+	}
+}
+
+func TestRenderProxyConfigSourceTLSCAOnly(t *testing.T) {
+	m := &temporalv1alpha1.TemporalMigration{}
+	m.Name = testMigrationName
+	m.Namespace = testMigrationNamespace
+	m.Spec.Source.Address = testSourceAddress
+	m.Spec.Source.TLS = &temporalv1alpha1.SourceTLSSpec{
+		Enabled:   true,
+		SecretRef: &corev1.LocalObjectReference{Name: "old-tls"},
+	}
+	cluster := &temporalv1alpha1.TemporalCluster{}
+	cluster.Name = testClusterName
+	cluster.Namespace = testMigrationNamespace
+
+	cfg, mounts, err := renderProxyConfig(m, cluster, &sourceTLSFiles{HasCA: true, HasClientCert: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Source.TLS == nil || cfg.Source.TLS.CAFile == "" {
+		t.Errorf("expected CAFile set, got %+v", cfg.Source.TLS)
+	}
+	if cfg.Source.TLS.CertFile != "" || cfg.Source.TLS.KeyFile != "" {
+		t.Errorf("expected no client cert for CA-only secret, got CertFile=%q KeyFile=%q", cfg.Source.TLS.CertFile, cfg.Source.TLS.KeyFile)
+	}
+	if len(mounts) != 1 {
+		t.Errorf("expected one mount, got %d", len(mounts))
 	}
 }

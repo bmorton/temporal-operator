@@ -147,7 +147,11 @@ func (r *TemporalMigrationReconciler) setProxyReadyCondition(ctx context.Context
 
 // provisionProxy renders config and applies the ConfigMap, Service, Deployment.
 func (r *TemporalMigrationReconciler) provisionProxy(ctx context.Context, mig *temporalv1alpha1.TemporalMigration, cluster *temporalv1alpha1.TemporalCluster) error {
-	cfg, mounts, err := renderProxyConfig(mig, cluster)
+	srcFiles, err := r.sourceTLSFiles(ctx, mig)
+	if err != nil {
+		return err
+	}
+	cfg, mounts, err := renderProxyConfig(mig, cluster, srcFiles)
 	if err != nil {
 		return err
 	}
@@ -286,6 +290,25 @@ func (r *TemporalMigrationReconciler) sourceTLS(ctx context.Context, mig *tempor
 		return nil, nil
 	}
 	return buildSourceTLSConfig(ctx, r.Client, mig.Namespace, t)
+}
+
+// sourceTLSFiles reports which TLS materials the source secret contains, so the
+// proxy config only references files that the mounted Secret will actually
+// project (one-way TLS omits the client cert; system roots omit the CA).
+func (r *TemporalMigrationReconciler) sourceTLSFiles(ctx context.Context, mig *temporalv1alpha1.TemporalMigration) (*sourceTLSFiles, error) {
+	t := mig.Spec.Source.TLS
+	if t == nil || !t.Enabled || t.SecretRef == nil {
+		return nil, nil
+	}
+	var secret corev1.Secret
+	key := types.NamespacedName{Namespace: mig.Namespace, Name: t.SecretRef.Name}
+	if err := r.Get(ctx, key, &secret); err != nil {
+		return nil, fmt.Errorf("reading source tls secret %s: %w", key, err)
+	}
+	return &sourceTLSFiles{
+		HasCA:         len(secret.Data["ca.crt"]) > 0,
+		HasClientCert: len(secret.Data["tls.crt"]) > 0 && len(secret.Data["tls.key"]) > 0,
+	}, nil
 }
 
 func (r *TemporalMigrationReconciler) proxyImage() string {

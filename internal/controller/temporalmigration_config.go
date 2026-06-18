@@ -32,13 +32,20 @@ type secretMount struct {
 	MountPath  string
 }
 
+// sourceTLSFiles reports which TLS materials the source secret actually
+// contains, so the proxy only references files that will exist on disk.
+type sourceTLSFiles struct {
+	HasCA         bool
+	HasClientCert bool
+}
+
 const (
 	sourceTLSMountPath = "/etc/migration-proxy/source-tls"
 	targetTLSMountPath = "/etc/migration-proxy/target-tls"
 )
 
 // renderProxyConfig builds the proxy config and required secret mounts.
-func renderProxyConfig(m *temporalv1alpha1.TemporalMigration, cluster *temporalv1alpha1.TemporalCluster) (*proxy.Config, []secretMount, error) {
+func renderProxyConfig(m *temporalv1alpha1.TemporalMigration, cluster *temporalv1alpha1.TemporalCluster, srcFiles *sourceTLSFiles) (*proxy.Config, []secretMount, error) {
 	mode := proxy.ModePassthrough
 	if m.Spec.Cutover {
 		mode = proxy.ModeCutover
@@ -57,12 +64,15 @@ func renderProxyConfig(m *temporalv1alpha1.TemporalMigration, cluster *temporalv
 		if t.SecretRef == nil {
 			return nil, nil, fmt.Errorf("source.tls.enabled requires source.tls.secretRef")
 		}
-		cfg.Source.TLS = &proxy.BackendTLS{
-			CAFile:     sourceTLSMountPath + "/ca.crt",
-			CertFile:   sourceTLSMountPath + "/tls.crt",
-			KeyFile:    sourceTLSMountPath + "/tls.key",
-			ServerName: t.ServerName,
+		backend := &proxy.BackendTLS{ServerName: t.ServerName}
+		if srcFiles != nil && srcFiles.HasCA {
+			backend.CAFile = sourceTLSMountPath + "/ca.crt"
 		}
+		if srcFiles != nil && srcFiles.HasClientCert {
+			backend.CertFile = sourceTLSMountPath + "/tls.crt"
+			backend.KeyFile = sourceTLSMountPath + "/tls.key"
+		}
+		cfg.Source.TLS = backend
 		mounts = append(mounts, secretMount{SecretName: t.SecretRef.Name, MountPath: sourceTLSMountPath})
 	}
 
