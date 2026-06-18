@@ -208,3 +208,24 @@ type ClusterMetadataSpec struct {
 	// +optional
 	Raw *runtime.RawExtension `json:"raw,omitempty"`
 }
+
+// Cluster reference kinds for ClusterReference.Kind.
+const (
+	// ClusterKindTemporalCluster references a full TemporalCluster.
+	ClusterKindTemporalCluster = "TemporalCluster"
+	// ClusterKindTemporalDevServer references a disposable TemporalDevServer.
+	ClusterKindTemporalDevServer = "TemporalDevServer"
+)
+
+// ClusterReference points at a Temporal frontend in the same Kubernetes
+// namespace: either a TemporalCluster (default) or a TemporalDevServer.
+type ClusterReference struct {
+	// Name is the name of the referenced object.
+	Name string `json:"name"`
+
+	// Kind selects the referenced object type.
+	// +kubebuilder:validation:Enum=TemporalCluster;TemporalDevServer
+	// +kubebuilder:default=TemporalCluster
+	// +optional
+	Kind string `json:"kind,omitempty"`
+}
