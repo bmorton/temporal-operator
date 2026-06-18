@@ -109,8 +109,9 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 ##@ Build
 
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
+build: manifests generate fmt vet ## Build manager and migration-proxy binaries.
 	go build -o bin/manager cmd/main.go
+	go build -o bin/migration-proxy ./cmd/migration-proxy
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
