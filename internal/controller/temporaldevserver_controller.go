@@ -46,6 +46,7 @@ type TemporalDevServerReconciler struct {
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporaldevservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporaldevservers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporaldevservers/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile applies the dev server resources and updates status.
 func (r *TemporalDevServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
