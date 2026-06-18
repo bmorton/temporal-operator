@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
+	github.com/a-h/templ v0.3.1020
 	github.com/cert-manager/cert-manager v1.20.2
 	github.com/gocql/gocql v1.7.0
 	github.com/jackc/pgx/v5 v5.10.0
