@@ -64,7 +64,9 @@ while IFS= read -r dir; do
     for yf in "${yaml_files[@]}"; do
       printf '### %s\n\n' "${yf}"
       printf '```yaml\n'
-      cat "${dir}/${yf}"
+      # Normalize the trailing newline so the closing fence is always on its
+      # own line, even if the manifest does not end in a newline.
+      printf '%s\n' "$(cat "${dir}/${yf}")"
       printf '```\n\n'
     done
   } > "${page}"
