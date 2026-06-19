@@ -92,6 +92,9 @@ spec:
             content: |
               kubectl patch temporalmigration orders-migration -n $NAMESPACE \
                 --type merge -p '{"spec":{"cutover":true}}'
+        # cutoverTime is set in the same reconcile that re-renders the proxy
+        # Deployment into cutover mode, so waiting for it guarantees the new
+        # proxy config has been applied before we check the rollout.
         - assert:
             resource:
               apiVersion: temporal.bmor10.com/v1alpha1
@@ -99,7 +102,12 @@ spec:
               metadata:
                 name: orders-migration
               status:
-                phase: Cutover
+                (cutoverTime != null): true
+        # Wait for the cutover-mode proxy pod to fully roll out before starting
+        # the cutover client, so requests cannot hit the old passthrough pod.
+        - script:
+            content: |
+              kubectl rollout status deployment/orders-migration-proxy -n $NAMESPACE --timeout=120s
     - name: assert-cutover-runs-on-target
       try:
         - apply:
