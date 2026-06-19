@@ -40,6 +40,7 @@ type versionInfo struct {
 	AllowedFromVersions          []string `json:"allowedFromVersions"`
 	UISeries                     string   `json:"uiSeries"`
 	DefaultUIVersion             string   `json:"defaultUIVersion"`
+	DevServerCLIVersion          string   `json:"devServerCLIVersion"`
 	CassandraVisibilitySupported bool     `json:"cassandraVisibilitySupported"`
 	RemovedDynamicConfig         []string `json:"removedDynamicConfig"`
 	AddedDynamicConfig           []string `json:"addedDynamicConfig"`
@@ -66,6 +67,7 @@ var supportedVersions = []VersionInfo{
 		AllowedFromVersions:          {{ strSlice .AllowedFromVersions }},
 		UISeries:                     {{ printf "%q" .UISeries }},
 		DefaultUIVersion:             {{ printf "%q" .DefaultUIVersion }},
+		DevServerCLIVersion:          {{ printf "%q" .DevServerCLIVersion }},
 		CassandraVisibilitySupported: {{ .CassandraVisibilitySupported }},
 		RemovedDynamicConfig:         {{ strSlice .RemovedDynamicConfig }},
 		AddedDynamicConfig:           {{ strSlice .AddedDynamicConfig }},
