@@ -72,8 +72,8 @@ func (b *cassandraBackend) SchemaVersion(ctx context.Context) (string, error) {
 
 	var version string
 	err = session.Query(
-		"SELECT curr_version FROM schema_version WHERE version_partition = ? AND db_name = ?",
-		0, b.spec.Keyspace,
+		"SELECT curr_version FROM schema_version WHERE keyspace_name = ?",
+		b.spec.Keyspace,
 	).WithContext(ctx).Scan(&version)
 	switch {
 	case errors.Is(err, gocql.ErrNotFound):
