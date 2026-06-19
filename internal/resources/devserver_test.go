@@ -115,9 +115,17 @@ func TestDevServerImageUnsupportedVersion(t *testing.T) {
 	if _, err := DevServerImage(dev); err == nil {
 		t.Fatal("expected an error for an unsupported version, got nil")
 	}
-	dev.Spec.Version = "1.31.999"
-	if _, err := DevServerImage(dev); err == nil {
-		t.Fatal("expected an error for an unsupported patch version, got nil")
+}
+
+func TestDevServerImageUnknownPatchResolvesToLine(t *testing.T) {
+	dev := devServerFixture()
+	dev.Spec.Version = "1.31.999" // unknown exact patch, but the 1.31 line is known
+	img, err := DevServerImage(dev)
+	if err != nil {
+		t.Fatalf("DevServerImage: %v", err)
+	}
+	if img != "temporalio/temporal:1.7.2" {
+		t.Fatalf("image = %q, want temporalio/temporal:1.7.2 (resolved by minor line)", img)
 	}
 }
 

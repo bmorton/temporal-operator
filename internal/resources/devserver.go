@@ -78,10 +78,6 @@ func DevServerImage(dev *temporalv1alpha1.TemporalDevServer) (string, error) {
 	if version == "" {
 		version = temporal.LatestSupportedVersion()
 	}
-	if !temporal.IsSupported(version) {
-		return "", fmt.Errorf("unsupported dev server version %q: not in the supported matrix %v",
-			version, temporal.SupportedVersions())
-	}
 	cli := temporal.DevServerCLIVersion(version)
 	if cli == "" {
 		return "", fmt.Errorf("unsupported dev server version %q: not in the supported matrix %v",
