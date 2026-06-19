@@ -45,6 +45,7 @@ func TestBaseRendersRootBasePathURLs(t *testing.T) {
 		`href="/static/app.css?v=abc123"`,
 		`src="/static/htmx.min.js?v=abc123"`,
 		`src="/static/alpine.min.js?v=abc123"`,
+		`src="/static/app.js?v=abc123"`,
 		`href="/"`,
 	} {
 		if !strings.Contains(html, want) {
@@ -53,6 +54,20 @@ func TestBaseRendersRootBasePathURLs(t *testing.T) {
 	}
 	if strings.Contains(html, `href="//`) || strings.Contains(html, `src="//`) {
 		t.Errorf("rendered HTML contains protocol-relative URL:\n%s", html)
+	}
+}
+
+func TestBaseRendersLiveControls(t *testing.T) {
+	html := renderComponent(t, Base(View{Title: "Clusters", BasePath: "/", AssetVer: "abc123"}))
+	for _, want := range []string{
+		`$store.live.toggle()`,
+		`$store.live.paused`,
+		`x-text="$store.live.last`,
+		`>Pause</button>`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("rendered HTML missing live control %q:\n%s", want, html)
+		}
 	}
 }
 
@@ -67,6 +82,7 @@ func TestBaseRendersPrefixedBasePathURLs(t *testing.T) {
 		`href="/ops/static/app.css?v=abc123"`,
 		`src="/ops/static/htmx.min.js?v=abc123"`,
 		`src="/ops/static/alpine.min.js?v=abc123"`,
+		`src="/ops/static/app.js?v=abc123"`,
 		`href="/ops/"`,
 	} {
 		if !strings.Contains(html, want) {

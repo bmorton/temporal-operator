@@ -100,6 +100,18 @@ func TestStaticRouteServesRootBasePath(t *testing.T) {
 	}
 }
 
+func TestStaticRouteServesAppJS(t *testing.T) {
+	s := newTestServer(&fakeDS{}, DefaultOptions())
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/static/app.js", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("code = %d, want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "__uiLivePaused") {
+		t.Error("app.js missing live-control logic")
+	}
+}
+
 func TestStaticRouteServesPrefixedBasePath(t *testing.T) {
 	opts := DefaultOptions()
 	opts.BasePath = "/ops"

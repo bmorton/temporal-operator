@@ -113,3 +113,33 @@ func TestClusterDetailPageRendersPrefixedURLs(t *testing.T) {
 		}
 	}
 }
+
+func TestOverviewRendersPausablePolling(t *testing.T) {
+	html := renderComponent(t, Overview(layouts.View{
+		Title: "Clusters", BasePath: "/", AssetVer: "abc123", RefreshSecs: 5,
+	}, nil))
+	for _, want := range []string{
+		`data-live`,
+		`every 5s [!window.__uiLivePaused], live:resume`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("overview missing %q:\n%s", want, html)
+		}
+	}
+}
+
+func TestClusterDetailRendersPausablePolling(t *testing.T) {
+	html := renderComponent(t, ClusterDetailPage(layouts.View{
+		Title: "demo", BasePath: "/", AssetVer: "abc123", RefreshSecs: 5,
+	}, ui.ClusterDetail{
+		ClusterSummary: ui.ClusterSummary{Namespace: "default", Name: "demo"},
+	}))
+	for _, want := range []string{
+		`data-live`,
+		`every 5s [!window.__uiLivePaused], live:resume`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("detail missing %q:\n%s", want, html)
+		}
+	}
+}

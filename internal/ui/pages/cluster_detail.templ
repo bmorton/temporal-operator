@@ -49,7 +49,9 @@ templ DetailBody(d ui.ClusterDetail) {
 	</div>
 	<div class="card"><h3>Services</h3>@components.ServiceTable(d.Services)</div>
 	<div class="card"><h3>Persistence</h3>@components.PersistencePanel(d.Persistence)</div>
-	<div class="card"><h3>Endpoints</h3>@components.EndpointsPanel(d.Endpoints)</div>
+	if d.Endpoints.HasAny() {
+		<div class="card"><h3>Endpoints</h3>@components.EndpointsPanel(d.Endpoints)</div>
+	}
 	<div class="card"><h3>Conditions</h3>@components.ConditionList(d.Conditions)</div>
 	<div class="card"><h3>Related resources</h3>@components.RelatedResources(d.Related)</div>
 }
@@ -59,8 +61,9 @@ templ ClusterDetailPage(v layouts.View, d ui.ClusterDetail) {
 		<p><a href={ ui.JoinPath(v.BasePath, "/") }>← All clusters</a></p>
 		<h2>{ d.Namespace }/{ d.Name }</h2>
 		<div
+			data-live
 			hx-get={ ui.JoinPath(v.BasePath, "/partials/clusters/" + d.Namespace + "/" + d.Name) }
-			hx-trigger={ "every " + strconv.Itoa(v.RefreshSecs) + "s" }
+			hx-trigger={ "every " + strconv.Itoa(v.RefreshSecs) + "s [!window.__uiLivePaused], live:resume" }
 			hx-swap="innerHTML"
 		>
 			@DetailBody(d)
