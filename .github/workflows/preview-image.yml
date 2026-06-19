@@ -53,8 +53,11 @@ jobs:
             base="$INPUT_BASE"
             if [ -z "$base" ]; then
               # Latest published (non-prerelease, non-draft) release tag; fall
-              # back to 0.0.0 when the repo has no releases yet.
-              latest="$(gh api "repos/${REPO}/releases/latest" -q .tag_name 2>/dev/null || echo "v0.0.0")"
+              # back to 0.0.0 when the repo has no releases yet. The fallback is
+              # outside the command substitution so a failing (e.g. 404) gh call
+              # cannot leak its response body into the captured value.
+              latest="$(gh api "repos/${REPO}/releases/latest" -q .tag_name 2>/dev/null)" || latest=""
+              latest="${latest:-v0.0.0}"
               latest="${latest#v}"
               major="${latest%%.*}"
               rest="${latest#*.}"
