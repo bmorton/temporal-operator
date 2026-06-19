@@ -40,6 +40,13 @@ spec:
                     - /manager
                   image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
                   imagePullPolicy: {{ .Values.manager.image.pullPolicy }}
+                  env:
+                    # The migration proxy runs from the operator image, so it
+                    # must point at an image that ships the /migration-proxy
+                    # binary. Default to the operator's own image so the two
+                    # always stay in sync.
+                    - name: MIGRATION_PROXY_IMAGE
+                      value: "{{ .Values.manager.migrationProxyImage | default (printf "%s:%s" .Values.manager.image.repository (.Values.manager.image.tag | default .Chart.AppVersion)) }}"
                   livenessProbe:
                     httpGet:
                         path: /healthz

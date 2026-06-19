@@ -9,6 +9,12 @@ manager:
     tag: ""
     pullPolicy: IfNotPresent
 
+  # Image used for provisioned TemporalMigration proxy Deployments. The proxy
+  # runs the /migration-proxy binary shipped in the operator image, so this
+  # must reference an image that contains it. Defaults to the operator's own
+  # image (manager.image) when left empty.
+  migrationProxyImage: ""
+
   # Arguments
   args:
     - --leader-elect
