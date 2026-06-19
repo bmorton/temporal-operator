@@ -760,7 +760,7 @@ spec:
   timeouts:
     apply: 1m
     assert: 5m
-    exec: 2m
+    exec: 3m
   steps:
     - name: provision-postgres
       try:
