@@ -1,0 +1,118 @@
+# Chainsaw test: migrate workflow traffic from a source TemporalDevServer to a
+# Postgres-backed target TemporalCluster via the upgrade proxy. Proves the
+# routing transition: passthrough runs new workflows on the source; after
+# cutover, new workflows run on the target.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: migration
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+    exec: 2m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+        - apply:
+            file: ../postgres/02-secrets.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: create-visibility-db
+              status:
+                succeeded: 1
+    - name: bring-up-clusters
+      try:
+        - apply:
+            file: 01-source-devserver.yaml
+        - assert:
+            file: 01-assert.yaml
+        - apply:
+            file: 02-target-cluster.yaml
+        - assert:
+            file: 02-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster
+        - podLogs:
+            selector: app.kubernetes.io/instance=target
+    - name: register-namespaces
+      try:
+        - apply:
+            file: 03-namespaces.yaml
+        - assert:
+            file: 03-assert.yaml
+    - name: provision-proxy
+      try:
+        - apply:
+            file: 04-migration.yaml
+        - assert:
+            file: 04-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalMigration
+    - name: deploy-workers
+      try:
+        - apply:
+            file: 05-workers.yaml
+        - assert:
+            file: 05-assert.yaml
+    - name: assert-passthrough-runs-on-source
+      try:
+        - apply:
+            file: 06-client-passthrough.yaml
+        - assert:
+            file: 06-assert.yaml
+      catch:
+        - describe:
+            apiVersion: batch/v1
+            kind: Job
+        - podLogs:
+            selector: app=source-worker
+        - podLogs:
+            selector: job-name=client-passthrough
+    - name: cutover
+      try:
+        - script:
+            content: |
+              kubectl patch temporalmigration orders-migration -n $NAMESPACE \
+                --type merge -p '{"spec":{"cutover":true}}'
+        - assert:
+            resource:
+              apiVersion: temporal.bmor10.com/v1alpha1
+              kind: TemporalMigration
+              metadata:
+                name: orders-migration
+              status:
+                phase: Cutover
+    - name: assert-cutover-runs-on-target
+      try:
+        - apply:
+            file: 07-client-cutover.yaml
+        - assert:
+            file: 07-assert.yaml
+      catch:
+        - describe:
+            apiVersion: batch/v1
+            kind: Job
+        - podLogs:
+            selector: app=target-worker
+        - podLogs:
+            selector: job-name=client-cutover
+        - podLogs:
+            selector: app.kubernetes.io/instance=orders-migration
