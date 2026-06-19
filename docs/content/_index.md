@@ -7,8 +7,9 @@ type = "docs"
 
 A Kubernetes operator that manages the full lifecycle of [Temporal](https://temporal.io)
 clusters — persistence and schema management, mTLS, the UI, monitoring,
-controlled version upgrades, and declarative namespaces, search attributes, and
-client credentials.
+controlled version upgrades, and declarative namespaces, search attributes,
+schedules, and client credentials — plus disposable dev servers for local
+development and CI.
 
 - **[Getting Started](./getting-started/)** — zero to a running cluster.
 - **[Installation](./installation/)** — Helm, OLM, or kustomize.

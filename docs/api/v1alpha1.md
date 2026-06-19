@@ -22,7 +22,9 @@ Package v1alpha1 contains API Schema definitions for the temporal v1alpha1 API g
 ### Resource Types
 - [TemporalCluster](#temporalcluster)
 - [TemporalClusterClient](#temporalclusterclient)
+- [TemporalDevServer](#temporaldevserver)
 - [TemporalNamespace](#temporalnamespace)
+- [TemporalSchedule](#temporalschedule)
 - [TemporalSearchAttribute](#temporalsearchattribute)
 
 
@@ -60,6 +62,24 @@ _Appears in:_
 | `authorizer` _string_ |  |  | Optional: \{\} <br /> |
 | `claimMapper` _string_ |  |  | Optional: \{\} <br /> |
 | `config` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | Config is a passthrough for authorization provider configuration. |  | Optional: \{\} <br /> |
+
+
+#### CalendarRange
+
+
+
+CalendarRange is an inclusive [Start,End] range with an optional Step.
+
+
+
+_Appears in:_
+- [StructuredCalendarSpec](#structuredcalendarspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `start` _integer_ |  |  |  |
+| `end` _integer_ |  |  | Optional: \{\} <br /> |
+| `step` _integer_ |  | 1 | Optional: \{\} <br /> |
 
 
 #### CassandraDatastoreSpec
@@ -118,6 +138,27 @@ _Appears in:_
 | `raw` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ |  |  | Optional: \{\} <br /> |
 
 
+#### ClusterReference
+
+
+
+ClusterReference points at a Temporal frontend in the same Kubernetes
+namespace: either a TemporalCluster (default) or a TemporalDevServer.
+
+
+
+_Appears in:_
+- [TemporalClusterClientSpec](#temporalclusterclientspec)
+- [TemporalNamespaceSpec](#temporalnamespacespec)
+- [TemporalScheduleSpec](#temporalschedulespec)
+- [TemporalSearchAttributeSpec](#temporalsearchattributespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the name of the referenced object. |  |  |
+| `kind` _string_ | Kind selects the referenced object type. | TemporalCluster | Enum: [TemporalCluster TemporalDevServer] <br />Optional: \{\} <br /> |
+
+
 #### DatastoreSpec
 
 
@@ -158,6 +199,57 @@ _Appears in:_
 | `keySecretRef` _[SecretKeyReference](#secretkeyreference)_ |  |  | Optional: \{\} <br /> |
 | `enableHostVerification` _boolean_ |  |  | Optional: \{\} <br /> |
 | `serverName` _string_ |  |  | Optional: \{\} <br /> |
+
+
+#### DevServerEndpoints
+
+
+
+DevServerEndpoints reports the dev server's resolved endpoints.
+
+
+
+_Appears in:_
+- [TemporalDevServerStatus](#temporaldevserverstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `frontend` _string_ | Frontend is the gRPC frontend endpoint (host:7233). |  | Optional: \{\} <br /> |
+| `ui` _string_ | UI is the Web UI endpoint (host:8233). |  | Optional: \{\} <br /> |
+
+
+#### DevServerStorageSpec
+
+
+
+DevServerStorageSpec configures SQLite storage.
+
+
+
+_Appears in:_
+- [TemporalDevServerSpec](#temporaldevserverspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `type` _string_ | Type selects ephemeral (emptyDir, wiped on restart) or Persistent (PVC). | Ephemeral | Enum: [Ephemeral Persistent] <br />Optional: \{\} <br /> |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#quantity-resource-api)_ | Size is the PVC size when Type=Persistent. Default "1Gi". |  | Optional: \{\} <br /> |
+| `storageClassName` _string_ | StorageClassName is the PVC storage class when Type=Persistent. |  | Optional: \{\} <br /> |
+
+
+#### DevServerUISpec
+
+
+
+DevServerUISpec controls the bundled Web UI.
+
+
+
+_Appears in:_
+- [TemporalDevServerSpec](#temporaldevserverspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled toggles the bundled Web UI. Default true. | true |  |
 
 
 #### DynamicConfigConstraints
@@ -285,6 +377,23 @@ _Appears in:_
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#resourcerequirements-v1-core)_ |  |  | Optional: \{\} <br /> |
 
 
+#### IntervalSpec
+
+
+
+IntervalSpec matches times of epoch + n*Every + Offset.
+
+
+
+_Appears in:_
+- [ScheduleSpec](#schedulespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `every` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  |  |
+| `offset` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  | Optional: \{\} <br /> |
+
+
 #### IssuerReference
 
 
@@ -396,6 +505,26 @@ _Appears in:_
 | `spec` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | Spec is a partial PodSpec (strategic-merge patch) merged onto the<br />generated pod template. It is stored as an opaque object to keep the<br />CRD schema small. |  | Optional: \{\} <br /> |
 
 
+#### RetryPolicySpec
+
+
+
+RetryPolicySpec is the retry policy for the started workflow.
+
+
+
+_Appears in:_
+- [StartWorkflowAction](#startworkflowaction)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `initialInterval` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  | Optional: \{\} <br /> |
+| `backoffCoefficient` _string_ | BackoffCoefficient is a decimal string (e.g. "2.0") parsed to float64. |  | Optional: \{\} <br /> |
+| `maximumInterval` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  | Optional: \{\} <br /> |
+| `maximumAttempts` _integer_ |  |  | Optional: \{\} <br /> |
+| `nonRetryableErrorTypes` _string array_ |  |  | Optional: \{\} <br /> |
+
+
 #### SQLDatastoreSpec
 
 
@@ -421,6 +550,83 @@ _Appears in:_
 | `maxIdleConns` _integer_ |  |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `maxConnLifetime` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  | Optional: \{\} <br /> |
 | `tls` _[DatastoreTLSSpec](#datastoretlsspec)_ |  |  | Optional: \{\} <br /> |
+
+
+#### ScheduleActionSpec
+
+
+
+ScheduleActionSpec is the action taken when the schedule fires.
+
+
+
+_Appears in:_
+- [TemporalScheduleSpec](#temporalschedulespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `startWorkflow` _[StartWorkflowAction](#startworkflowaction)_ |  |  |  |
+
+
+#### SchedulePoliciesSpec
+
+
+
+SchedulePoliciesSpec tunes overlap/catchup behavior.
+
+
+
+_Appears in:_
+- [TemporalScheduleSpec](#temporalschedulespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `overlapPolicy` _string_ |  |  | Enum: [Skip BufferOne BufferAll CancelOther TerminateOther AllowAll] <br />Optional: \{\} <br /> |
+| `catchupWindow` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  | Optional: \{\} <br /> |
+| `pauseOnFailure` _boolean_ |  |  | Optional: \{\} <br /> |
+| `keepOriginalWorkflowID` _boolean_ |  |  | Optional: \{\} <br /> |
+
+
+#### ScheduleSpec
+
+
+
+ScheduleSpec is the set of times an action should occur at.
+
+
+
+_Appears in:_
+- [TemporalScheduleSpec](#temporalschedulespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `calendars` _string array_ | Calendars holds cron strings (5/6/7 field, or @daily etc). |  | Optional: \{\} <br /> |
+| `intervals` _[IntervalSpec](#intervalspec) array_ | Intervals fire every Every (plus optional Offset/phase). |  | Optional: \{\} <br /> |
+| `structuredCalendar` _[StructuredCalendarSpec](#structuredcalendarspec) array_ | StructuredCalendar gives field-level control without cron syntax. |  | Optional: \{\} <br /> |
+| `excludeStructuredCalendar` _[StructuredCalendarSpec](#structuredcalendarspec) array_ | ExcludeStructuredCalendar subtracts matching times. |  | Optional: \{\} <br /> |
+| `startTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#time-v1-meta)_ | StartTime bounds the schedule start (inclusive). |  | Optional: \{\} <br /> |
+| `endTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#time-v1-meta)_ | EndTime bounds the schedule end (inclusive). |  | Optional: \{\} <br /> |
+| `jitter` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ | Jitter randomizes each action time by 0..Jitter. |  | Optional: \{\} <br /> |
+| `timezoneName` _string_ | TimezoneName interprets calendar specs (IANA name; defaults to UTC). |  | Optional: \{\} <br /> |
+
+
+#### ScheduleStateSpec
+
+
+
+ScheduleStateSpec controls pause and action-limit state.
+
+
+
+_Appears in:_
+- [TemporalScheduleSpec](#temporalschedulespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `paused` _boolean_ |  |  | Optional: \{\} <br /> |
+| `notes` _string_ |  |  | Optional: \{\} <br /> |
+| `limitedActions` _boolean_ |  |  | Optional: \{\} <br /> |
+| `remainingActions` _integer_ |  |  | Optional: \{\} <br /> |
 
 
 #### SchemaUpgradeRecord
@@ -472,6 +678,7 @@ ServiceExposureSpec configures how a service is exposed.
 
 _Appears in:_
 - [ServiceSpec](#servicespec)
+- [TemporalDevServerSpec](#temporaldevserverspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -575,6 +782,55 @@ _Appears in:_
 | `overrides` _[ServiceOverrides](#serviceoverrides)_ | Overrides are applied to every service unless overridden per-service. |  | Optional: \{\} <br /> |
 
 
+#### StartWorkflowAction
+
+
+
+StartWorkflowAction starts a workflow when the schedule fires.
+
+
+
+_Appears in:_
+- [ScheduleActionSpec](#scheduleactionspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `workflowType` _string_ |  |  |  |
+| `taskQueue` _string_ |  |  |  |
+| `workflowID` _string_ |  |  | Optional: \{\} <br /> |
+| `args` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg) array_ | Args are JSON-serializable workflow inputs (one json/plain payload each). |  | Optional: \{\} <br /> |
+| `workflowExecutionTimeout` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  | Optional: \{\} <br /> |
+| `workflowRunTimeout` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  | Optional: \{\} <br /> |
+| `workflowTaskTimeout` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  | Optional: \{\} <br /> |
+| `workflowIDReusePolicy` _string_ |  |  | Enum: [AllowDuplicate AllowDuplicateFailedOnly RejectDuplicate TerminateIfRunning] <br />Optional: \{\} <br /> |
+| `retryPolicy` _[RetryPolicySpec](#retrypolicyspec)_ |  |  | Optional: \{\} <br /> |
+| `memo` _object (keys:string, values:[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg))_ |  |  | Optional: \{\} <br /> |
+| `searchAttributes` _object (keys:string, values:[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg))_ |  |  | Optional: \{\} <br /> |
+
+
+#### StructuredCalendarSpec
+
+
+
+StructuredCalendarSpec describes calendar times as field ranges.
+
+
+
+_Appears in:_
+- [ScheduleSpec](#schedulespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `second` _[CalendarRange](#calendarrange) array_ |  |  | Optional: \{\} <br /> |
+| `minute` _[CalendarRange](#calendarrange) array_ |  |  | Optional: \{\} <br /> |
+| `hour` _[CalendarRange](#calendarrange) array_ |  |  | Optional: \{\} <br /> |
+| `dayOfMonth` _[CalendarRange](#calendarrange) array_ |  |  | Optional: \{\} <br /> |
+| `month` _[CalendarRange](#calendarrange) array_ |  |  | Optional: \{\} <br /> |
+| `year` _[CalendarRange](#calendarrange) array_ |  |  | Optional: \{\} <br /> |
+| `dayOfWeek` _[CalendarRange](#calendarrange) array_ |  |  | Optional: \{\} <br /> |
+| `comment` _string_ |  |  | Optional: \{\} <br /> |
+
+
 #### TemporalCluster
 
 
@@ -624,7 +880,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `clusterRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core)_ | ClusterRef references the TemporalCluster to generate client credentials for. |  |  |
+| `clusterRef` _[ClusterReference](#clusterreference)_ | ClusterRef references the cluster to generate client credentials for.<br />Client credentials are only available for mTLS-enabled TemporalClusters. |  |  |
 | `secretName` _string_ | SecretName is the name of the Secret to write generated client credentials into.<br />Defaults to the resource name when empty. |  | Optional: \{\} <br /> |
 
 
@@ -661,6 +917,55 @@ _Appears in:_
 
 
 
+#### TemporalDevServer
+
+
+
+TemporalDevServer is the Schema for the temporaldevservers API.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `temporal.bmor10.com/v1alpha1` | | |
+| `kind` _string_ | `TemporalDevServer` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  | Optional: \{\} <br /> |
+| `spec` _[TemporalDevServerSpec](#temporaldevserverspec)_ | spec defines the desired state of TemporalDevServer |  | Required: \{\} <br /> |
+
+
+#### TemporalDevServerSpec
+
+
+
+TemporalDevServerSpec defines the desired state of TemporalDevServer.
+
+A TemporalDevServer runs a single-pod, disposable `temporal server start-dev`
+instance backed by SQLite. It is NOT for production use.
+
+
+
+_Appears in:_
+- [TemporalDevServer](#temporaldevserver)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `version` _string_ | Version is the temporalio/temporal CLI image tag. Default "latest". | latest | Optional: \{\} <br /> |
+| `image` _string_ | Image overrides the full image reference. Default<br />temporalio/temporal:<Version>. |  | Optional: \{\} <br /> |
+| `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core) array_ | ImagePullSecrets references secrets for pulling the image. |  | Optional: \{\} <br /> |
+| `namespaces` _string array_ | Namespaces are extra Temporal namespaces created at startup, in addition<br />to the always-present "default" namespace. These are created once at boot<br />with no drift management; use TemporalNamespace CRs for managed namespaces. |  | Optional: \{\} <br /> |
+| `ui` _[DevServerUISpec](#devserveruispec)_ | UI controls the bundled Temporal Web UI (port 8233). |  | Optional: \{\} <br /> |
+| `storage` _[DevServerStorageSpec](#devserverstoragespec)_ | Storage selects ephemeral (default) or PVC-backed SQLite storage. |  | Optional: \{\} <br /> |
+| `service` _[ServiceExposureSpec](#serviceexposurespec)_ | Service configures how the frontend/UI Service is exposed. |  | Optional: \{\} <br /> |
+| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#resourcerequirements-v1-core)_ | Resources sets the dev server container resource requirements. |  | Optional: \{\} <br /> |
+| `nodeSelector` _object (keys:string, values:string)_ | NodeSelector constrains the dev server pod to matching nodes. |  | Optional: \{\} <br /> |
+| `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#toleration-v1-core) array_ | Tolerations applied to the dev server pod. |  | Optional: \{\} <br /> |
+| `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#affinity-v1-core)_ | Affinity applied to the dev server pod. |  | Optional: \{\} <br /> |
+
+
+
+
 #### TemporalNamespace
 
 
@@ -692,10 +997,55 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `clusterRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core)_ | ClusterRef references the TemporalCluster that owns this namespace. |  |  |
+| `clusterRef` _[ClusterReference](#clusterreference)_ | ClusterRef references the TemporalCluster or TemporalDevServer that owns<br />this namespace. |  |  |
 | `retentionPeriod` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ | RetentionPeriod is how long closed workflows are retained. | 72h | Optional: \{\} <br /> |
 | `description` _string_ | Description is a human-friendly description of the namespace. |  | Optional: \{\} <br /> |
 | `ownerEmail` _string_ | OwnerEmail is the owner contact for the namespace. |  | Optional: \{\} <br /> |
+| `allowDeletion` _boolean_ | AllowDeletion permits the operator to delete the Temporal namespace when<br />the CR is deleted. When false, the namespace is left in place. |  | Optional: \{\} <br /> |
+| `driftDetection` _string_ | DriftDetection controls whether the operator reconciles drift between the<br />spec and the live namespace. | reconcile | Enum: [reconcile ignore] <br />Optional: \{\} <br /> |
+
+
+
+
+#### TemporalSchedule
+
+
+
+TemporalSchedule is the Schema for the temporalschedules API.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `temporal.bmor10.com/v1alpha1` | | |
+| `kind` _string_ | `TemporalSchedule` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  | Optional: \{\} <br /> |
+| `spec` _[TemporalScheduleSpec](#temporalschedulespec)_ |  |  | Required: \{\} <br /> |
+
+
+#### TemporalScheduleSpec
+
+
+
+TemporalScheduleSpec defines the desired state of TemporalSchedule.
+
+
+
+_Appears in:_
+- [TemporalSchedule](#temporalschedule)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `clusterRef` _[ClusterReference](#clusterreference)_ | ClusterRef references the TemporalCluster or TemporalDevServer that hosts this schedule. |  |  |
+| `namespace` _string_ | Namespace is the Temporal namespace the schedule lives in. |  |  |
+| `scheduleID` _string_ | ScheduleID is the Temporal schedule ID. Defaults to metadata.name.<br />Immutable once set. |  | Optional: \{\} <br /> |
+| `allowDeletion` _boolean_ | AllowDeletion permits the operator to delete the Temporal schedule when<br />the CR is deleted. When false, the schedule is left in place. |  | Optional: \{\} <br /> |
+| `schedule` _[ScheduleSpec](#schedulespec)_ | Schedule describes when the action fires. |  |  |
+| `action` _[ScheduleActionSpec](#scheduleactionspec)_ | Action describes what to do when the schedule fires. |  |  |
+| `policies` _[SchedulePoliciesSpec](#schedulepoliciesspec)_ | Policies tunes overlap/catchup/pause-on-failure behavior. |  | Optional: \{\} <br /> |
+| `state` _[ScheduleStateSpec](#schedulestatespec)_ | State controls pause and action-limit state. |  | Optional: \{\} <br /> |
 
 
 
@@ -731,10 +1081,11 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `clusterRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core)_ | ClusterRef references the TemporalCluster this search attribute belongs to. |  |  |
+| `clusterRef` _[ClusterReference](#clusterreference)_ | ClusterRef references the TemporalCluster or TemporalDevServer this search attribute belongs to. |  |  |
 | `namespace` _string_ | Namespace is the Temporal namespace to register the attribute in. |  |  |
 | `name` _string_ | Name is the search attribute name. |  |  |
 | `type` _string_ | Type is the search attribute type. Immutable once created. |  | Enum: [Keyword Text Int Double Bool Datetime KeywordList] <br /> |
+| `allowDeletion` _boolean_ | AllowDeletion permits the operator to remove the search attribute from the<br />namespace when the CR is deleted. |  | Optional: \{\} <br /> |
 
 
 
@@ -814,6 +1165,7 @@ _Appears in:_
 | `fromVersion` _string_ |  |  | Optional: \{\} <br /> |
 | `toVersion` _string_ |  |  | Optional: \{\} <br /> |
 | `phase` _string_ |  |  | Optional: \{\} <br /> |
+| `rollbackable` _boolean_ | Rollbackable is true until schema migration begins, after which a<br />rollback is no longer safe. |  | Optional: \{\} <br /> |
 | `startedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#time-v1-meta)_ |  |  | Optional: \{\} <br /> |
 
 

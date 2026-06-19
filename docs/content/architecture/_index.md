@@ -13,8 +13,10 @@ resource has a reconciler that drives observed state toward desired state.
 | Kind | Short | Purpose |
 |---|---|---|
 | `TemporalCluster` | `tc` | A complete Temporal server deployment. |
+| `TemporalDevServer` | `tds` | A disposable single-pod dev server (SQLite); for development/CI, not production. |
 | `TemporalNamespace` | `tns` | A namespace within a managed cluster. |
 | `TemporalSearchAttribute` | `tsa` | A custom search attribute registration. |
+| `TemporalSchedule` | `tsch` | A declarative Temporal schedule (cron or interval). |
 | `TemporalClusterClient` | `tcc` | Generated mTLS client credentials. |
 
 ## TemporalCluster reconciliation
