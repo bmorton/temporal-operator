@@ -293,6 +293,26 @@ nsc-clean: ## Destroy ALL nsc clusters labeled app=temporal-operator-e2e (leaves
 		done; \
 	fi
 
+.PHONY: azure-e2e-up
+azure-e2e-up: chainsaw ## Provision AKS + Flexible Server and install the operator (Workload Identity).
+	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh up
+
+.PHONY: azure-e2e-test
+azure-e2e-test: chainsaw ## Run the Azure passwordless Chainsaw suite against the standing cluster.
+	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh test
+
+.PHONY: azure-e2e-down
+azure-e2e-down: ## Delete the Azure e2e resource group (everything).
+	./hack/azure-e2e.sh down
+
+.PHONY: azure-e2e
+azure-e2e: chainsaw ## Provision -> test -> teardown in one shot (always tears down).
+	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh all
+
+.PHONY: azure-e2e-clean
+azure-e2e-clean: ## Delete ANY resource group tagged app=temporal-operator-e2e (leak backstop).
+	./hack/azure-e2e.sh clean
+
 .PHONY: crd-ref-docs
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
 $(CRD_REF_DOCS): $(LOCALBIN)
