@@ -1,0 +1,11 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalDevServer
+metadata:
+  name: dev
+spec:
+  # temporalio/temporal CLI image tag — versioned independently of the Temporal server.
+  version: "1.7.2"
+  ui:
+    enabled: true
+  storage:
+    type: Ephemeral
