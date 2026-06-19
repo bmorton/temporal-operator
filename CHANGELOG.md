@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/bmorton/temporal-operator/compare/v0.6.0...v0.7.0) (2026-06-19)
+
+
+### Features
+
+* **ui:** read-only operator UI (topology & state overview) ([#63](https://github.com/bmorton/temporal-operator/issues/63)) ([de0f61d](https://github.com/bmorton/temporal-operator/commit/de0f61dd997bcce25c7302a468f0dacadef61b51))
+
 ## [0.6.0](https://github.com/bmorton/temporal-operator/compare/v0.5.1...v0.6.0) (2026-06-18)
 
 
