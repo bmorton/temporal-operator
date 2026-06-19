@@ -1,8 +1,10 @@
-# Chainsaw test: Cassandra default store via the K8ssandra Operator.
+# Chainsaw test: Cassandra default (persistence) store + OpenSearch visibility
+# store -- the typical production layout.
 #
-# Prerequisite: install the K8ssandra Operator (which provides the
-# cassandra.datastax.com / k8ssandra.io CRDs). This test assumes a K8ssandraCluster
-# named "temporal-cass" exposing a CQL service "temporal-cass-dc1-service".
+# Prerequisites (installed by the e2e workflow): the temporal-operator and its
+# CRDs. No Cassandra or OpenSearch Kubernetes operator is required; both backends
+# are plain workloads provisioned by this suite. Cassandra is slow to cold-start
+# on kind, so the assert timeout is generous.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
@@ -12,25 +14,36 @@ spec:
     apply: 2m
     assert: 10m
   steps:
-    - name: provision-cassandra
+    - name: provision-backends
       try:
         - apply:
-            file: 01-k8ssandra.yaml
+            file: 01-cassandra.yaml
+        - apply:
+            file: 03-opensearch.yaml
+        - assert:
+            file: 01-assert.yaml
+        - assert:
+            file: 03-opensearch-assert.yaml
+    - name: create-keyspace
+      try:
+        - apply:
+            file: 02-keyspace.yaml
         - assert:
             resource:
-              apiVersion: k8ssandra.io/v1alpha1
-              kind: K8ssandraCluster
+              apiVersion: batch/v1
+              kind: Job
               metadata:
-                name: temporal-cass
+                name: create-cassandra-keyspace
               status:
-                (conditions[?type == 'CassandraInitialized'].status | [0]): "True"
-    - name: cluster-cassandra
+                succeeded: 1
+    - name: cluster-cassandra-opensearch
       try:
         - apply:
-            file: 02-temporalcluster.yaml
+            file: 04-temporalcluster.yaml
         - assert:
-            file: 02-assert.yaml
+            file: 04-assert.yaml
       catch:
         - describe:
             apiVersion: temporal.bmor10.com/v1alpha1
             kind: TemporalCluster
+        - events: {}
