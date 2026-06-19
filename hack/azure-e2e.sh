@@ -50,7 +50,14 @@ preflight() {
   [ -x "$CHAINSAW" ] || { log "chainsaw missing; running 'make chainsaw'"; make chainsaw; }
 }
 
-rand_suffix() { tr -dc 'a-z0-9' </dev/urandom | head -c 6; }
+rand_suffix() {
+  # Read a bounded chunk so `tr` reaches EOF cleanly and slice with bash. A
+  # trailing `| head -c 6` would SIGPIPE `tr` (unbounded /dev/urandom reader),
+  # which under `set -o pipefail` surfaces as exit 141 and aborts the script.
+  local raw
+  raw="$(head -c 1024 /dev/urandom | LC_ALL=C tr -dc 'a-z0-9')"
+  printf '%s' "${raw:0:6}"
+}
 
 cmd_up() {
   preflight
