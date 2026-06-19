@@ -57,38 +57,51 @@ This effort ships as **two sequential PRs** on separate branches:
 
 ## PR1 — Full passwordless auth (close #47)
 
-### 1. Operator probe & schema inspection execute `passwordCommand`
+### 1. Operator probe & schema inspection: native Entra token
 
-Files: `internal/persistence/sql.go`,
-`internal/controller/temporalcluster_persistence.go`.
+Files: `internal/persistence/sql.go`, `internal/persistence/azure.go` (new),
+`internal/persistence/secrets.go`, `api/v1alpha1/persistence_types.go`.
 
-- Today `sqlBackend.dsn()` builds the DSN from `b.cred.Password`. Change: when
-  `cred.PasswordCommand` is set (and `Password` is empty), **execute the command
-  and use its trimmed stdout as the password**, rebuilding the DSN on **every**
-  probe and schema-version inspection so an expiring Entra token is always
-  refreshed.
-- Introduce a small injectable runner to keep this unit-testable:
+> **Design pivot (2026-06-19).** The operator runs on `gcr.io/distroless/static:nonroot`,
+> which has **no shell** (`sh`, `cat`). Executing a `passwordCommand` via
+> `os/exec` (the originally-approved approach) therefore cannot work in the
+> operator container. The token-refresher sidecar pattern works for the server
+> and schema-Job pods (their images have shells), but **not** for the operator's
+> own in-process probe. We pivoted the operator to obtain a Microsoft Entra
+> access token **natively in Go** via Azure Workload Identity, with no shelling
+> out. The generic `passwordCommand` model is kept for the workload pods; making
+> the operator's own auth generic/multi-provider is tracked in a follow-up issue.
 
-  ```go
-  // CommandRunner executes a shell command and returns its trimmed stdout.
-  type CommandRunner func(ctx context.Context, command string) (string, error)
-  ```
+- New optional API field `sql.azureWorkloadIdentity` (`AzureWorkloadIdentitySpec`,
+  pointer = enabled) on `SQLDatastoreSpec`, with an optional `scope` (default
+  `https://ossrdbms-aad.database.windows.net/.default`). Its presence tells the
+  operator to authenticate its **own** probe/schema-inspection with an Entra
+  token.
+- New `internal/persistence/azure.go`: a small `tokenProvider` interface
+  (`Token(ctx, scope) (string, error)`) with a default implementation backed by
+  `github.com/Azure/azure-sdk-for-go/sdk/azidentity` `WorkloadIdentityCredential`
+  (reads the `AZURE_*` env + projected federated token that the Azure Workload
+  Identity webhook injects when the operator pod carries the
+  `azure.workload.identity/use: "true"` label and SA client-id annotation). The
+  SDK caches/refreshes tokens internally, so calling it per probe is cheap.
+- `ResolvedCredential` gains an `AzureWorkloadIdentity *AzureWorkloadIdentityCredential`
+  field (carrying the resolved scope). `ResolveSQL` populates it from the spec
+  field; it is **additive** to `Password`/`PasswordCommand` (the same store can
+  set `passwordCommandSecretRef` for the server/schema Job *and*
+  `azureWorkloadIdentity` for the operator).
+- `sqlBackend.resolvePassword(ctx)`: when `cred.AzureWorkloadIdentity != nil`,
+  fetch a token via the provider (bounded by its own timeout so a slow token
+  fetch can't hang the reconcile worker) and use it as the DSN password; else use
+  the static `Password`. The operator **does not** execute `passwordCommand`
+  (distroless). The static-password path is unchanged.
+- The injectable `CommandRunner`/shell-out approach (`internal/persistence/command.go`)
+  is **removed** as dead code, since the operator no longer shells out and the
+  schema-Job wrapper builds its own `sh -c` script string in `schemajob.go`.
 
-  Default implementation runs `sh -c <command>` via `os/exec` and trims trailing
-  whitespace/newlines. The runner is a field on `SQLProber` / `sqlBackend` and
-  defaults to the real implementation when nil.
-- The static-password path is **byte-for-byte unchanged** (no command set →
-  existing behavior).
-- Security / trust boundary: the operator only ever executes the command the
-  user explicitly supplied via `passwordCommandSecretRef`. This is the same
-  command the server pods already run. Documented as an explicit opt-in.
-
-**Tests** (`internal/persistence/sql_test.go`):
-- When `cred.PasswordCommand` is set, the backend executes it and uses the
-  output as the DSN password (inject a fake `CommandRunner`).
-- The command is executed **fresh** on each `Probe` / `SchemaVersion` call
-  (token rotation).
-- Command execution error propagates as a probe error.
+**Tests** (`internal/persistence/azure_test.go`, `sql_test.go`):
+- With `cred.AzureWorkloadIdentity` set, the backend uses the injected fake
+  `tokenProvider`'s token as the DSN password; a fresh token is requested per
+  probe; provider errors propagate as probe errors.
 - Static password path produces the identical DSN it does today.
 
 ### 2. Schema Job passwordless + `podTemplate`
@@ -129,11 +142,15 @@ Files: `internal/resources/schemajob.go`,
 
 Files: `dist/chart/` (edited **by hand** — never run `make helm-chart`).
 
-- Add **opt-in** values to set, on the operator controller Deployment:
-  - the ServiceAccount name + `azure.workload.identity/client-id` annotation,
-  - the `azure.workload.identity/use: "true"` pod label,
-  - a token-refresher sidecar + shared `emptyDir` (so the operator pod's
-    `cat /azure/pgpass` `passwordCommand` works).
+- Add **opt-in** values (`workloadIdentity.enable`, `workloadIdentity.clientId`)
+  that set, on the operator controller Deployment:
+  - the ServiceAccount `azure.workload.identity/client-id` annotation,
+  - the `azure.workload.identity/use: "true"` pod label.
+- That is **all** that is needed: the Azure Workload Identity webhook then
+  injects the `AZURE_*` env and projects the federated token, which the operator
+  consumes in-process via `azidentity` (section 1). **No token-refresher sidecar
+  or shared volume is added to the operator pod** (the operator does not shell
+  out) — this keeps the operator distroless.
 - All default **off**, so non-Azure installs are unchanged. Follow the chart's
   existing flat `values.yaml` contract (do not introduce the nested
   kubebuilder-generated contract).
@@ -141,13 +158,18 @@ Files: `dist/chart/` (edited **by hand** — never run `make helm-chart`).
 ### 4. Examples & docs
 
 - `examples/cluster-azure-workload-identity`: remove the "operator probe + schema
-  Job are not passwordless" caveat; add the operator Helm WI values and the
-  `persistence.schemaJob.podTemplate` token initContainer; promote out of
-  "preview" once verified.
+  Job are not passwordless" caveat; add `sql.azureWorkloadIdentity: {}` to the
+  store specs (operator auth) alongside `passwordCommandSecretRef` (server +
+  schema Job); install the operator with `workloadIdentity.enable=true` +
+  `clientId` (label/annotation only, no sidecar); keep the schema-Job
+  `podTemplate` token initContainer; promote out of "preview" once verified.
 - `docs/content/installation/azure.md`: update the Entra/Workload Identity
-  section to state full passwordless now works and document the operator chart
-  values + schema-Job `podTemplate`.
-- Close #47, referencing the PR.
+  section to state full passwordless now works, document that the operator
+  obtains its own token natively (distroless-friendly), and document the operator
+  chart values + the per-actor auth (operator: native Entra; server + schema Job:
+  `passwordCommand`).
+- Close #47, referencing the PR. Open a follow-up issue to make the operator's
+  own DB token auth generic / multi-provider (beyond Azure Workload Identity).
 
 ### PR1 validation
 
