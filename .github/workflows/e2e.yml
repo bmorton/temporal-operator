@@ -10,7 +10,7 @@ on:
       suite:
         description: Which suite(s) to run
         type: choice
-        options: [default, devserver, mtls, upgrade, opensearch, all]
+        options: [default, devserver, mtls, upgrade, opensearch, migration, all]
         default: default
 
 permissions:
@@ -35,15 +35,17 @@ jobs:
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
           upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
           opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
+          migration='{"temporal":"1.31.1","persistence":"postgres","suite":"migration"}'
           if [ "$EVENT" = "schedule" ]; then
-            echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$migration]" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             case "$SUITE" in
               devserver)  echo "combos=[$devserver]" >> "$GITHUB_OUTPUT" ;;
               mtls)       echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
               upgrade)    echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
               opensearch) echo "combos=[$opensearch]" >> "$GITHUB_OUTPUT" ;;
-              all)        echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT" ;;
+              migration)  echo "combos=[$migration]" >> "$GITHUB_OUTPUT" ;;
+              all)        echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$migration]" >> "$GITHUB_OUTPUT" ;;
               *)          echo "combos=[$postgres,$devserver]" >> "$GITHUB_OUTPUT" ;;
             esac
           else
@@ -79,6 +81,12 @@ jobs:
         run: |
           make docker-build IMG=temporal-operator:e2e
           make kind-load IMG=temporal-operator:e2e
+
+      - name: Build and load migration runner image
+        if: matrix.combo.suite == 'migration'
+        run: |
+          docker build -t migration-runner:e2e test/e2e/migration/runner
+          kind load docker-image migration-runner:e2e --name temporal-operator-test-e2e
 
       - name: Install cert-manager and CloudNativePG
         run: |
