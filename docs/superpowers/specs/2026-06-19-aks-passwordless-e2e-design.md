@@ -70,7 +70,7 @@ Files: `internal/persistence/sql.go`, `internal/persistence/azure.go` (new),
 > own in-process probe. We pivoted the operator to obtain a Microsoft Entra
 > access token **natively in Go** via Azure Workload Identity, with no shelling
 > out. The generic `passwordCommand` model is kept for the workload pods; making
-> the operator's own auth generic/multi-provider is tracked in a follow-up issue.
+> the operator's own auth generic/multi-provider is tracked in #84.
 
 - New optional API field `sql.azureWorkloadIdentity` (`AzureWorkloadIdentitySpec`,
   pointer = enabled) on `SQLDatastoreSpec`, with an optional `scope` (default
@@ -168,8 +168,9 @@ Files: `dist/chart/` (edited **by hand** — never run `make helm-chart`).
   obtains its own token natively (distroless-friendly), and document the operator
   chart values + the per-actor auth (operator: native Entra; server + schema Job:
   `passwordCommand`).
-- Close #47, referencing the PR. Open a follow-up issue to make the operator's
-  own DB token auth generic / multi-provider (beyond Azure Workload Identity).
+- Close #47, referencing the PR. Follow-up issue #84 tracks making the
+  operator's own DB token auth generic / multi-provider (beyond Azure Workload
+  Identity).
 
 ### PR1 validation
 

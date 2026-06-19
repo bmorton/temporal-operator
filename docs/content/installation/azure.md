@@ -68,6 +68,9 @@ projected OIDC token automatically — no token-refresher sidecar on the operato
 Full passwordless support (operator probe + schema Job + server pods) is available
 as of this release. Issue
 [#47](https://github.com/bmorton/temporal-operator/issues/47) tracked this work.
+The operator's own native token currently supports Azure Workload Identity only;
+[#84](https://github.com/bmorton/temporal-operator/issues/84) tracks generic /
+multi-provider support (e.g. AWS RDS IAM).
 
 Example:
 [`examples/cluster-azure-workload-identity`](https://github.com/bmorton/temporal-operator/tree/main/examples/cluster-azure-workload-identity).
