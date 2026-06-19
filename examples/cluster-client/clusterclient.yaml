@@ -1,0 +1,10 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterClient
+metadata:
+  name: temporal-mtls-client
+spec:
+  # Must reference an mTLS-enabled TemporalCluster in the same namespace.
+  clusterRef:
+    name: temporal-mtls
+  # Name of the Secret the operator writes the generated client credentials into.
+  secretName: temporal-mtls-client

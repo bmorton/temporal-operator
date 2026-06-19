@@ -1,0 +1,32 @@
+# A self-signed root issuer and CA, then a CA issuer that the operator uses to
+# mint internode and frontend certificates. Requires cert-manager installed.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: temporal-selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: temporal-ca
+spec:
+  isCA: true
+  commonName: temporal-ca
+  secretName: temporal-ca
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: temporal-selfsigned
+    kind: Issuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: temporal-ca-issuer
+spec:
+  ca:
+    secretName: temporal-ca
