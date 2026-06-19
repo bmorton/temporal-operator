@@ -27,6 +27,9 @@ import (
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
 
+// wiLabelValue is the value of the Azure Workload Identity use label.
+const wiLabelValue = "true"
+
 func testCluster() *temporalv1alpha1.TemporalCluster {
 	return &temporalv1alpha1.TemporalCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "tc", Namespace: "ns"},
@@ -192,7 +195,7 @@ func TestBuildSchemaJobPodTemplate(t *testing.T) {
 		Action:           ActionSetup,
 		SchemaVersionDir: "v12",
 		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
-			Labels: map[string]string{"azure.workload.identity/use": "true"},
+			Labels: map[string]string{"azure.workload.identity/use": wiLabelValue},
 			Spec:   &runtime.RawExtension{Raw: raw},
 		},
 	})
@@ -200,7 +203,7 @@ func TestBuildSchemaJobPodTemplate(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	tpl := job.Spec.Template
-	if tpl.Labels["azure.workload.identity/use"] != "true" {
+	if tpl.Labels["azure.workload.identity/use"] != wiLabelValue {
 		t.Errorf("expected WI label, got %v", tpl.Labels)
 	}
 	if tpl.Spec.ServiceAccountName != "temporal-wi" {
