@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/bmorton/temporal-operator/compare/v0.7.0...v0.8.0) (2026-06-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **devserver:** TemporalDevServer.spec.version is now a Temporal server version (e.g. 1.31.1) mapped to the CLI image, not a raw temporalio/temporal tag. Use spec.image to pin a CLI image directly.
+
+### Features
+
+* **devserver:** accept a Temporal server version for TemporalDevServer ([#79](https://github.com/bmorton/temporal-operator/issues/79)) ([80d32b9](https://github.com/bmorton/temporal-operator/commit/80d32b960c46e5ce92bd364be3a924575e000774))
+* **ui:** live-refresh pause/resume controls + layout polish ([#78](https://github.com/bmorton/temporal-operator/issues/78)) ([19f9a4f](https://github.com/bmorton/temporal-operator/commit/19f9a4f37c4a36f14097b341545d6be98a10cc72))
+
 ## [0.7.0](https://github.com/bmorton/temporal-operator/compare/v0.6.0...v0.7.0) (2026-06-19)
 
 
