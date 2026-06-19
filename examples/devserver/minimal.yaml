@@ -3,8 +3,8 @@ kind: TemporalDevServer
 metadata:
   name: dev
 spec:
-  # temporalio/temporal CLI image tag — versioned independently of the Temporal server.
-  version: "1.7.2"
+  # Temporal server version; mapped to the matching temporalio/temporal CLI image.
+  version: "1.31.1"
   ui:
     enabled: true
   storage:

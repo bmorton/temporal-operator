@@ -47,6 +47,9 @@ type VersionInfo struct {
 	UISeries string
 	// DefaultUIVersion is the known-good exact temporal-ui version to pair with.
 	DefaultUIVersion string
+	// DevServerCLIVersion is the temporalio/temporal CLI image tag whose bundled
+	// server is in this line, used to run a dev server for this server version.
+	DevServerCLIVersion string
 	// CassandraVisibilitySupported reports whether Cassandra may be used as a
 	// visibility store on this version.
 	CassandraVisibilitySupported bool
@@ -225,6 +228,27 @@ func DefaultUIVersion(serverVersion string) string {
 		return ""
 	}
 	return info.DefaultUIVersion
+}
+
+// DevServerCLIVersion returns the temporalio/temporal CLI image tag that runs
+// the given Temporal server version, or an empty string when the server version
+// is unknown or has no dev-server mapping.
+func DevServerCLIVersion(serverVersion string) string {
+	info, err := LookupVersion(serverVersion)
+	if err != nil {
+		return ""
+	}
+	return info.DevServerCLIVersion
+}
+
+// LatestSupportedVersion returns the highest supported Temporal server patch
+// version in the matrix, or an empty string when the matrix is empty.
+func LatestSupportedVersion() string {
+	vs := SupportedVersions()
+	if len(vs) == 0 {
+		return ""
+	}
+	return vs[len(vs)-1] // SupportedVersions() is sorted ascending by semver.
 }
 
 // ServerImage returns the default Temporal server image for a version.

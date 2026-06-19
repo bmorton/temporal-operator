@@ -77,3 +77,39 @@ func TestSupportedVersionsAndGet(t *testing.T) {
 		t.Errorf("expected Get(nope) to return false")
 	}
 }
+
+func TestDevServerCLIVersion(t *testing.T) {
+	cases := map[string]string{
+		"1.31.1": "1.7.2",
+		"1.31":   "1.7.2",
+		"1.30.4": "1.6.2",
+		"1.29.6": "1.5.1",
+		"1.28.3": "1.4.1",
+		"1.27.0": "1.3.0",
+		"9.9.9":  "",
+	}
+	for in, want := range cases {
+		if got := DevServerCLIVersion(in); got != want {
+			t.Errorf("DevServerCLIVersion(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestLatestSupportedVersion(t *testing.T) {
+	got := LatestSupportedVersion()
+	for _, v := range SupportedVersions() {
+		a, errA := parseSemver(got)
+		b, errB := parseSemver(v)
+		if errA != nil || errB != nil {
+			t.Fatalf("unparseable versions %q / %q", got, v)
+		}
+		if b.major > a.major ||
+			(b.major == a.major && b.minor > a.minor) ||
+			(b.major == a.major && b.minor == a.minor && b.patch > a.patch) {
+			t.Fatalf("LatestSupportedVersion()=%q is not the highest; found %q", got, v)
+		}
+	}
+	if !IsSupported(got) {
+		t.Fatalf("LatestSupportedVersion()=%q is not supported", got)
+	}
+}

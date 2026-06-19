@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
 // Dev server ports (Temporal CLI start-dev defaults).
@@ -65,16 +66,37 @@ func devServerLabels(name string) map[string]string {
 	return labels
 }
 
-// DevServerImage returns the container image for a dev server.
-func DevServerImage(dev *temporalv1alpha1.TemporalDevServer) string {
+// DevServerImage returns the container image for a dev server. When Image is set
+// it is used verbatim; otherwise the Temporal server Version (or the latest
+// supported version when empty) is mapped to the matching temporalio/temporal
+// CLI image. It returns an error when the server version is unsupported.
+func DevServerImage(dev *temporalv1alpha1.TemporalDevServer) (string, error) {
 	if dev.Spec.Image != "" {
-		return dev.Spec.Image
+		return dev.Spec.Image, nil
 	}
 	version := dev.Spec.Version
 	if version == "" {
-		version = "latest"
+		version = temporal.LatestSupportedVersion()
 	}
-	return "temporalio/temporal:" + version
+	cli := temporal.DevServerCLIVersion(version)
+	if cli == "" {
+		return "", fmt.Errorf("unsupported dev server version %q: not in the supported matrix %v",
+			version, temporal.SupportedVersions())
+	}
+	return "temporalio/temporal:" + cli, nil
+}
+
+// DevServerServerVersion returns the Temporal server version reported in status:
+// the explicit Version, the latest supported version when Version is empty, or
+// an empty string when a raw Image override is used.
+func DevServerServerVersion(dev *temporalv1alpha1.TemporalDevServer) string {
+	if dev.Spec.Image != "" {
+		return ""
+	}
+	if dev.Spec.Version != "" {
+		return dev.Spec.Version
+	}
+	return temporal.LatestSupportedVersion()
 }
 
 func devServerArgs(dev *temporalv1alpha1.TemporalDevServer) []string {
@@ -117,7 +139,7 @@ func devServerFSGroup() *int64 { v := int64(1000); return &v }
 
 // BuildDevServerDeployment builds the single-replica Deployment that runs
 // `temporal server start-dev`.
-func BuildDevServerDeployment(dev *temporalv1alpha1.TemporalDevServer) *appsv1.Deployment {
+func BuildDevServerDeployment(dev *temporalv1alpha1.TemporalDevServer, image string) *appsv1.Deployment {
 	replicas := int32(1)
 	labels := devServerLabels(dev.Name)
 
@@ -128,7 +150,7 @@ func BuildDevServerDeployment(dev *temporalv1alpha1.TemporalDevServer) *appsv1.D
 
 	container := corev1.Container{
 		Name:      "temporal",
-		Image:     DevServerImage(dev),
+		Image:     image,
 		Command:   []string{"temporal"},
 		Args:      devServerArgs(dev),
 		Ports:     ports,

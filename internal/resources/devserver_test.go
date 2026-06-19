@@ -25,11 +25,16 @@ import (
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
 
+const (
+	devServerTemporalImage = "temporalio/temporal:1.7.2"
+	devServerCustomImage   = "ghcr.io/me/temporal:dev"
+)
+
 func devServerFixture() *temporalv1alpha1.TemporalDevServer {
 	return &temporalv1alpha1.TemporalDevServer{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "demo"},
 		Spec: temporalv1alpha1.TemporalDevServerSpec{
-			Version:    "latest",
+			Version:    "1.31.1",
 			Namespaces: []string{"orders", "billing"},
 		},
 	}
@@ -37,7 +42,7 @@ func devServerFixture() *temporalv1alpha1.TemporalDevServer {
 
 func TestBuildDevServerDeployment(t *testing.T) {
 	dev := devServerFixture()
-	dep := BuildDevServerDeployment(dev)
+	dep := BuildDevServerDeployment(dev, devServerTemporalImage)
 
 	if dep.Name != "dev" || dep.Namespace != "demo" {
 		t.Fatalf("unexpected name/namespace: %s/%s", dep.Name, dep.Namespace)
@@ -46,7 +51,7 @@ func TestBuildDevServerDeployment(t *testing.T) {
 		t.Fatalf("dev server must be single-replica")
 	}
 	c := dep.Spec.Template.Spec.Containers[0]
-	if c.Image != "temporalio/temporal:latest" {
+	if c.Image != devServerTemporalImage {
 		t.Fatalf("unexpected image: %s", c.Image)
 	}
 	args := strings.Join(c.Args, " ")
@@ -67,10 +72,81 @@ func TestBuildDevServerDeployment(t *testing.T) {
 func TestBuildDevServerDeploymentUIDisabled(t *testing.T) {
 	dev := devServerFixture()
 	dev.Spec.UI = &temporalv1alpha1.DevServerUISpec{Enabled: false}
-	dep := BuildDevServerDeployment(dev)
+	dep := BuildDevServerDeployment(dev, devServerTemporalImage)
 	args := strings.Join(dep.Spec.Template.Spec.Containers[0].Args, " ")
 	if !strings.Contains(args, "--headless") {
 		t.Fatalf("UI-disabled dev server must pass --headless, got %q", args)
+	}
+}
+
+func TestDevServerImageMapsServerVersion(t *testing.T) {
+	dev := devServerFixture() // Version 1.31.1
+	img, err := DevServerImage(dev)
+	if err != nil {
+		t.Fatalf("DevServerImage: %v", err)
+	}
+	if img != devServerTemporalImage {
+		t.Fatalf("image = %q, want temporalio/temporal:1.7.2", img)
+	}
+}
+
+func TestDevServerImageDefaultsToLatestSupported(t *testing.T) {
+	dev := devServerFixture()
+	dev.Spec.Version = ""
+	img, err := DevServerImage(dev)
+	if err != nil {
+		t.Fatalf("DevServerImage: %v", err)
+	}
+	if !strings.HasPrefix(img, "temporalio/temporal:") {
+		t.Fatalf("expected a temporalio/temporal image, got %q", img)
+	}
+}
+
+func TestDevServerImageEscapeHatch(t *testing.T) {
+	dev := devServerFixture()
+	dev.Spec.Image = devServerCustomImage
+	img, err := DevServerImage(dev)
+	if err != nil {
+		t.Fatalf("DevServerImage: %v", err)
+	}
+	if img != devServerCustomImage {
+		t.Fatalf("image = %q, want the explicit override", img)
+	}
+}
+
+func TestDevServerImageUnsupportedVersion(t *testing.T) {
+	dev := devServerFixture()
+	dev.Spec.Version = "9.9.9"
+	if _, err := DevServerImage(dev); err == nil {
+		t.Fatal("expected an error for an unsupported version, got nil")
+	}
+}
+
+func TestDevServerImageUnknownPatchResolvesToLine(t *testing.T) {
+	dev := devServerFixture()
+	dev.Spec.Version = "1.31.999" // unknown exact patch, but the 1.31 line is known
+	img, err := DevServerImage(dev)
+	if err != nil {
+		t.Fatalf("DevServerImage: %v", err)
+	}
+	if img != devServerTemporalImage {
+		t.Fatalf("image = %q, want temporalio/temporal:1.7.2 (resolved by minor line)", img)
+	}
+}
+
+func TestDevServerServerVersion(t *testing.T) {
+	dev := devServerFixture() // 1.31.1
+	if got := DevServerServerVersion(dev); got != "1.31.1" {
+		t.Fatalf("server version = %q, want 1.31.1", got)
+	}
+	dev.Spec.Version = ""
+	if got := DevServerServerVersion(dev); got == "" {
+		t.Fatal("expected latest-supported server version, got empty")
+	}
+	dev = devServerFixture()
+	dev.Spec.Image = devServerCustomImage
+	if got := DevServerServerVersion(dev); got != "" {
+		t.Fatalf("with image override, server version = %q, want empty", got)
 	}
 }
 
@@ -91,7 +167,7 @@ func TestBuildDevServerService(t *testing.T) {
 
 func TestBuildDevServerEphemeralVolume(t *testing.T) {
 	dev := devServerFixture()
-	dep := BuildDevServerDeployment(dev)
+	dep := BuildDevServerDeployment(dev, devServerTemporalImage)
 	vols := dep.Spec.Template.Spec.Volumes
 	if len(vols) != 1 || vols[0].EmptyDir == nil {
 		t.Fatalf("ephemeral storage must use an emptyDir volume, got %+v", vols)
@@ -100,7 +176,7 @@ func TestBuildDevServerEphemeralVolume(t *testing.T) {
 
 func TestBuildDevServerPodSecurityContext(t *testing.T) {
 	dev := devServerFixture()
-	dep := BuildDevServerDeployment(dev)
+	dep := BuildDevServerDeployment(dev, devServerTemporalImage)
 	sc := dep.Spec.Template.Spec.SecurityContext
 	if sc == nil || sc.FSGroup == nil || *sc.FSGroup != 1000 {
 		t.Fatalf("expected pod SecurityContext.FSGroup=1000, got %+v", sc)
@@ -110,7 +186,7 @@ func TestBuildDevServerPodSecurityContext(t *testing.T) {
 func TestBuildDevServerPersistentVolume(t *testing.T) {
 	dev := devServerFixture()
 	dev.Spec.Storage = &temporalv1alpha1.DevServerStorageSpec{Type: "Persistent"}
-	dep := BuildDevServerDeployment(dev)
+	dep := BuildDevServerDeployment(dev, devServerTemporalImage)
 	vols := dep.Spec.Template.Spec.Volumes
 	if len(vols) != 1 || vols[0].PersistentVolumeClaim == nil {
 		t.Fatalf("persistent storage must use a PVC volume, got %+v", vols)

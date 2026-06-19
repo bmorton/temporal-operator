@@ -956,7 +956,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `version` _string_ | Version is the temporalio/temporal CLI image tag. Default "latest". | latest | Optional: \{\} <br /> |
+| `version` _string_ | Version is the Temporal server version to run, e.g. "1.31.1". The operator<br />maps it to the matching temporalio/temporal CLI image via the supported<br />version matrix. When empty, the latest supported server version is used.<br />Use Image to pin a specific CLI image directly. |  | Optional: \{\} <br /> |
 | `image` _string_ | Image overrides the full image reference. Default<br />temporalio/temporal:<Version>. |  | Optional: \{\} <br /> |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core) array_ | ImagePullSecrets references secrets for pulling the image. |  | Optional: \{\} <br /> |
 | `namespaces` _string array_ | Namespaces are extra Temporal namespaces created at startup, in addition<br />to the always-present "default" namespace. These are created once at boot<br />with no drift management; use TemporalNamespace CRs for managed namespaces. |  | Optional: \{\} <br /> |

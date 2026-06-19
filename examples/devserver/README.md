@@ -80,7 +80,11 @@ clusterRef:
 
 ## Version field
 
-`spec.version` is the **`temporalio/temporal` CLI image tag**, not the Temporal
-server version. CLI releases follow their own cadence (e.g. `1.7.2`). The
-resulting image is `temporalio/temporal:<version>` unless `spec.image` is set to
-override it entirely.
+`spec.version` is the **Temporal server version** (e.g. `1.31.1`), the same value
+`TemporalCluster.spec.version` takes. The operator maps it to the matching
+`temporalio/temporal` CLI image (which runs `temporal server start-dev`) using the
+supported version matrix. When `version` is omitted, the latest supported server
+version is used.
+
+To pin a specific CLI image directly instead, set `spec.image` (e.g.
+`temporalio/temporal:1.7.2`); it takes precedence over `version`.

@@ -55,6 +55,14 @@ func (r *TemporalDevServerReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	image, err := resources.DevServerImage(&dev)
+	if err != nil {
+		dev.Status.ObservedGeneration = dev.Generation
+		dev.Status.Phase = "Failed"
+		r.setReady(&dev, metav1.ConditionFalse, temporalv1alpha1.ReasonVersionUnsupported, err.Error())
+		return ctrl.Result{}, r.statusUpdate(ctx, &dev)
+	}
+
 	if pvc := resources.BuildDevServerPVC(&dev); pvc != nil {
 		if err := r.apply(ctx, &dev, pvc); err != nil {
 			return ctrl.Result{}, err
@@ -63,7 +71,7 @@ func (r *TemporalDevServerReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if err := r.apply(ctx, &dev, resources.BuildDevServerService(&dev)); err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.apply(ctx, &dev, resources.BuildDevServerDeployment(&dev)); err != nil {
+	if err := r.apply(ctx, &dev, resources.BuildDevServerDeployment(&dev, image)); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -73,7 +81,7 @@ func (r *TemporalDevServerReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 
 	dev.Status.ObservedGeneration = dev.Generation
-	dev.Status.Version = resources.DevServerImage(&dev)
+	dev.Status.Version = resources.DevServerServerVersion(&dev)
 	dev.Status.Endpoints = temporalv1alpha1.DevServerEndpoints{
 		Frontend: resources.DevServerFrontendEndpoint(&dev),
 	}
