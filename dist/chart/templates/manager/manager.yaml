@@ -78,45 +78,6 @@ spec:
                       name: webhook-certs
                       readOnly: true
                     {{- end }}
-                    {{- if .Values.workloadIdentity.enable }}
-                    - name: azure-token
-                      mountPath: {{ dir .Values.workloadIdentity.tokenSidecar.tokenPath }}
-                    {{- end }}
-                {{- if .Values.workloadIdentity.enable }}
-                - name: azure-token-refresher
-                  image: {{ .Values.workloadIdentity.tokenSidecar.image }}
-                  command: ["/bin/sh", "-c"]
-                  args:
-                    - |
-                      set -e
-                      export HOME={{ dir .Values.workloadIdentity.tokenSidecar.tokenPath }}
-                      export AZURE_CONFIG_DIR={{ dir .Values.workloadIdentity.tokenSidecar.tokenPath }}/.azure
-                      az login --federated-token "$(cat $AZURE_FEDERATED_TOKEN_FILE)" \
-                        --service-principal -u "$AZURE_CLIENT_ID" -t "$AZURE_TENANT_ID" >/dev/null
-                      while true; do
-                        if az account get-access-token --resource-type oss-rdbms \
-                            --query accessToken -o tsv > {{ .Values.workloadIdentity.tokenSidecar.tokenPath }}.tmp 2>/dev/null; then
-                          mv {{ .Values.workloadIdentity.tokenSidecar.tokenPath }}.tmp {{ .Values.workloadIdentity.tokenSidecar.tokenPath }}
-                        else
-                          echo "azure token refresh failed; retrying" >&2
-                          rm -f {{ .Values.workloadIdentity.tokenSidecar.tokenPath }}.tmp
-                        fi
-                        sleep {{ .Values.workloadIdentity.tokenSidecar.refreshSeconds }}
-                      done
-                  securityContext:
-                    runAsNonRoot: true
-                    runAsUser: {{ .Values.workloadIdentity.tokenSidecar.runAsUser }}
-                    allowPrivilegeEscalation: false
-                    readOnlyRootFilesystem: false
-                    capabilities:
-                      drop:
-                        - ALL
-                  resources:
-                    {{- toYaml .Values.workloadIdentity.tokenSidecar.resources | nindent 20 }}
-                  volumeMounts:
-                    - name: azure-token
-                      mountPath: {{ dir .Values.workloadIdentity.tokenSidecar.tokenPath }}
-                {{- end }}
             securityContext:
               {{- if .Values.manager.podSecurityContext }}
               {{- toYaml .Values.manager.podSecurityContext | nindent 14 }}
@@ -130,8 +91,4 @@ spec:
                 - name: webhook-certs
                   secret:
                     secretName: webhook-server-cert
-                {{- end }}
-                {{- if .Values.workloadIdentity.enable }}
-                - name: azure-token
-                  emptyDir: {}
                 {{- end }}
