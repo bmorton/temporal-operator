@@ -1,14 +1,18 @@
 name: Preview Image
 
-# Builds and pushes a one-off preview container image (and a matching
-# install.yaml) for a branch or PR, so reviewers can try the operator on a
-# cluster before merging. Triggered manually from the Actions tab against the
-# branch you want to preview.
+# Builds and pushes a one-off preview container image AND a matching preview
+# Helm chart (pinned to that image) for a branch or PR, so reviewers can try the
+# operator on a cluster (e.g. via ArgoCD) before merging. Triggered manually
+# from the Actions tab against the branch you want to preview.
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Image tag (default: pr-<short-sha>)"
+      baseVersion:
+        description: "Base SemVer for the preview (default: latest release, minor bumped, e.g. 0.7.0)"
+        required: false
+        type: string
+      version:
+        description: "Full preview version override (must be valid SemVer; wins over baseVersion)"
         required: false
         type: string
       platforms:
@@ -31,17 +35,45 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Resolve image reference
+      - name: Resolve preview version
         id: ref
         env:
-          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BASE: ${{ inputs.baseVersion }}
           SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          tag="$INPUT_TAG"
-          if [ -z "$tag" ]; then
-            tag="pr-${SHA::7}"
+          set -euo pipefail
+          short="${SHA::7}"
+
+          if [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"
+          else
+            base="$INPUT_BASE"
+            if [ -z "$base" ]; then
+              # Latest published (non-prerelease, non-draft) release tag; fall
+              # back to 0.0.0 when the repo has no releases yet.
+              latest="$(gh api "repos/${REPO}/releases/latest" -q .tag_name 2>/dev/null || echo "v0.0.0")"
+              latest="${latest#v}"
+              major="${latest%%.*}"
+              rest="${latest#*.}"
+              minor="${rest%%.*}"
+              base="${major}.$((minor + 1)).0"
+            fi
+            version="${base}-pr.${short}"
           fi
-          echo "image=ghcr.io/bmorton/temporal-operator:${tag}" >> "$GITHUB_OUTPUT"
+
+          # Validate SemVer so chart packaging cannot fail late.
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          if ! printf '%s' "$version" | grep -Eq "$semver"; then
+            echo "::error::Resolved version '$version' is not valid SemVer" >&2
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/bmorton/temporal-operator:${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved preview version: ${version}"
 
       - name: Log in to GHCR
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
