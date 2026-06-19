@@ -1,0 +1,9 @@
+# A disposable dev server (single pod, SQLite, bundled UI).
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalDevServer
+metadata:
+  name: dev
+spec:
+  version: "1.7.2"
+  ui:
+    enabled: true

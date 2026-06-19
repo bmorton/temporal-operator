@@ -10,7 +10,7 @@ on:
       suite:
         description: Which suite(s) to run
         type: choice
-        options: [default, mtls, upgrade, opensearch, all]
+        options: [default, devserver, mtls, upgrade, opensearch, all]
         default: default
 
 permissions:
@@ -31,21 +31,23 @@ jobs:
           SUITE: ${{ github.event.inputs.suite }}
         run: |
           postgres='{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"}'
+          devserver='{"suite":"devserver"}'
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
           upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
           opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
           if [ "$EVENT" = "schedule" ]; then
-            echo "combos=[$postgres,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             case "$SUITE" in
+              devserver)  echo "combos=[$devserver]" >> "$GITHUB_OUTPUT" ;;
               mtls)       echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
               upgrade)    echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
               opensearch) echo "combos=[$opensearch]" >> "$GITHUB_OUTPUT" ;;
-              all)        echo "combos=[$postgres,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT" ;;
-              *)          echo "combos=[$postgres]" >> "$GITHUB_OUTPUT" ;;
+              all)        echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT" ;;
+              *)          echo "combos=[$postgres,$devserver]" >> "$GITHUB_OUTPUT" ;;
             esac
           else
-            echo "combos=[$postgres]" >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres,$devserver]" >> "$GITHUB_OUTPUT"
           fi
 
   e2e:
@@ -113,7 +115,17 @@ jobs:
             | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
           images=""
           for v in $versions; do
-            images="$images temporalio/server:$v temporalio/admin-tools:$v"
+            if echo "${{ matrix.combo.suite }}" | grep -q "^devserver"; then
+              # The dev server runs the temporalio/temporal CLI image, which is
+              # versioned independently of the server (its tags are the CLI
+              # releases, e.g. 1.7.x, not server versions like 1.31.x). Only the
+              # CLI image is derived from spec.version here; admin-tools (used by
+              # the test's health-check script) is pinned separately and picked
+              # up by the literal-image harvest below.
+              images="$images temporalio/temporal:$v"
+            else
+              images="$images temporalio/server:$v temporalio/admin-tools:$v"
+            fi
           done
           # Pick up any images referenced literally in the fixtures/scripts
           # (e.g. admin-tools health checks or pinned UI images).
@@ -147,6 +159,7 @@ jobs:
           mkdir -p artifacts
           kubectl get all -A > artifacts/all.txt || true
           kubectl get temporalcluster -A -o yaml > artifacts/temporalclusters.yaml || true
+          kubectl get temporaldevserver -A -o yaml > artifacts/temporaldevservers.yaml || true
           kubectl -n temporal-system logs deploy/temporal-operator-controller-manager --tail=2000 > artifacts/operator.log || true
 
       - name: Upload diagnostics

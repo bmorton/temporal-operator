@@ -1,0 +1,22 @@
+# Paused schedule: created but not firing. Flip state.paused to false and
+# re-apply to resume; the operator reconciles pause/unpause in place.
+#
+# Requires 00-shared.yaml (cluster "app" + namespace "scheduling").
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalSchedule
+metadata:
+  name: maintenance-window
+spec:
+  clusterRef: { name: app }
+  namespace: scheduling
+  allowDeletion: true
+  schedule:
+    calendars:
+      - "0 3 * * 0"               # Sundays at 03:00
+  action:
+    startWorkflow:
+      workflowType: RunMaintenance
+      taskQueue: ops
+  state:
+    paused: true
+    notes: "paused until the next maintenance window is approved"

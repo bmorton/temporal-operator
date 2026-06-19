@@ -1,0 +1,17 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalDevServer
+metadata:
+  name: dev-persistent
+spec:
+  version: "1.7.2"
+  ui:
+    enabled: true
+  # Pre-create extra namespaces at startup (default is always available).
+  namespaces:
+    - orders
+    - billing
+  storage:
+    type: Persistent
+    size: 1Gi
+  service:
+    type: ClusterIP

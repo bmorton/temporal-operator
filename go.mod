@@ -8,8 +8,9 @@ require (
 	github.com/cert-manager/cert-manager v1.20.2
 	github.com/go-logr/logr v1.4.3
 	github.com/gocql/gocql v1.7.0
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/onsi/ginkgo/v2 v2.29.0
+	github.com/onsi/ginkgo/v2 v2.30.0
 	github.com/onsi/gomega v1.41.0
 	go.temporal.io/api v1.62.14
 	google.golang.org/grpc v1.81.1
@@ -49,7 +50,6 @@ require (
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect

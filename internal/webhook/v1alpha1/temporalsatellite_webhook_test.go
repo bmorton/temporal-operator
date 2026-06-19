@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
@@ -33,7 +32,7 @@ var _ = Describe("TemporalNamespace Webhook", func() {
 	It("admits a namespace with a clusterRef", func() {
 		ns := &temporalv1alpha1.TemporalNamespace{
 			Spec: temporalv1alpha1.TemporalNamespaceSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: "tc"},
+				ClusterRef: temporalv1alpha1.ClusterReference{Name: "tc"},
 			},
 		}
 		_, err := validator.ValidateCreate(ctx, ns)
@@ -56,7 +55,7 @@ var _ = Describe("TemporalSearchAttribute Webhook", func() {
 	newSA := func(saType string) *temporalv1alpha1.TemporalSearchAttribute {
 		return &temporalv1alpha1.TemporalSearchAttribute{
 			Spec: temporalv1alpha1.TemporalSearchAttributeSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: "tc"},
+				ClusterRef: temporalv1alpha1.ClusterReference{Name: "tc"},
 				Namespace:  "default",
 				Name:       "CustomerId",
 				Type:       saType,

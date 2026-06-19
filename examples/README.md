@@ -10,8 +10,11 @@ services/secrets exist.
 | [`cluster-postgres-full`](./cluster-postgres-full) | Production-leaning sizing, UI, ingress, metrics. |
 | [`cluster-cassandra`](./cluster-cassandra) | Cassandra default + visibility store. |
 | [`cluster-mtls-cert-manager`](./cluster-mtls-cert-manager) | mTLS via a cert-manager CA issuer. |
+| [`cluster-client`](./cluster-client) | mTLS cluster plus a `TemporalClusterClient` that issues client credentials. |
 | [`cluster-elasticsearch-visibility`](./cluster-elasticsearch-visibility) | Postgres default + Elasticsearch visibility. |
 | [`cluster-with-namespaces-and-search-attributes`](./cluster-with-namespaces-and-search-attributes) | Declarative namespace + search attribute. |
+| [`schedules`](./schedules) | Declarative `TemporalSchedule` resources (cron, interval, structured calendar, paused). |
+| [`devserver`](./devserver) | Disposable single-pod `TemporalDevServer` (SQLite) for development/CI. |
 | [`cluster-cnpg-integrated`](./cluster-cnpg-integrated) | End-to-end with CloudNativePG. |
 | [`cluster-azure-postgres-flexible`](./cluster-azure-postgres-flexible) | Azure Database for PostgreSQL Flexible Server (password auth). |
 | [`cluster-azure-aks-ingress`](./cluster-azure-aks-ingress) | Temporal UI on AKS via Application Gateway (AGIC). |

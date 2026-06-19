@@ -17,11 +17,61 @@ limitations under the License.
 package temporal
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	enumspb "go.temporal.io/api/enums/v1"
+	workflowservice "go.temporal.io/api/workflowservice/v1"
+	"google.golang.org/grpc"
 )
+
+// fakeWorkflowService captures the requests issued by grpcScheduleClient. Only
+// the methods exercised by the tests are implemented; the embedded interface
+// makes the remaining methods panic if unexpectedly called.
+type fakeWorkflowService struct {
+	workflowservice.WorkflowServiceClient
+	lastCreate *workflowservice.CreateScheduleRequest
+	lastUpdate *workflowservice.UpdateScheduleRequest
+}
+
+func (f *fakeWorkflowService) CreateSchedule(_ context.Context, req *workflowservice.CreateScheduleRequest, _ ...grpc.CallOption) (*workflowservice.CreateScheduleResponse, error) {
+	f.lastCreate = req
+	return &workflowservice.CreateScheduleResponse{}, nil
+}
+
+func (f *fakeWorkflowService) UpdateSchedule(_ context.Context, req *workflowservice.UpdateScheduleRequest, _ ...grpc.CallOption) (*workflowservice.UpdateScheduleResponse, error) {
+	f.lastUpdate = req
+	return &workflowservice.UpdateScheduleResponse{}, nil
+}
+
+func TestCreate_SetsRequestID(t *testing.T) {
+	fake := &fakeWorkflowService{}
+	c := &grpcScheduleClient{workflow: fake}
+	if err := c.Create(context.Background(), baseParams()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fake.lastCreate == nil {
+		t.Fatal("CreateSchedule was not called")
+	}
+	if fake.lastCreate.GetRequestId() == "" {
+		t.Error("RequestId must be set on CreateScheduleRequest; Temporal rejects an empty RequestId with InvalidArgument")
+	}
+}
+
+func TestUpdate_SetsRequestID(t *testing.T) {
+	fake := &fakeWorkflowService{}
+	c := &grpcScheduleClient{workflow: fake}
+	if err := c.Update(context.Background(), baseParams()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fake.lastUpdate == nil {
+		t.Fatal("UpdateSchedule was not called")
+	}
+	if fake.lastUpdate.GetRequestId() == "" {
+		t.Error("RequestId must be set on UpdateScheduleRequest; Temporal rejects an empty RequestId with InvalidArgument")
+	}
+}
 
 func baseParams() ScheduleParams {
 	return ScheduleParams{

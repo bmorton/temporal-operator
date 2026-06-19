@@ -1,0 +1,11 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: my-app
+spec:
+  # Point at a TemporalDevServer instead of the default TemporalCluster kind.
+  clusterRef:
+    name: dev
+    kind: TemporalDevServer
+  retentionPeriod: 72h
+  allowDeletion: true

@@ -1,0 +1,36 @@
+# An mTLS-enabled TemporalCluster backed by the cert-manager CA issuer above.
+# TemporalClusterClient requires an mTLS-enabled cluster — the controller reads
+# mtls.issuerRef to issue client certificates.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-mtls
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  mtls:
+    provider: cert-manager
+    issuerRef:
+      name: temporal-ca-issuer
+      kind: Issuer
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: temporal-pg-rw
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: temporal-pg-rw
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password

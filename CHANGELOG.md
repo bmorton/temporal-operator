@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.0](https://github.com/bmorton/temporal-operator/compare/v0.5.1...v0.6.0) (2026-06-18)
+
+
+### Features
+
+* add TemporalDevServer CRD for disposable dev servers ([#68](https://github.com/bmorton/temporal-operator/issues/68)) ([2d896a8](https://github.com/bmorton/temporal-operator/commit/2d896a85647de3e45072305f5afc95a0e98e9167))
+
+## [0.5.1](https://github.com/bmorton/temporal-operator/compare/v0.5.0...v0.5.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **controller:** remove stranded finalizer when cluster deleted first ([#62](https://github.com/bmorton/temporal-operator/issues/62)) ([28f444c](https://github.com/bmorton/temporal-operator/commit/28f444c21db11a8be874a922750bfe4569d91d96))
+* **temporal:** set RequestId on schedule create/update requests ([#66](https://github.com/bmorton/temporal-operator/issues/66)) ([7550264](https://github.com/bmorton/temporal-operator/commit/7550264b2ad4af37bf9f24def66e68eee31ace4d))
+
 ## [0.5.0](https://github.com/bmorton/temporal-operator/compare/v0.4.0...v0.5.0) (2026-06-18)
 
 

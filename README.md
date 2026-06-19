@@ -47,9 +47,11 @@ for configurable values.
 | Kind | Short | Purpose |
 |---|---|---|
 | `TemporalCluster` | `tc` | A complete Temporal server deployment. |
+| `TemporalDevServer` | `tds` | A disposable single-pod dev server (SQLite); for development/CI, not production. |
 | `TemporalNamespace` | `tns` | A namespace within a managed cluster. |
 | `TemporalSearchAttribute` | `tsa` | A custom search attribute registration. |
-| `TemporalClusterClient` | `tcc` | Generated client credentials for a cluster. |
+| `TemporalSchedule` | `tsch` | A declarative Temporal schedule (cron or interval). |
+| `TemporalClusterClient` | `tcc` | Generated mTLS client credentials for a cluster. |
 
 ## Documentation
 
