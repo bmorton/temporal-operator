@@ -5,7 +5,10 @@ The operator serves a read-only UI when you set `--ui-bind-address` (e.g.
 front it with a forward-auth proxy such as Authelia and pass the trusted
 identity headers through.
 
-1. Enable the UI on the manager by setting `--ui-bind-address=:8082`.
+1. Enable the UI on the manager by adding `--ui-bind-address=:8082` to its
+   arguments. With the Helm chart that means appending it to `manager.args` in
+   your values (alongside `--leader-elect`); with raw kustomize, add it to the
+   manager container args.
 2. Apply `config/ui` to expose the `operator-ui` Service.
 3. Apply `ingress-authelia.yaml` (edit hosts/URLs) so Authelia authenticates
    users and injects `Remote-User` / `Remote-Groups` / `Remote-Email`.

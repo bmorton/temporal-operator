@@ -70,9 +70,49 @@ mTLS, endpoints, conditions, in-flight upgrades, and related namespaces, clients
 and search attributes).
 
 It is **disabled by default**. Enable it by setting `--ui-bind-address` (for
-example `:8082`) and front it with a forward-auth proxy (e.g. Authelia) — the
-operator does not authenticate users itself. See `examples/ui/` for a worked
-example.
+example `:8082`) on the manager and front it with a forward-auth proxy (e.g.
+Authelia) — the operator does not authenticate users itself.
+
+### Enabling it
+
+The UI flags are manager arguments. With the Helm chart, add them to
+`manager.args` in your values:
+
+```yaml
+manager:
+  args:
+    - --leader-elect
+    - --ui-bind-address=:8082
+    # Recommended whenever the UI is reachable in-cluster (fail closed):
+    - --ui-require-auth
+```
+
+```sh
+helm upgrade --install temporal-operator dist/chart -n temporal-operator-system \
+  --set-string 'manager.args[0]=--leader-elect' \
+  --set-string 'manager.args[1]=--ui-bind-address=:8082'
+```
+
+(Using raw kustomize instead? Add the same flags to the manager container args
+and apply the `config/ui` overlay for the Service.)
+
+### Take a quick look
+
+To browse the UI without setting up a proxy first, port-forward the manager and
+open it locally (leave `--ui-require-auth` off for this, or send the header
+yourself):
+
+```sh
+kubectl -n temporal-operator-system port-forward \
+  deploy/temporal-operator-controller-manager 8082:8082
+# then open http://localhost:8082
+```
+
+### Exposing it for real
+
+To expose the UI to users, apply the `config/ui` Service and front it with a
+forward-auth proxy. See [`examples/ui/`](./examples/ui/) for a worked Authelia
+Ingress, a NetworkPolicy, and the security notes below.
 
 Because the Service routes directly to the pod, set `--ui-require-auth` (and
 optionally a NetworkPolicy; see `examples/ui/`) so direct in-cluster access
