@@ -1,14 +1,18 @@
 name: Preview Image
 
-# Builds and pushes a one-off preview container image (and a matching
-# install.yaml) for a branch or PR, so reviewers can try the operator on a
-# cluster before merging. Triggered manually from the Actions tab against the
-# branch you want to preview.
+# Builds and pushes a one-off preview container image AND a matching preview
+# Helm chart (pinned to that image) for a branch or PR, so reviewers can try the
+# operator on a cluster (e.g. via ArgoCD) before merging. Triggered manually
+# from the Actions tab against the branch you want to preview.
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Image tag (default: pr-<short-sha>)"
+      baseVersion:
+        description: "Base SemVer for the preview (default: latest release, minor bumped, e.g. 0.7.0)"
+        required: false
+        type: string
+      version:
+        description: "Full preview version override (must be valid SemVer; wins over baseVersion)"
         required: false
         type: string
       platforms:
@@ -31,17 +35,51 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Resolve image reference
+      - name: Resolve preview version
         id: ref
         env:
-          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BASE: ${{ inputs.baseVersion }}
           SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          tag="$INPUT_TAG"
-          if [ -z "$tag" ]; then
-            tag="pr-${SHA::7}"
+          set -euo pipefail
+          short="${SHA::7}"
+
+          if [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"
+          else
+            base="$INPUT_BASE"
+            if [ -z "$base" ]; then
+              # Latest published (non-prerelease, non-draft) release tag; fall
+              # back to 0.0.0 when the repo has no releases yet. The fallback is
+              # outside the command substitution so a failing (e.g. 404) gh call
+              # cannot leak its response body into the captured value.
+              latest="$(gh api "repos/${REPO}/releases/latest" -q .tag_name 2>/dev/null)" || latest=""
+              latest="${latest:-v0.0.0}"
+              latest="${latest#v}"
+              major="${latest%%.*}"
+              rest="${latest#*.}"
+              minor="${rest%%.*}"
+              base="${major}.$((minor + 1)).0"
+            fi
+            version="${base}-pr.${short}"
           fi
-          echo "image=ghcr.io/bmorton/temporal-operator:${tag}" >> "$GITHUB_OUTPUT"
+
+          # Validate the whole value as SemVer. Use bash [[ =~ ]] on the scalar
+          # (not line-based grep, which would accept a multi-line value), and
+          # disallow build metadata ('+'): preview versions are prereleases and
+          # '+' is not a valid OCI tag character.
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'
+          if [[ ! "$version" =~ $semver ]]; then
+            echo "::error::Resolved version '$version' is not a valid preview SemVer (no build metadata)" >&2
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/bmorton/temporal-operator:${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved preview version: ${version}"
 
       - name: Log in to GHCR
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
@@ -84,22 +122,49 @@ jobs:
           path: dist/install.yaml
           if-no-files-found: error
 
+      - name: Set up Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+
+      - name: Package and push preview chart to GHCR (OCI)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+          VERSION: ${{ steps.ref.outputs.version }}
+        run: |
+          set -euo pipefail
+          helm package dist/chart --version "$VERSION" --app-version "$VERSION"
+          echo "$GITHUB_TOKEN" | helm registry login ghcr.io -u "$REGISTRY_USER" --password-stdin
+          helm push "temporal-operator-${VERSION}.tgz" oci://ghcr.io/bmorton/charts
+
       - name: Summary
         env:
           IMAGE: ${{ steps.ref.outputs.image }}
+          VERSION: ${{ steps.ref.outputs.version }}
         run: |
           {
-            echo "### Preview image published"
+            echo "### Preview artifacts published"
             echo
+            echo "**Image**"
             echo '```'
             echo "$IMAGE"
             echo '```'
             echo
-            echo "Download the **install-yaml** artifact from this run (CRDs + operator pinned to the image above), then:"
-            echo
-            echo '```sh'
-            echo "kubectl apply -f install.yaml"
+            echo "**Helm chart** (OCI)"
+            echo '```'
+            echo "oci://ghcr.io/bmorton/charts/temporal-operator:${VERSION}"
             echo '```'
             echo
-            echo "The full installer expects cert-manager (for the validating webhook). To skip the webhook, set ENABLE_WEBHOOKS=false on the manager Deployment."
+            echo "**ArgoCD source** (set targetRevision to the preview version; flip back to your mainline version after merge):"
+            echo '```yaml'
+            echo "source:"
+            echo "  repoURL: ghcr.io/bmorton/charts"
+            echo "  chart: temporal-operator"
+            echo "  targetRevision: ${VERSION}"
+            echo "  helm:"
+            echo "    releaseName: temporal-operator"
+            echo '```'
+            echo
+            echo "Or with raw manifests: download the **install-yaml** artifact and \`kubectl apply -f install.yaml\`."
+            echo
+            echo "The chart/installer expect cert-manager (for the validating webhook). To skip the webhook, set ENABLE_WEBHOOKS=false on the manager Deployment."
           } >> "$GITHUB_STEP_SUMMARY"
