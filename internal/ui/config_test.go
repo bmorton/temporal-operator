@@ -91,6 +91,13 @@ func TestNormalizeTrimsTrailingSlash(t *testing.T) {
 	}
 }
 
+func TestNormalizeClampsSubSecondRefresh(t *testing.T) {
+	o := Options{RefreshInterval: 500 * time.Millisecond}.Normalize()
+	if o.RefreshInterval != time.Second {
+		t.Errorf("RefreshInterval = %v, want 1s (clamped)", o.RefreshInterval)
+	}
+}
+
 func TestEnabled(t *testing.T) {
 	if (Options{BindAddress: ""}).Enabled() {
 		t.Error("empty BindAddress should be disabled")

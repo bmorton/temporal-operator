@@ -37,7 +37,12 @@ type Options struct {
 	EmailHeader  string
 }
 
-// DefaultOptions returns the default UI options.
+// DefaultOptions returns the UI options used when the UI is enabled.
+//
+// Note: BindAddress here (":8082") is the suggested address once the UI is
+// turned on; it is NOT the runtime default. The CLI flag --ui-bind-address
+// defaults to empty (disabled), and Normalize never fills BindAddress from
+// these defaults, so an empty BindAddress keeps the UI off.
 func DefaultOptions() Options {
 	return Options{
 		BindAddress:     ":8082",
@@ -57,6 +62,11 @@ func (o Options) Normalize() Options {
 	d := DefaultOptions()
 	if o.RefreshInterval <= 0 {
 		o.RefreshInterval = d.RefreshInterval
+	}
+	if o.RefreshInterval < time.Second {
+		// htmx hx-trigger uses whole seconds; clamp so sub-second
+		// intervals never render as "every 0s".
+		o.RefreshInterval = time.Second
 	}
 	if o.UserHeader == "" {
 		o.UserHeader = d.UserHeader

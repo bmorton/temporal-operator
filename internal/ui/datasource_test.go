@@ -20,7 +20,6 @@ import (
 	"context"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -72,11 +71,11 @@ func TestGetClusterWithRelated(t *testing.T) {
 		},
 		&temporalv1alpha1.TemporalNamespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "orders", Namespace: "team-a"},
-			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: "demo"}},
+			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: "demo"}},
 		},
 		&temporalv1alpha1.TemporalNamespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "team-a"},
-			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: "nope"}},
+			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: "nope"}},
 		},
 	).Build()
 
@@ -103,7 +102,7 @@ func TestGetClusterExcludesOtherNamespaces(t *testing.T) {
 		// Same cluster name, DIFFERENT namespace — must NOT appear as related.
 		&temporalv1alpha1.TemporalNamespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "intruder", Namespace: "team-b"},
-			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: "demo"}},
+			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: "demo"}},
 		},
 	).Build()
 
@@ -126,11 +125,11 @@ func TestGetClusterRelatedClientsAndAttributes(t *testing.T) {
 		},
 		&temporalv1alpha1.TemporalClusterClient{
 			ObjectMeta: metav1.ObjectMeta{Name: "cli", Namespace: "team-a"},
-			Spec:       temporalv1alpha1.TemporalClusterClientSpec{ClusterRef: corev1.LocalObjectReference{Name: "demo"}},
+			Spec:       temporalv1alpha1.TemporalClusterClientSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: "demo"}},
 		},
 		&temporalv1alpha1.TemporalSearchAttribute{
 			ObjectMeta: metav1.ObjectMeta{Name: "attr", Namespace: "team-a"},
-			Spec:       temporalv1alpha1.TemporalSearchAttributeSpec{ClusterRef: corev1.LocalObjectReference{Name: "demo"}},
+			Spec:       temporalv1alpha1.TemporalSearchAttributeSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: "demo"}},
 		},
 	).Build()
 

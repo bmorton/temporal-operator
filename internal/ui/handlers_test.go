@@ -111,6 +111,20 @@ func TestStaticRouteServesPrefixedBasePath(t *testing.T) {
 	}
 }
 
+func TestBareBasePathRedirectsToTrailingSlash(t *testing.T) {
+	opts := DefaultOptions()
+	opts.BasePath = "/ops"
+	s := newTestServer(&fakeDS{}, opts)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ops", nil))
+	if rr.Code != http.StatusMovedPermanently {
+		t.Fatalf("code = %d, want 301", rr.Code)
+	}
+	if loc := rr.Header().Get("Location"); loc != "/ops/" {
+		t.Errorf("Location = %q, want /ops/", loc)
+	}
+}
+
 func TestClusterDetailRoute(t *testing.T) {
 	ds := &fakeDS{detail: &ClusterDetail{
 		ClusterSummary: ClusterSummary{Namespace: "team-a", Name: "demo", Ready: BadgeOK},

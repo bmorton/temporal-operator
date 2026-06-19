@@ -171,10 +171,20 @@ func endpointsInfo(c *temporalv1alpha1.TemporalCluster) EndpointsInfo {
 	}
 }
 
+// refersToCluster reports whether ref points at the named TemporalCluster.
+// Kind defaults to TemporalCluster when unset, so a satellite that targets a
+// same-named TemporalDevServer is not attributed to the cluster.
+func refersToCluster(ref temporalv1alpha1.ClusterReference, cluster string) bool {
+	if ref.Name != cluster {
+		return false
+	}
+	return ref.Kind == "" || ref.Kind == temporalv1alpha1.ClusterKindTemporalCluster
+}
+
 func relatedNamespaces(items []temporalv1alpha1.TemporalNamespace, cluster string) []RelatedResource {
 	out := make([]RelatedResource, 0)
 	for i := range items {
-		if items[i].Spec.ClusterRef.Name != cluster {
+		if !refersToCluster(items[i].Spec.ClusterRef, cluster) {
 			continue
 		}
 		detail := ""
@@ -194,7 +204,7 @@ func relatedNamespaces(items []temporalv1alpha1.TemporalNamespace, cluster strin
 func relatedClients(items []temporalv1alpha1.TemporalClusterClient, cluster string) []RelatedResource {
 	out := make([]RelatedResource, 0)
 	for i := range items {
-		if items[i].Spec.ClusterRef.Name != cluster {
+		if !refersToCluster(items[i].Spec.ClusterRef, cluster) {
 			continue
 		}
 		detail := ""
@@ -214,7 +224,7 @@ func relatedClients(items []temporalv1alpha1.TemporalClusterClient, cluster stri
 func relatedSearchAttributes(items []temporalv1alpha1.TemporalSearchAttribute, cluster string) []RelatedResource {
 	out := make([]RelatedResource, 0)
 	for i := range items {
-		if items[i].Spec.ClusterRef.Name != cluster {
+		if !refersToCluster(items[i].Spec.ClusterRef, cluster) {
 			continue
 		}
 		out = append(out, RelatedResource{

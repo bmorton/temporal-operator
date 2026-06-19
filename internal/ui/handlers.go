@@ -43,6 +43,14 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET "+base+"/static/", StaticHandler(JoinPath(s.opts.BasePath, "/static/")))
 
 	mux.HandleFunc("GET "+base+"/{$}", s.handleOverview)
+	if base != "" {
+		// A non-root BasePath only registers "<base>/"; redirect the bare
+		// "<base>" (a common entry URL / ingress rewrite) to it.
+		target := base + "/"
+		mux.HandleFunc("GET "+base, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, target, http.StatusMovedPermanently)
+		})
+	}
 	mux.HandleFunc("GET "+base+"/partials/clusters", s.handleClustersPartial)
 	mux.HandleFunc("GET "+base+"/clusters/{namespace}/{name}", s.handleClusterDetail)
 	mux.HandleFunc("GET "+base+"/partials/clusters/{namespace}/{name}", s.handleClusterDetailPartial)

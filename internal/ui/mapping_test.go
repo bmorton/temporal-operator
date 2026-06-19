@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -158,16 +157,46 @@ func TestUpgradeInfo(t *testing.T) {
 func TestRelatedFromSatellites(t *testing.T) {
 	ns := []temporalv1alpha1.TemporalNamespace{{
 		ObjectMeta: metav1.ObjectMeta{Name: "orders", Namespace: "team-a"},
-		Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: "demo"}},
+		Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: "demo"}},
 		Status: temporalv1alpha1.TemporalNamespaceStatus{
 			Conditions: []metav1.Condition{cond("Ready", "True", "")},
 		},
 	}}
 	other := []temporalv1alpha1.TemporalNamespace{{
-		Spec: temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: corev1.LocalObjectReference{Name: "elsewhere"}},
+		Spec: temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: "elsewhere"}},
 	}}
 	got := relatedNamespaces(append(ns, other...), "demo")
 	if len(got) != 1 || got[0].Name != "orders" || got[0].Ready != BadgeOK {
 		t.Errorf("related wrong: %+v", got)
+	}
+}
+
+func TestRelatedExcludesDevServerKind(t *testing.T) {
+	items := []temporalv1alpha1.TemporalNamespace{
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "on-cluster", Namespace: "team-a"},
+			Spec: temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{
+				Name: "demo", Kind: temporalv1alpha1.ClusterKindTemporalCluster,
+			}},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "default-kind", Namespace: "team-a"},
+			Spec:       temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{Name: "demo"}},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "on-devserver", Namespace: "team-a"},
+			Spec: temporalv1alpha1.TemporalNamespaceSpec{ClusterRef: temporalv1alpha1.ClusterReference{
+				Name: "demo", Kind: temporalv1alpha1.ClusterKindTemporalDevServer,
+			}},
+		},
+	}
+	got := relatedNamespaces(items, "demo")
+	if len(got) != 2 {
+		t.Fatalf("want 2 cluster-scoped namespaces, got %d: %+v", len(got), got)
+	}
+	for _, r := range got {
+		if r.Name == "on-devserver" {
+			t.Errorf("devserver-scoped namespace should not be attributed to the cluster: %+v", got)
+		}
 	}
 }
