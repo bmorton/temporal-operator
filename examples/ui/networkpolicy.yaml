@@ -1,0 +1,23 @@
+# Example: restrict access to the operator UI Service to the nginx ingress
+# controller only, so in-cluster clients cannot reach it directly. Adjust the
+# namespaceSelector/podSelector to match your ingress controller, and the
+# podSelector to match the operator manager pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: operator-ui-allow-ingress
+  namespace: temporal-operator-system
+spec:
+  podSelector:
+    matchLabels:
+      control-plane: controller-manager
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8082

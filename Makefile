@@ -46,7 +46,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: controller-gen ui-generate ## Generate DeepCopy methods and templ Go code.
 	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: gen-version-matrix
@@ -219,6 +219,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 CHAINSAW ?= $(LOCALBIN)/chainsaw
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
+TEMPL ?= $(LOCALBIN)/templ
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.7.1
@@ -226,6 +227,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.19.0
 KIND_VERSION ?= v0.27.0
 CHAINSAW_VERSION ?= v0.2.15
 CRD_REF_DOCS_VERSION ?= v0.3.0
+TEMPL_VERSION ?= v0.3.1020
 
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell v='$(call gomodver,sigs.k8s.io/controller-runtime)'; \
@@ -296,6 +298,15 @@ crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
 $(CRD_REF_DOCS): $(LOCALBIN)
 	$(call go-install-tool,$(CRD_REF_DOCS),github.com/elastic/crd-ref-docs,$(CRD_REF_DOCS_VERSION))
 
+.PHONY: templ
+templ: $(TEMPL) ## Download templ locally if necessary.
+$(TEMPL): $(LOCALBIN)
+	$(call go-install-tool,$(TEMPL),github.com/a-h/templ/cmd/templ,$(TEMPL_VERSION))
+
+.PHONY: ui-generate
+ui-generate: templ ## Generate Go code from .templ files.
+	"$(TEMPL)" generate
+
 .PHONY: api-docs
 api-docs: crd-ref-docs ## Generate CRD API reference documentation.
 	"$(CRD_REF_DOCS)" --source-path=./api/v1alpha1 --config=hack/crd-ref-docs-config.yaml --renderer=markdown --output-path=docs/api/v1alpha1.md
@@ -332,7 +343,7 @@ $(KUBEBUILDER): $(LOCALBIN) hack/tools/go.mod
 	cd hack/tools && GOBIN="$(LOCALBIN)" go install sigs.k8s.io/kubebuilder/v4
 
 .PHONY: install-tools
-install-tools: controller-gen kustomize envtest golangci-lint chainsaw crd-ref-docs kind kubebuilder ## Install all pinned developer tooling into ./bin.
+install-tools: controller-gen kustomize envtest golangci-lint chainsaw crd-ref-docs kind kubebuilder templ ## Install all pinned developer tooling into ./bin.
 	@echo "Developer tooling installed in $(LOCALBIN)."
 
 .PHONY: kind-up

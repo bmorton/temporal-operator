@@ -14,3 +14,4 @@
 # These are not *.go files, so the rule above would otherwise drop them and
 # break the build (e.g. "pattern ...: no matching files found").
 !internal/temporal/templates/**
+!internal/ui/static/**

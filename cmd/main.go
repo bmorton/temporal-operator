@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -37,6 +38,7 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/controller"
+	"github.com/bmorton/temporal-operator/internal/ui"
 	webhookv1alpha1 "github.com/bmorton/temporal-operator/internal/webhook/v1alpha1"
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -66,6 +68,10 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	var uiBindAddress string
+	var uiRefreshInterval time.Duration
+	var uiBasePath string
+	var uiRequireAuth bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -83,6 +89,13 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&uiBindAddress, "ui-bind-address", "",
+		"Address the read-only operator UI binds to (e.g. :8082). Empty (the default) disables the UI.")
+	flag.DurationVar(&uiRefreshInterval, "ui-refresh-interval", 5*time.Second,
+		"How often the UI auto-refreshes via htmx polling.")
+	flag.StringVar(&uiBasePath, "ui-base-path", "/", "URL base path the UI is served under.")
+	flag.BoolVar(&uiRequireAuth, "ui-require-auth", false,
+		"Require a trusted forward-auth user header; return 401 when absent.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -251,6 +264,21 @@ func main() {
 		}
 	}
 	// +kubebuilder:scaffold:builder
+
+	uiOpts := ui.Options{
+		BindAddress:     uiBindAddress,
+		RefreshInterval: uiRefreshInterval,
+		BasePath:        uiBasePath,
+		RequireAuth:     uiRequireAuth,
+	}
+	if uiOpts.Enabled() {
+		uiServer := ui.NewServer(uiOpts, &ui.CachedDataSource{Reader: mgr.GetClient()}, ctrl.Log.WithName("ui"))
+		if err := mgr.Add(uiServer); err != nil {
+			setupLog.Error(err, "unable to register UI server")
+			os.Exit(1)
+		}
+		setupLog.Info("operator UI enabled", "address", uiBindAddress)
+	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")

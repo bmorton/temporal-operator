@@ -4,7 +4,9 @@ go 1.26.4
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
+	github.com/a-h/templ v0.3.1020
 	github.com/cert-manager/cert-manager v1.20.2
+	github.com/go-logr/logr v1.4.3
 	github.com/gocql/gocql v1.7.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -36,7 +38,6 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
-	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.22.4 // indirect
