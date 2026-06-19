@@ -28,6 +28,7 @@ Package v1alpha1 contains API Schema definitions for the temporal v1alpha1 API g
 - [TemporalCluster](#temporalcluster)
 - [TemporalClusterClient](#temporalclusterclient)
 - [TemporalDevServer](#temporaldevserver)
+- [TemporalMigration](#temporalmigration)
 - [TemporalNamespace](#temporalnamespace)
 - [TemporalSchedule](#temporalschedule)
 - [TemporalSearchAttribute](#temporalsearchattribute)
@@ -456,6 +457,41 @@ _Appears in:_
 | `serviceMonitor` _[ServiceMonitorSpec](#servicemonitorspec)_ |  |  | Optional: \{\} <br /> |
 
 
+#### NamespaceDrainStatus
+
+
+
+NamespaceDrainStatus reports drain progress for one source namespace.
+
+
+
+_Appears in:_
+- [TemporalMigrationStatus](#temporalmigrationstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `namespace` _string_ |  |  |  |
+| `sourceRunningWorkflows` _integer_ |  |  | Optional: \{\} <br /> |
+| `drained` _boolean_ |  |  | Optional: \{\} <br /> |
+
+
+#### NamespaceMapping
+
+
+
+NamespaceMapping maps a source namespace to a target namespace.
+
+
+
+_Appears in:_
+- [TemporalMigrationSpec](#temporalmigrationspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `source` _string_ |  |  |  |
+| `target` _string_ |  |  | Optional: \{\} <br /> |
+
+
 #### PersistenceSpec
 
 
@@ -508,6 +544,24 @@ _Appears in:_
 | `labels` _object (keys:string, values:string)_ |  |  | Optional: \{\} <br /> |
 | `annotations` _object (keys:string, values:string)_ |  |  | Optional: \{\} <br /> |
 | `spec` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | Spec is a partial PodSpec (strategic-merge patch) merged onto the<br />generated pod template. It is stored as an opaque object to keep the<br />CRD schema small. |  | Optional: \{\} <br /> |
+
+
+#### ProxySpec
+
+
+
+ProxySpec tunes the provisioned proxy Deployment.
+
+
+
+_Appears in:_
+- [TemporalMigrationSpec](#temporalmigrationspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `replicas` _integer_ |  | 1 | Minimum: 1 <br />Optional: \{\} <br /> |
+| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#resourcerequirements-v1-core)_ |  |  | Optional: \{\} <br /> |
+| `image` _string_ | Image overrides the proxy image. Defaults to the operator image. |  | Optional: \{\} <br /> |
 
 
 #### RetryPolicySpec
@@ -787,6 +841,41 @@ _Appears in:_
 | `overrides` _[ServiceOverrides](#serviceoverrides)_ | Overrides are applied to every service unless overridden per-service. |  | Optional: \{\} <br /> |
 
 
+#### SourceClusterSpec
+
+
+
+SourceClusterSpec describes how to reach the external source frontend.
+
+
+
+_Appears in:_
+- [TemporalMigrationSpec](#temporalmigrationspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `address` _string_ | Address is the source frontend host:port (e.g. "old-temporal:7233"). |  |  |
+| `tls` _[SourceTLSSpec](#sourcetlsspec)_ | TLS configures how the proxy connects to the source. |  | Optional: \{\} <br /> |
+
+
+#### SourceTLSSpec
+
+
+
+SourceTLSSpec configures TLS/mTLS from the proxy to the source frontend.
+
+
+
+_Appears in:_
+- [SourceClusterSpec](#sourceclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled turns on TLS to the source frontend. |  | Optional: \{\} <br /> |
+| `secretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core)_ | SecretRef holds ca.crt (and optional tls.crt/tls.key for client mTLS). |  | Optional: \{\} <br /> |
+| `serverName` _string_ | ServerName overrides SNI / certificate verification name. |  | Optional: \{\} <br /> |
+
+
 #### StartWorkflowAction
 
 
@@ -967,6 +1056,47 @@ _Appears in:_
 | `nodeSelector` _object (keys:string, values:string)_ | NodeSelector constrains the dev server pod to matching nodes. |  | Optional: \{\} <br /> |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#toleration-v1-core) array_ | Tolerations applied to the dev server pod. |  | Optional: \{\} <br /> |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#affinity-v1-core)_ | Affinity applied to the dev server pod. |  | Optional: \{\} <br /> |
+
+
+
+
+#### TemporalMigration
+
+
+
+TemporalMigration is the Schema for the temporalmigrations API.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `temporal.bmor10.com/v1alpha1` | | |
+| `kind` _string_ | `TemporalMigration` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  | Optional: \{\} <br /> |
+| `spec` _[TemporalMigrationSpec](#temporalmigrationspec)_ |  |  | Required: \{\} <br /> |
+
+
+#### TemporalMigrationSpec
+
+
+
+TemporalMigrationSpec defines a migration from an external source Temporal
+cluster to an operator-managed target TemporalCluster via a managed proxy.
+
+
+
+_Appears in:_
+- [TemporalMigration](#temporalmigration)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `source` _[SourceClusterSpec](#sourceclusterspec)_ | Source describes the EXTERNAL Temporal cluster being migrated away from. |  |  |
+| `targetRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core)_ | TargetRef references the operator-managed TemporalCluster to migrate to. |  |  |
+| `namespaces` _[NamespaceMapping](#namespacemapping) array_ | Namespaces to migrate. Empty means all namespaces present on the source. |  | Optional: \{\} <br /> |
+| `cutover` _boolean_ | Cutover is the manual gate. false keeps the proxy in passthrough mode<br />(100% to source). true routes new starts to the target and falls back to<br />the source for operations on existing workflows. |  | Optional: \{\} <br /> |
+| `proxy` _[ProxySpec](#proxyspec)_ | Proxy tunes the provisioned proxy Deployment. |  | Optional: \{\} <br /> |
 
 
 
