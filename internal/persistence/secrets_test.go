@@ -138,3 +138,38 @@ func TestResolveStoreDispatch(t *testing.T) {
 		t.Errorf("expected error for empty datastore")
 	}
 }
+
+func TestResolveSQLAzureWorkloadIdentityDefaultScope(t *testing.T) {
+	r := &SecretResolver{Namespace: "ns"}
+	spec := &temporalv1alpha1.SQLDatastoreSpec{
+		AzureWorkloadIdentity: &temporalv1alpha1.AzureWorkloadIdentitySpec{},
+	}
+	cred, err := r.ResolveSQL(context.Background(), spec)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cred.AzureWorkloadIdentity == nil || cred.AzureWorkloadIdentity.Scope != DefaultAzureOSSRDBMSScope {
+		t.Errorf("expected default scope, got %+v", cred.AzureWorkloadIdentity)
+	}
+}
+
+func TestResolveSQLAzureWorkloadIdentityCustomScopeAdditiveWithCommand(t *testing.T) {
+	c := newClient(
+		secret("cmd", map[string]string{"password": "aws rds generate-token"}),
+	).Build()
+	r := NewSecretResolver(c, "ns")
+
+	cred, err := r.ResolveSQL(context.Background(), &temporalv1alpha1.SQLDatastoreSpec{
+		PasswordCommandSecretRef: &temporalv1alpha1.SecretKeyReference{Name: "cmd"},
+		AzureWorkloadIdentity:    &temporalv1alpha1.AzureWorkloadIdentitySpec{Scope: "https://custom/.default"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cred.PasswordCommand != "aws rds generate-token" {
+		t.Errorf("expected passwordCommand, got %q", cred.PasswordCommand)
+	}
+	if cred.AzureWorkloadIdentity == nil || cred.AzureWorkloadIdentity.Scope != "https://custom/.default" {
+		t.Errorf("expected custom scope, got %+v", cred.AzureWorkloadIdentity)
+	}
+}

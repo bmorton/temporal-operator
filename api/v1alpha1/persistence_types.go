@@ -91,6 +91,15 @@ type SQLDatastoreSpec struct {
 	// +optional
 	PasswordCommandSecretRef *SecretKeyReference `json:"passwordCommandSecretRef,omitempty"`
 
+	// AzureWorkloadIdentity, when set, makes the OPERATOR authenticate its own
+	// reachability probe and schema-version inspection using a Microsoft Entra
+	// access token obtained via Azure Workload Identity (no static password or
+	// passwordCommand needed for the operator). The Temporal server pods and the
+	// schema Job authenticate independently (typically via passwordCommand). The
+	// operator pod must run with Azure Workload Identity enabled.
+	// +optional
+	AzureWorkloadIdentity *AzureWorkloadIdentitySpec `json:"azureWorkloadIdentity,omitempty"`
+
 	// +optional
 	ConnectAttributes map[string]string `json:"connectAttributes,omitempty"`
 
@@ -107,6 +116,17 @@ type SQLDatastoreSpec struct {
 
 	// +optional
 	TLS *DatastoreTLSSpec `json:"tls,omitempty"`
+}
+
+// AzureWorkloadIdentitySpec configures Microsoft Entra (Azure AD) token auth for
+// the operator's own database connections via Azure Workload Identity. Its
+// presence enables the feature.
+type AzureWorkloadIdentitySpec struct {
+	// Scope is the Entra token scope requested for the database. Defaults to
+	// "https://ossrdbms-aad.database.windows.net/.default" (Azure Database for
+	// PostgreSQL Flexible Server).
+	// +optional
+	Scope string `json:"scope,omitempty"`
 }
 
 // CassandraDatastoreSpec configures a Cassandra datastore.

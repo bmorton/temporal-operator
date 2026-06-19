@@ -30,14 +30,31 @@ import (
 )
 
 // ResolvedCredential is the resolved authentication material for a datastore.
-// Exactly one of Password or PasswordCommand is set.
+// Password or PasswordCommand may be set for the server / schema Job;
+// AzureWorkloadIdentity may additionally be set for operator-side token auth.
 type ResolvedCredential struct {
 	// Password is a static password (password-auth).
 	Password string
 	// PasswordCommand is a command that emits a short-lived credential
 	// (Temporal 1.31+ IAM auth). When set, Password is empty.
 	PasswordCommand string
+	// AzureWorkloadIdentity, when non-nil, tells the operator to obtain a
+	// Microsoft Entra access token via Azure Workload Identity for its own
+	// database connections (probe + schema inspection). It is additive: the same
+	// store may also carry Password/PasswordCommand for the server / schema Job.
+	AzureWorkloadIdentity *AzureWorkloadIdentityCredential
 }
+
+// AzureWorkloadIdentityCredential carries the resolved Entra token scope for
+// operator-side Azure Workload Identity auth.
+type AzureWorkloadIdentityCredential struct {
+	// Scope is the Entra token scope.
+	Scope string
+}
+
+// DefaultAzureOSSRDBMSScope is the default Entra token scope for Azure Database
+// for PostgreSQL / MySQL Flexible Server.
+const DefaultAzureOSSRDBMSScope = "https://ossrdbms-aad.database.windows.net/.default"
 
 // SecretResolver resolves datastore password references from Secrets in the
 // cluster's namespace.
@@ -73,24 +90,33 @@ func (r *SecretResolver) getSecretValue(ctx context.Context, ref *temporalv1alph
 	return string(value), nil
 }
 
-// ResolveSQL resolves the credential for a SQL datastore. The passwordCommand
-// reference takes precedence over a static password when both are set.
+// ResolveSQL resolves the credential for a SQL datastore. AzureWorkloadIdentity
+// is additive and set whenever the spec enables it. PasswordCommand takes
+// precedence over a static password when both password refs are set.
 func (r *SecretResolver) ResolveSQL(ctx context.Context, spec *temporalv1alpha1.SQLDatastoreSpec) (ResolvedCredential, error) {
-	if spec.PasswordCommandSecretRef != nil {
+	var cred ResolvedCredential
+	if spec.AzureWorkloadIdentity != nil {
+		scope := spec.AzureWorkloadIdentity.Scope
+		if scope == "" {
+			scope = DefaultAzureOSSRDBMSScope
+		}
+		cred.AzureWorkloadIdentity = &AzureWorkloadIdentityCredential{Scope: scope}
+	}
+	switch {
+	case spec.PasswordCommandSecretRef != nil:
 		cmd, err := r.getSecretValue(ctx, spec.PasswordCommandSecretRef)
 		if err != nil {
 			return ResolvedCredential{}, err
 		}
-		return ResolvedCredential{PasswordCommand: cmd}, nil
-	}
-	if spec.PasswordSecretRef != nil {
+		cred.PasswordCommand = cmd
+	case spec.PasswordSecretRef != nil:
 		pw, err := r.getSecretValue(ctx, spec.PasswordSecretRef)
 		if err != nil {
 			return ResolvedCredential{}, err
 		}
-		return ResolvedCredential{Password: pw}, nil
+		cred.Password = pw
 	}
-	return ResolvedCredential{}, nil
+	return cred, nil
 }
 
 // ResolveCassandra resolves the credential for a Cassandra datastore.
