@@ -154,18 +154,43 @@ type sqlBackend struct {
 	spec   *temporalv1alpha1.SQLDatastoreSpec
 	cred   ResolvedCredential
 	dbName string
+	// runner resolves a passwordCommand credential. Defaults to
+	// DefaultCommandRunner when nil.
+	runner CommandRunner
 }
 
-func (b *sqlBackend) dsn() string {
-	return BuildPostgresDSN(b.spec, b.cred.Password, b.dbName)
+// resolvePassword returns the static password, or the fresh output of the
+// configured passwordCommand when one is set (re-run on every call so an
+// expiring token is always current).
+func (b *sqlBackend) resolvePassword(ctx context.Context) (string, error) {
+	if b.cred.PasswordCommand == "" {
+		return b.cred.Password, nil
+	}
+	run := b.runner
+	if run == nil {
+		run = DefaultCommandRunner
+	}
+	return run(ctx, b.cred.PasswordCommand)
+}
+
+func (b *sqlBackend) dsn(password string) string {
+	return BuildPostgresDSN(b.spec, password, b.dbName)
 }
 
 func (b *sqlBackend) Probe(ctx context.Context) error {
-	return SQLProber{}.Probe(ctx, b.dsn())
+	password, err := b.resolvePassword(ctx)
+	if err != nil {
+		return err
+	}
+	return SQLProber{}.Probe(ctx, b.dsn(password))
 }
 
 func (b *sqlBackend) SchemaVersion(ctx context.Context) (string, error) {
-	return SQLProber{}.CurrentSchemaVersion(ctx, b.dsn(), b.dbName)
+	password, err := b.resolvePassword(ctx)
+	if err != nil {
+		return "", err
+	}
+	return SQLProber{}.CurrentSchemaVersion(ctx, b.dsn(password), b.dbName)
 }
 
 func (b *sqlBackend) EnsureSchema(_ context.Context, _ string) (bool, error) {
