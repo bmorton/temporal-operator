@@ -3,7 +3,7 @@ kind: TemporalDevServer
 metadata:
   name: temporaldevserver-sample
 spec:
-  version: "latest"
+  version: "1.31.1"
   namespaces:
     - orders
   ui:
