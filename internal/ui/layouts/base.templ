@@ -41,17 +41,31 @@ templ Base(v View) {
 			<link rel="stylesheet" href={ v.asset("app.css") }/>
 			<script src={ v.asset("htmx.min.js") } defer></script>
 			<script src={ v.asset("alpine.min.js") } defer></script>
+			<script src={ v.asset("app.js") }></script>
 		</head>
 		<body>
 			<header class="app">
 				<a class="brand" href={ ui.JoinPath(v.BasePath, "/") }>temporal-operator</a>
-				<span class="muted">
-					if v.User != "" {
-						Signed in as { v.User }
-					} else {
-						Not authenticated
-					}
-				</span>
+				<div class="meta" x-data x-init="$store.live.stamp()">
+					<span class="live" title="Auto-refresh">
+						<span class="dot" x-bind:class="$store.live.paused ? 'paused' : 'on'" aria-hidden="true"></span>
+						<span class="muted">Updated <span x-text="$store.live.last || '—'"></span></span>
+						<button
+							type="button"
+							class="btn"
+							x-on:click="$store.live.toggle()"
+							x-bind:aria-pressed="$store.live.paused"
+							x-text="$store.live.paused ? 'Resume' : 'Pause'"
+						>Pause</button>
+					</span>
+					<span class="muted">
+						if v.User != "" {
+							Signed in as { v.User }
+						} else {
+							Not authenticated
+						}
+					</span>
+				</div>
 			</header>
 			<main>
 				{ children... }

@@ -69,6 +69,9 @@ TemporalCluster it manages and a per-cluster detail view (services, persistence,
 mTLS, endpoints, conditions, in-flight upgrades, and related namespaces, clients
 and search attributes).
 
+The views refresh live; the header shows a "last updated" timestamp and a
+Pause/Resume toggle so you can freeze the auto-refresh while inspecting data.
+
 It is **disabled by default**. Enable it by setting `--ui-bind-address` (for
 example `:8082`) on the manager and front it with a forward-auth proxy (e.g.
 Authelia) — the operator does not authenticate users itself.

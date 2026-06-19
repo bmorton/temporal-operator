@@ -337,14 +337,14 @@ func ClusterDetailPage(v layouts.View, d ui.ClusterDetail) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</h2><div hx-get=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</h2><div data-live hx-get=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(ui.JoinPath(v.BasePath, "/partials/clusters/"+d.Namespace+"/"+d.Name))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/pages/cluster_detail.templ`, Line: 64, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/pages/cluster_detail.templ`, Line: 65, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
@@ -355,9 +355,9 @@ func ClusterDetailPage(v layouts.View, d ui.ClusterDetail) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var14 string
-			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue("every " + strconv.Itoa(v.RefreshSecs) + "s")
+			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue("every " + strconv.Itoa(v.RefreshSecs) + "s [!window.__uiLivePaused], live:resume")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/pages/cluster_detail.templ`, Line: 65, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/pages/cluster_detail.templ`, Line: 66, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
