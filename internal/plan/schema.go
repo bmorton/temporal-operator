@@ -38,6 +38,10 @@ func PlanSchemaJobs(cluster *temporalv1alpha1.TemporalCluster) ([]PlannedObject,
 		{resources.StoreVisibility, cluster.Spec.Persistence.VisibilityStore},
 	}
 	objs := make([]client.Object, 0, len(stores))
+	var schemaJobPodTemplate *temporalv1alpha1.PodTemplateOverride
+	if cluster.Spec.Persistence.SchemaJob != nil {
+		schemaJobPodTemplate = cluster.Spec.Persistence.SchemaJob.PodTemplate
+	}
 	for _, s := range stores {
 		job, err := resources.BuildSchemaJob(resources.SchemaJobParams{
 			Cluster:          cluster,
@@ -46,6 +50,7 @@ func PlanSchemaJobs(cluster *temporalv1alpha1.TemporalCluster) ([]PlannedObject,
 			Store:            s.name,
 			Action:           resources.ActionSetup,
 			SchemaVersionDir: resources.PostgresSchemaDir,
+			PodTemplate:      schemaJobPodTemplate,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("building schema job for %s store: %w", s.name, err)
