@@ -73,6 +73,11 @@ type EndpointsInfo struct {
 	Metrics  string
 }
 
+// HasAny reports whether at least one endpoint is set.
+func (e EndpointsInfo) HasAny() bool {
+	return e.Frontend != "" || e.UI != "" || e.Metrics != ""
+}
+
 // UpgradeInfo describes an in-flight upgrade.
 type UpgradeInfo struct {
 	Active       bool

@@ -39,6 +39,7 @@ templ OverviewGrid(basePath string, clusters []ui.ClusterSummary) {
 
 templ Overview(v layouts.View, clusters []ui.ClusterSummary) {
 	@layouts.Base(v) {
+		<h2>Clusters</h2>
 		<div
 			hx-get={ ui.JoinPath(v.BasePath, "/partials/clusters") }
 			hx-trigger={ "every " + strconv.Itoa(v.RefreshSecs) + "s" }

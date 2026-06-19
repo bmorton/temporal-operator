@@ -20,15 +20,14 @@ import ui "github.com/bmorton/temporal-operator/internal/ui/model"
 
 templ EndpointsPanel(e ui.EndpointsInfo) {
 	<div class="kv">
-		<div>Frontend</div><div class="muted">{ orDash(e.Frontend) }</div>
-		<div>UI</div><div class="muted">{ orDash(e.UI) }</div>
-		<div>Metrics</div><div class="muted">{ orDash(e.Metrics) }</div>
+		if e.Frontend != "" {
+			<div>Frontend</div><div>{ e.Frontend }</div>
+		}
+		if e.UI != "" {
+			<div>UI</div><div>{ e.UI }</div>
+		}
+		if e.Metrics != "" {
+			<div>Metrics</div><div>{ e.Metrics }</div>
+		}
 	</div>
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "—"
-	}
-	return s
 }
