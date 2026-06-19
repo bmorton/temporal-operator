@@ -17,6 +17,8 @@ limitations under the License.
 package plan
 
 import (
+	"fmt"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -27,7 +29,7 @@ import (
 // visibility stores. The operator additionally runs update-schema Jobs based on
 // live schema introspection; the preview shows the from-scratch setup case,
 // which is the representative "what gets created" view.
-func PlanSchemaJobs(cluster *temporalv1alpha1.TemporalCluster) []PlannedObject {
+func PlanSchemaJobs(cluster *temporalv1alpha1.TemporalCluster) ([]PlannedObject, error) {
 	stores := []struct {
 		name  resources.SchemaStore
 		store temporalv1alpha1.DatastoreSpec
@@ -37,14 +39,18 @@ func PlanSchemaJobs(cluster *temporalv1alpha1.TemporalCluster) []PlannedObject {
 	}
 	objs := make([]client.Object, 0, len(stores))
 	for _, s := range stores {
-		objs = append(objs, resources.BuildSchemaJob(resources.SchemaJobParams{
+		job, err := resources.BuildSchemaJob(resources.SchemaJobParams{
 			Cluster:          cluster,
 			SQLSpec:          s.store.SQL,
 			CassandraSpec:    s.store.Cassandra,
 			Store:            s.name,
 			Action:           resources.ActionSetup,
 			SchemaVersionDir: resources.PostgresSchemaDir,
-		}))
+		})
+		if err != nil {
+			return nil, fmt.Errorf("building schema job for %s store: %w", s.name, err)
+		}
+		objs = append(objs, job)
 	}
-	return tag(PhasePersistenceSchema, objs...)
+	return tag(PhasePersistenceSchema, objs...), nil
 }

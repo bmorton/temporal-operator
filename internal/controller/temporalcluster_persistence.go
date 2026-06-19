@@ -237,7 +237,7 @@ func (r *TemporalClusterReconciler) ensureSchemaJob(ctx context.Context, cluster
 	var job batchv1.Job
 	err := r.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, &job)
 	if apierrors.IsNotFound(err) {
-		built := resources.BuildSchemaJob(resources.SchemaJobParams{
+		built, buildErr := resources.BuildSchemaJob(resources.SchemaJobParams{
 			Cluster:          cluster,
 			SQLSpec:          t.spec.SQL,
 			CassandraSpec:    t.spec.Cassandra,
@@ -245,6 +245,9 @@ func (r *TemporalClusterReconciler) ensureSchemaJob(ctx context.Context, cluster
 			Action:           action,
 			SchemaVersionDir: resources.PostgresSchemaDir,
 		})
+		if buildErr != nil {
+			return jobPending, buildErr
+		}
 		if err := controllerutil.SetControllerReference(cluster, built, r.Scheme); err != nil {
 			return jobPending, err
 		}

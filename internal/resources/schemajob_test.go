@@ -18,9 +18,11 @@ package resources
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
@@ -56,13 +58,16 @@ func TestSchemaJobName(t *testing.T) {
 }
 
 func TestBuildSchemaJobSetup(t *testing.T) {
-	job := BuildSchemaJob(SchemaJobParams{
+	job, err := BuildSchemaJob(SchemaJobParams{
 		Cluster:          testCluster(),
 		SQLSpec:          sqlSpec(),
 		Store:            StoreDefault,
 		Action:           ActionSetup,
 		SchemaVersionDir: "v12",
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if job.Name != "tc-schema-default-setup" || job.Namespace != "ns" {
 		t.Errorf("unexpected metadata: %s/%s", job.Namespace, job.Name)
@@ -92,13 +97,16 @@ func TestBuildSchemaJobSetup(t *testing.T) {
 }
 
 func TestBuildSchemaJobUpdateVisibility(t *testing.T) {
-	job := BuildSchemaJob(SchemaJobParams{
+	job, err := BuildSchemaJob(SchemaJobParams{
 		Cluster:          testCluster(),
 		SQLSpec:          sqlSpec(),
 		Store:            StoreVisibility,
 		Action:           ActionUpdate,
 		SchemaVersionDir: "v12",
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	c := job.Spec.Template.Spec.Containers[0]
 	if !slices.Contains(c.Args, "update-schema") {
 		t.Errorf("expected update-schema, got %v", c.Args)
@@ -119,12 +127,15 @@ func cassandraSpec() *temporalv1alpha1.CassandraDatastoreSpec {
 }
 
 func TestBuildCassandraSchemaJob(t *testing.T) {
-	job := BuildSchemaJob(SchemaJobParams{
+	job, err := BuildSchemaJob(SchemaJobParams{
 		Cluster:       testCluster(),
 		CassandraSpec: cassandraSpec(),
 		Store:         StoreDefault,
 		Action:        ActionUpdate,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	c := job.Spec.Template.Spec.Containers[0]
 	if c.Command[0] != "temporal-cassandra-tool" {
 		t.Errorf("expected cassandra tool, got %v", c.Command)
@@ -138,5 +149,106 @@ func TestBuildCassandraSchemaJob(t *testing.T) {
 	wantDir := "/etc/temporal/schema/cassandra/temporal/versioned"
 	if !slices.Contains(c.Args, wantDir) {
 		t.Errorf("expected cassandra schema dir, got %v", c.Args)
+	}
+}
+
+func TestBuildSchemaJobPasswordCommand(t *testing.T) {
+	spec := sqlSpec()
+	spec.PasswordSecretRef = nil
+	job, err := BuildSchemaJob(SchemaJobParams{
+		Cluster:          testCluster(),
+		SQLSpec:          spec,
+		PasswordCommand:  "cat /azure/pgpass",
+		Store:            StoreDefault,
+		Action:           ActionSetup,
+		SchemaVersionDir: "v12",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	if len(c.Command) != 2 || c.Command[0] != "sh" || c.Command[1] != "-c" {
+		t.Fatalf("expected sh -c wrapper, got command %v", c.Command)
+	}
+	if len(c.Args) != 1 || !strings.Contains(c.Args[0], `SQL_PASSWORD="$(cat /azure/pgpass)"`) {
+		t.Errorf("expected SQL_PASSWORD exported from command, got args %v", c.Args)
+	}
+	if !strings.Contains(c.Args[0], "exec temporal-sql-tool") {
+		t.Errorf("expected exec of temporal-sql-tool, got %v", c.Args)
+	}
+	for _, e := range c.Env {
+		if e.Name == "SQL_PASSWORD" {
+			t.Errorf("did not expect static SQL_PASSWORD env, got %+v", c.Env)
+		}
+	}
+}
+
+func TestBuildSchemaJobPodTemplate(t *testing.T) {
+	raw := []byte(`{"serviceAccountName":"temporal-wi","initContainers":[{"name":"token","image":"mcr.microsoft.com/azure-cli"}]}`)
+	job, err := BuildSchemaJob(SchemaJobParams{
+		Cluster:          testCluster(),
+		SQLSpec:          sqlSpec(),
+		Store:            StoreDefault,
+		Action:           ActionSetup,
+		SchemaVersionDir: "v12",
+		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
+			Labels: map[string]string{"azure.workload.identity/use": "true"},
+			Spec:   &runtime.RawExtension{Raw: raw},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	tpl := job.Spec.Template
+	if tpl.Labels["azure.workload.identity/use"] != "true" {
+		t.Errorf("expected WI label, got %v", tpl.Labels)
+	}
+	if tpl.Spec.ServiceAccountName != "temporal-wi" {
+		t.Errorf("expected serviceAccountName from podTemplate, got %q", tpl.Spec.ServiceAccountName)
+	}
+	if len(tpl.Spec.InitContainers) != 1 || tpl.Spec.InitContainers[0].Name != "token" {
+		t.Errorf("expected token initContainer, got %v", tpl.Spec.InitContainers)
+	}
+	if len(tpl.Spec.Containers) != 1 || tpl.Spec.Containers[0].Name != "schema" {
+		t.Errorf("expected generated schema container preserved, got %v", tpl.Spec.Containers)
+	}
+}
+
+func TestBuildSchemaJobPasswordCommandQuotesArgs(t *testing.T) {
+	spec := sqlSpec()
+	spec.PasswordSecretRef = nil
+	spec.Database = "temp'oral" // arg with an embedded single quote
+	job, err := BuildSchemaJob(SchemaJobParams{
+		Cluster:          testCluster(),
+		SQLSpec:          spec,
+		PasswordCommand:  "cat /azure/pgpass",
+		Store:            StoreDefault,
+		Action:           ActionSetup,
+		SchemaVersionDir: "v12",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	script := job.Spec.Template.Spec.Containers[0].Args[0]
+	if !strings.Contains(script, `'temp'\''oral'`) {
+		t.Errorf("expected single-quote-escaped database arg, got %q", script)
+	}
+}
+
+func TestBuildSchemaJobCassandraIgnoresPasswordCommand(t *testing.T) {
+	job, err := BuildSchemaJob(SchemaJobParams{
+		Cluster:          testCluster(),
+		CassandraSpec:    cassandraSpec(),
+		PasswordCommand:  "cat /azure/pgpass",
+		Store:            StoreDefault,
+		Action:           ActionSetup,
+		SchemaVersionDir: "v12",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	if c.Command[0] == "sh" {
+		t.Errorf("cassandra must not use sh -c wrapper, got command %v", c.Command)
 	}
 }

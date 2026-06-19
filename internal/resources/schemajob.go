@@ -20,6 +20,7 @@ package resources
 
 import (
 	"fmt"
+	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -77,6 +78,12 @@ type SchemaJobParams struct {
 	Action SchemaAction
 	// SchemaVersionDir is the on-image schema version directory, e.g. "v12".
 	SchemaVersionDir string
+	// PasswordCommand, when set, is a shell command whose stdout is exported as
+	// SQL_PASSWORD before the schema tool runs (passwordless / token auth).
+	PasswordCommand string
+	// PodTemplate overrides the Job pod template (ServiceAccount, labels, token
+	// initContainer, volumes). Nil leaves the generated pod unchanged.
+	PodTemplate *temporalv1alpha1.PodTemplateOverride
 }
 
 func (p SchemaJobParams) isCassandra() bool { return p.CassandraSpec != nil }
@@ -199,10 +206,35 @@ func passwordEnv(p SchemaJobParams) []corev1.EnvVar {
 	}
 }
 
+// schemaContainerExec returns the container Command, Args, and Env for the
+// schema tool. When p.PasswordCommand is set (SQL stores only), the tool is
+// wrapped in "sh -c" that exports SQL_PASSWORD from the command output (no
+// static env); otherwise the tool is invoked directly with the static
+// SQL_PASSWORD env.
+func schemaContainerExec(p SchemaJobParams) (command []string, args []string, env []corev1.EnvVar) {
+	tool := schemaCommand(p)
+	toolArgs := schemaToolArgs(p)
+	if p.PasswordCommand != "" && !p.isCassandra() {
+		quoted := make([]string, 0, len(toolArgs))
+		for _, a := range toolArgs {
+			quoted = append(quoted, shellQuote(a))
+		}
+		script := fmt.Sprintf("export SQL_PASSWORD=\"$(%s)\"; exec %s %s",
+			p.PasswordCommand, tool, strings.Join(quoted, " "))
+		return []string{"sh", "-c"}, []string{script}, nil
+	}
+	return []string{tool}, toolArgs, passwordEnv(p)
+}
+
+// shellQuote single-quotes an argument for safe use inside an sh -c script.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // BuildSchemaJob builds a batch/v1 Job that runs temporal-sql-tool for the given
 // store and action. The caller is responsible for setting the controller owner
 // reference on the returned Job.
-func BuildSchemaJob(p SchemaJobParams) *batchv1.Job {
+func BuildSchemaJob(p SchemaJobParams) (*batchv1.Job, error) {
 	name := SchemaJobName(p.Cluster.Name, p.Store, p.Action)
 	backoff := schemaJobBackoffLimit
 	ttl := schemaJobTTLAfterFinish
@@ -216,6 +248,30 @@ func BuildSchemaJob(p SchemaJobParams) *batchv1.Job {
 		"temporal.bmor10.com/action":   string(p.Action),
 	}
 
+	command, args, env := schemaContainerExec(p)
+
+	template := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{Labels: labels},
+		Spec: corev1.PodSpec{
+			RestartPolicy:    corev1.RestartPolicyNever,
+			ImagePullSecrets: p.Cluster.Spec.ImagePullSecrets,
+			Containers: []corev1.Container{
+				{
+					Name:    "schema",
+					Image:   temporal.AdminToolsImage(p.Cluster.Spec.Version),
+					Command: command,
+					Args:    args,
+					Env:     env,
+				},
+			},
+		},
+	}
+
+	template, err := applyPodTemplate(template, p.PodTemplate, labels)
+	if err != nil {
+		return nil, fmt.Errorf("applying schema job podTemplate: %w", err)
+	}
+
 	return &batchv1.Job{
 		TypeMeta: metav1.TypeMeta{APIVersion: "batch/v1", Kind: "Job"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -226,22 +282,7 @@ func BuildSchemaJob(p SchemaJobParams) *batchv1.Job {
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoff,
 			TTLSecondsAfterFinished: &ttl,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: corev1.PodSpec{
-					RestartPolicy:    corev1.RestartPolicyNever,
-					ImagePullSecrets: p.Cluster.Spec.ImagePullSecrets,
-					Containers: []corev1.Container{
-						{
-							Name:    "schema",
-							Image:   temporal.AdminToolsImage(p.Cluster.Spec.Version),
-							Command: []string{schemaCommand(p)},
-							Args:    schemaToolArgs(p),
-							Env:     passwordEnv(p),
-						},
-					},
-				},
-			},
+			Template:                template,
 		},
-	}
+	}, nil
 }
