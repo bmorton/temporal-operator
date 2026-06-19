@@ -119,22 +119,49 @@ jobs:
           path: dist/install.yaml
           if-no-files-found: error
 
+      - name: Set up Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+
+      - name: Package and push preview chart to GHCR (OCI)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+          VERSION: ${{ steps.ref.outputs.version }}
+        run: |
+          set -euo pipefail
+          helm package dist/chart --version "$VERSION" --app-version "$VERSION"
+          echo "$GITHUB_TOKEN" | helm registry login ghcr.io -u "$REGISTRY_USER" --password-stdin
+          helm push "temporal-operator-${VERSION}.tgz" oci://ghcr.io/bmorton/charts
+
       - name: Summary
         env:
           IMAGE: ${{ steps.ref.outputs.image }}
+          VERSION: ${{ steps.ref.outputs.version }}
         run: |
           {
-            echo "### Preview image published"
+            echo "### Preview artifacts published"
             echo
+            echo "**Image**"
             echo '```'
             echo "$IMAGE"
             echo '```'
             echo
-            echo "Download the **install-yaml** artifact from this run (CRDs + operator pinned to the image above), then:"
-            echo
-            echo '```sh'
-            echo "kubectl apply -f install.yaml"
+            echo "**Helm chart** (OCI)"
+            echo '```'
+            echo "oci://ghcr.io/bmorton/charts/temporal-operator:${VERSION}"
             echo '```'
             echo
-            echo "The full installer expects cert-manager (for the validating webhook). To skip the webhook, set ENABLE_WEBHOOKS=false on the manager Deployment."
+            echo "**ArgoCD source** (set targetRevision to the preview version; flip back to your mainline version after merge):"
+            echo '```yaml'
+            echo "source:"
+            echo "  repoURL: ghcr.io/bmorton/charts"
+            echo "  chart: temporal-operator"
+            echo "  targetRevision: ${VERSION}"
+            echo "  helm:"
+            echo "    releaseName: temporal-operator"
+            echo '```'
+            echo
+            echo "Or with raw manifests: download the **install-yaml** artifact and \`kubectl apply -f install.yaml\`."
+            echo
+            echo "The chart/installer expect cert-manager (for the validating webhook). To skip the webhook, set ENABLE_WEBHOOKS=false on the manager Deployment."
           } >> "$GITHUB_STEP_SUMMARY"
