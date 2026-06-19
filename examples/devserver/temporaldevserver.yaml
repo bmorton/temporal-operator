@@ -1,0 +1,13 @@
+# Disposable single-pod Temporal dev server (SQLite) in the temporal-test namespace.
+#
+# Note: `version` is the temporalio/temporal *CLI* image tag (the image that runs
+# `temporal server start-dev`), NOT a Temporal *server* version like 1.31.1. The
+# CLI image has its own version scheme; see https://hub.docker.com/r/temporalio/temporal/tags
+# Omit `version` to use the "latest" CLI image.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalDevServer
+metadata:
+  name: dev
+  namespace: temporal-test
+spec:
+  version: "1.7.2"
