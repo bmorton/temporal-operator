@@ -1,0 +1,26 @@
+# The operator's schema Job runs setup-schema/update-schema but never
+# create-keyspace, and the official cassandra image does not auto-run init CQL.
+# This one-shot Job creates the `temporal` keyspace (the default store) before the
+# TemporalCluster is applied. The visibility store is OpenSearch, so no second
+# keyspace is needed. cqlsh ships in the cassandra image; we reuse it here. The
+# loop waits for CQL to come up before issuing the CREATE KEYSPACE.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-cassandra-keyspace
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: createkeyspace
+          image: cassandra:4.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - >-
+              until cqlsh temporal-cass 9042 -e "SELECT now() FROM system.local";
+              do echo "waiting for cassandra..."; sleep 5; done;
+              cqlsh temporal-cass 9042 -e
+              "CREATE KEYSPACE IF NOT EXISTS temporal WITH replication =
+              {'class':'SimpleStrategy','replication_factor':1};"

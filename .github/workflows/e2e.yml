@@ -10,7 +10,7 @@ on:
       suite:
         description: Which suite(s) to run
         type: choice
-        options: [default, devserver, mtls, upgrade, opensearch, all]
+        options: [default, devserver, mtls, upgrade, opensearch, cassandra, all]
         default: default
 
 permissions:
@@ -35,15 +35,17 @@ jobs:
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
           upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
           opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
+          cassandra='{"temporal":"1.31.1","persistence":"cassandra","suite":"cassandra"}'
           if [ "$EVENT" = "schedule" ]; then
-            echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$cassandra]" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             case "$SUITE" in
               devserver)  echo "combos=[$devserver]" >> "$GITHUB_OUTPUT" ;;
               mtls)       echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
               upgrade)    echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
               opensearch) echo "combos=[$opensearch]" >> "$GITHUB_OUTPUT" ;;
-              all)        echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT" ;;
+              cassandra)  echo "combos=[$cassandra]" >> "$GITHUB_OUTPUT" ;;
+              all)        echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$cassandra]" >> "$GITHUB_OUTPUT" ;;
               *)          echo "combos=[$postgres,$devserver]" >> "$GITHUB_OUTPUT" ;;
             esac
           else
@@ -134,6 +136,9 @@ jobs:
           # OpenSearch (Docker Hub, rate-limited for the kind kubelet) used by
           # the opensearch suite's visibility store.
           images="$images $(grep -rhoE 'opensearchproject/[a-zA-Z0-9-]+:[^ "}]+' "$root" || true)"
+          # Cassandra (Docker Hub, rate-limited for the kind kubelet) used by the
+          # cassandra suite's default store and keyspace-bootstrap Job.
+          images="$images $(grep -rhoE 'cassandra:[0-9][^ "}]*' "$root" || true)"
           for img in $(echo "$images" | tr ' ' '\n' | sort -u); do
             [ -n "$img" ] || continue
             echo "::group::Loading $img"

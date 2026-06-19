@@ -1,0 +1,30 @@
+# A TemporalCluster using Cassandra for the default (persistence) store and
+# OpenSearch for the visibility store -- the typical production layout. Cassandra
+# visibility is unsupported on current Temporal versions (see the version matrix
+# / validating webhook), so visibility is served by OpenSearch via the operator's
+# elasticsearch config (v7/v8 client, healthcheck/sniff disabled, works against
+# OpenSearch 2.x).
+#
+# Hosts/URLs are namespace-qualified FQDNs: the operator probes both stores from
+# the temporal-system namespace, so a bare service name would not resolve
+# cross-namespace. The cassandra store omits user/passwordSecretRef because the
+# backend runs with AllowAllAuthenticator; the visibility store omits a tls block,
+# which yields an http scheme in the rendered Temporal config.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-cass
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      cassandra:
+        hosts:
+          - (join('.', ['temporal-cass', $namespace, 'svc.cluster.local']))
+        port: 9042
+        keyspace: temporal
+    visibilityStore:
+      elasticsearch:
+        url: (join('.', ['temporal-os', $namespace, 'svc.cluster.local:9200']))
+        version: v8
