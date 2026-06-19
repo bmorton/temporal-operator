@@ -83,6 +83,7 @@ type schemaTarget struct {
 	store   resources.SchemaStore
 	spec    temporalv1alpha1.DatastoreSpec
 	backend persistence.Backend
+	cred    persistence.ResolvedCredential
 }
 
 // reconcilePersistence probes the datastore(s) and drives schema setup/migration
@@ -150,7 +151,7 @@ func (r *TemporalClusterReconciler) buildSchemaTargets(ctx context.Context, clus
 		if err != nil {
 			return schemaTarget{}, fmt.Errorf("building %s backend: %w", name, err)
 		}
-		return schemaTarget{store: name, spec: store, backend: backend}, nil
+		return schemaTarget{store: name, spec: store, backend: backend, cred: cred}, nil
 	}
 
 	defTarget, err := build(cluster.Spec.Persistence.DefaultStore, resources.StoreDefault)
@@ -244,6 +245,8 @@ func (r *TemporalClusterReconciler) ensureSchemaJob(ctx context.Context, cluster
 			Store:            t.store,
 			Action:           action,
 			SchemaVersionDir: resources.PostgresSchemaDir,
+			PasswordCommand:  t.cred.PasswordCommand,
+			PodTemplate:      schemaJobPodTemplate(cluster),
 		})
 		if buildErr != nil {
 			return jobPending, buildErr
@@ -260,6 +263,15 @@ func (r *TemporalClusterReconciler) ensureSchemaJob(ctx context.Context, cluster
 		return jobPending, err
 	}
 	return classifyJob(&job), nil
+}
+
+// schemaJobPodTemplate returns the configured schema Job podTemplate override,
+// or nil when none is set.
+func schemaJobPodTemplate(cluster *temporalv1alpha1.TemporalCluster) *temporalv1alpha1.PodTemplateOverride {
+	if cluster.Spec.Persistence.SchemaJob == nil {
+		return nil
+	}
+	return cluster.Spec.Persistence.SchemaJob.PodTemplate
 }
 
 func classifyJob(job *batchv1.Job) jobPhase {
