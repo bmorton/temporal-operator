@@ -30,6 +30,21 @@ type PersistenceSpec struct {
 	// VisibilityStore holds visibility records. One of sql, cassandra, or
 	// elasticsearch must be set.
 	VisibilityStore DatastoreSpec `json:"visibilityStore"`
+
+	// SchemaJob customizes the schema setup/update Jobs the operator runs.
+	// +optional
+	SchemaJob *SchemaJobSpec `json:"schemaJob,omitempty"`
+}
+
+// SchemaJobSpec customizes the schema management Jobs (setup-schema /
+// update-schema) the operator runs against SQL and Cassandra datastores.
+type SchemaJobSpec struct {
+	// PodTemplate overrides metadata and the pod spec of the schema Job pods.
+	// Use it to attach a ServiceAccount, pod labels (e.g. Azure Workload
+	// Identity), and a token initContainer so the Job can authenticate with a
+	// passwordCommand instead of a static password.
+	// +optional
+	PodTemplate *PodTemplateOverride `json:"podTemplate,omitempty"`
 }
 
 // DatastoreSpec configures a single datastore. Exactly one backend should be set.

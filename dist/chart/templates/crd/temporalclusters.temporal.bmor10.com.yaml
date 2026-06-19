@@ -529,6 +529,34 @@ spec:
                                         x-kubernetes-validations:
                                             - message: exactly one of sql or cassandra must be set for defaultStore
                                               rule: has(self.sql) != has(self.cassandra)
+                                    schemaJob:
+                                        description: SchemaJob customizes the schema setup/update Jobs
+                                            the operator runs.
+                                        properties:
+                                            podTemplate:
+                                                description: |-
+                                                    PodTemplate overrides metadata and the pod spec of the schema Job pods.
+                                                    Use it to attach a ServiceAccount, pod labels (e.g. Azure Workload
+                                                    Identity), and a token initContainer so the Job can authenticate with a
+                                                    passwordCommand instead of a static password.
+                                                properties:
+                                                    annotations:
+                                                        additionalProperties:
+                                                            type: string
+                                                        type: object
+                                                    labels:
+                                                        additionalProperties:
+                                                            type: string
+                                                        type: object
+                                                    spec:
+                                                        description: |-
+                                                            Spec is a partial PodSpec (strategic-merge patch) merged onto the
+                                                            generated pod template. It is stored as an opaque object to keep the
+                                                            CRD schema small.
+                                                        type: object
+                                                        x-kubernetes-preserve-unknown-fields: true
+                                                type: object
+                                        type: object
                                     visibilityStore:
                                         description: |-
                                             VisibilityStore holds visibility records. One of sql, cassandra, or
