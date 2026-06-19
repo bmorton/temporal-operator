@@ -149,28 +149,37 @@ func BuildPostgresDSN(spec *temporalv1alpha1.SQLDatastoreSpec, password, dbName 
 	return u.String()
 }
 
+// azureTokenTimeout bounds an Entra token acquisition so a slow token endpoint
+// cannot hang the reconcile worker.
+const azureTokenTimeout = 10 * time.Second
+
 // sqlBackend adapts the SQL prober to the Backend interface.
 type sqlBackend struct {
 	spec   *temporalv1alpha1.SQLDatastoreSpec
 	cred   ResolvedCredential
 	dbName string
-	// runner resolves a passwordCommand credential. Defaults to
-	// DefaultCommandRunner when nil.
-	runner CommandRunner
+	// tokens obtains Entra access tokens when the credential uses Azure Workload
+	// Identity. Defaults to the process-wide provider when nil.
+	tokens tokenProvider
 }
 
-// resolvePassword returns the static password, or the fresh output of the
-// configured passwordCommand when one is set (re-run on every call so an
-// expiring token is always current).
+// resolvePassword returns the DB password for the operator's own connection.
+// When the credential uses Azure Workload Identity, it obtains a fresh Entra
+// access token (bounded by azureTokenTimeout); otherwise it returns the static
+// password. The operator never executes passwordCommand (it runs on a distroless
+// image with no shell); passwordCommand is used only by the server pods and the
+// schema Job.
 func (b *sqlBackend) resolvePassword(ctx context.Context) (string, error) {
-	if b.cred.PasswordCommand == "" {
-		return b.cred.Password, nil
+	if b.cred.AzureWorkloadIdentity != nil {
+		provider := b.tokens
+		if provider == nil {
+			provider = defaultTokenProvider
+		}
+		tctx, cancel := context.WithTimeout(ctx, azureTokenTimeout)
+		defer cancel()
+		return provider.Token(tctx, b.cred.AzureWorkloadIdentity.Scope)
 	}
-	run := b.runner
-	if run == nil {
-		run = DefaultCommandRunner
-	}
-	return run(ctx, b.cred.PasswordCommand)
+	return b.cred.Password, nil
 }
 
 func (b *sqlBackend) dsn(password string) string {
