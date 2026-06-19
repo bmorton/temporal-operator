@@ -1,0 +1,54 @@
+# Workers connect DIRECTLY to each cluster frontend (the proxy always routes
+# task-queue polls to the source, so workers cannot poll the target through it).
+# Each worker reports its own cluster label via WhoAmIActivity.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: source-worker
+  labels:
+    app: source-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: source-worker
+  template:
+    metadata:
+      labels:
+        app: source-worker
+    spec:
+      containers:
+        - name: worker
+          image: migration-runner:e2e
+          imagePullPolicy: Never
+          args:
+            - worker
+            - --cluster=source
+            - --namespace=migration
+            - --address=source-devserver:7233
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: target-worker
+  labels:
+    app: target-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: target-worker
+  template:
+    metadata:
+      labels:
+        app: target-worker
+    spec:
+      containers:
+        - name: worker
+          image: migration-runner:e2e
+          imagePullPolicy: Never
+          args:
+            - worker
+            - --cluster=target
+            - --namespace=migration
+            - --address=target-frontend:7233

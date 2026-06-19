@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: source-worker
+status:
+  (availableReplicas > `0`): true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: target-worker
+status:
+  (availableReplicas > `0`): true

@@ -1,0 +1,21 @@
+# Before cutover: a workflow started through the proxy must run on the SOURCE.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: client-passthrough
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: client
+          image: migration-runner:e2e
+          imagePullPolicy: Never
+          args:
+            - client
+            - --address=orders-migration-proxy:7233
+            - --namespace=migration
+            - --workflow-id=passthrough-1
+            - --expect=source
+            - --timeout=3m
