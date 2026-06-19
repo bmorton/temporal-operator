@@ -27,8 +27,10 @@ import (
 // A TemporalDevServer runs a single-pod, disposable `temporal server start-dev`
 // instance backed by SQLite. It is NOT for production use.
 type TemporalDevServerSpec struct {
-	// Version is the temporalio/temporal CLI image tag. Default "latest".
-	// +kubebuilder:default="latest"
+	// Version is the Temporal server version to run, e.g. "1.31.1". The operator
+	// maps it to the matching temporalio/temporal CLI image via the supported
+	// version matrix. When empty, the latest supported server version is used.
+	// Use Image to pin a specific CLI image directly.
 	// +optional
 	Version string `json:"version,omitempty"`
 
