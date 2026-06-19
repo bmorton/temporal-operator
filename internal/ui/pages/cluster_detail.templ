@@ -49,7 +49,9 @@ templ DetailBody(d ui.ClusterDetail) {
 	</div>
 	<div class="card"><h3>Services</h3>@components.ServiceTable(d.Services)</div>
 	<div class="card"><h3>Persistence</h3>@components.PersistencePanel(d.Persistence)</div>
-	<div class="card"><h3>Endpoints</h3>@components.EndpointsPanel(d.Endpoints)</div>
+	if d.Endpoints.HasAny() {
+		<div class="card"><h3>Endpoints</h3>@components.EndpointsPanel(d.Endpoints)</div>
+	}
 	<div class="card"><h3>Conditions</h3>@components.ConditionList(d.Conditions)</div>
 	<div class="card"><h3>Related resources</h3>@components.RelatedResources(d.Related)</div>
 }

@@ -6,9 +6,10 @@ header.app{display:flex;align-items:center;justify-content:space-between;padding
 header.app .brand{font-weight:600}
 main{max-width:1100px;margin:0 auto;padding:20px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto}
 .card h3{margin:0 0 8px}
 .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;color:#fff}
+.badge + span{margin-left:6px}
 .badge.ok{background:var(--ok)}.badge.warn{background:var(--warn)}.badge.error{background:var(--error)}
 .badge.pending{background:var(--pending)}.badge.unknown{background:var(--unknown)}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)}
