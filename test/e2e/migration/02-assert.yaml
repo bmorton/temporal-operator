@@ -1,0 +1,14 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: target
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"
+  phase: Ready
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: target-frontend
+status:
+  (readyReplicas > `0`): true
