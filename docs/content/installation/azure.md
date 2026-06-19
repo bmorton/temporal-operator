@@ -35,25 +35,29 @@ annotations.
 Example:
 [`examples/cluster-azure-aks-ingress`](https://github.com/bmorton/temporal-operator/tree/main/examples/cluster-azure-aks-ingress).
 
-## Passwordless auth with Microsoft Entra + Workload Identity (preview)
+## Passwordless auth with Microsoft Entra + Workload Identity
 
-The operator can drive the Temporal **server** pods passwordlessly using Azure
-Workload Identity and Entra access tokens, via the `podTemplate` override
-(`serviceAccountName`, the `azure.workload.identity/use` label, and a
-token-refresher sidecar).
+The operator drives the Temporal **server pods**, its own **reachability probe**,
+and the **schema Job** passwordlessly using Azure Workload Identity and Entra
+access tokens, via the `podTemplate` override (`serviceAccountName`, the
+`azure.workload.identity/use` label, and a token-refresher sidecar) and the new
+`schemaJob.podTemplate` field.
 
 1. Enable the OIDC issuer and Workload Identity on AKS:
    `az aks update -g <rg> -n <cluster> --enable-oidc-issuer --enable-workload-identity`.
 2. Create a managed identity and a federated credential bound to the
-   `temporal-azure` ServiceAccount.
-3. Enable Entra auth on the Flexible Server and map the identity to a Postgres
+   `temporal-azure` ServiceAccount (for cluster pods and schema Jobs) and another
+   bound to the `temporal-operator-controller-manager` ServiceAccount in
+   `temporal-system` (for the operator's probe). These can be the same identity or
+   separate ones; each needs a federated credential and a Postgres role.
+3. Enable Entra auth on the Flexible Server and map each identity to a Postgres
    role with `pgaadauth_create_principal`.
+4. Install the operator with Workload Identity enabled:
+   `helm install temporal-operator oci://ghcr.io/bmorton/charts/temporal-operator --set workloadIdentity.enable=true --set workloadIdentity.clientId=<client-id>`.
 
-**Current limitation:** only the server pods are passwordless today. The
-operator's reachability probe and the schema Job still need a password. Bootstrap
-the schema with password auth first, or grant those identities temporary access.
-Tracking issue:
-[#47](https://github.com/bmorton/temporal-operator/issues/47).
+Full passwordless support (operator probe + schema Job + server pods) is available
+as of this release. Issue
+[#47](https://github.com/bmorton/temporal-operator/issues/47) tracked this work.
 
 Example:
 [`examples/cluster-azure-workload-identity`](https://github.com/bmorton/temporal-operator/tree/main/examples/cluster-azure-workload-identity).

@@ -1,25 +1,12 @@
-# PREVIEW: passwordless Flexible Server via Azure Workload Identity
+# Passwordless Flexible Server via Azure Workload Identity
 
-Demonstrates passwordless authentication to Azure Database for PostgreSQL
+Demonstrates fully passwordless authentication to Azure Database for PostgreSQL
 Flexible Server using [Azure Workload Identity](https://azure.github.io/azure-workload-identity/)
-and Microsoft Entra access tokens. It exercises the operator's `podTemplate`
-override to inject a `serviceAccountName`, the Workload Identity pod label, and a
-token-refresher sidecar.
+and Microsoft Entra access tokens. The **Temporal server pods**, the **operator's
+reachability probe**, and the **schema Job** all authenticate with short-lived
+Entra tokens — no static passwords anywhere.
 
-## Status: preview
-
-This makes the **Temporal server pods** passwordless. Two actors are **not** yet
-passwordless, so a cluster applied as-is will not reach Ready without extra
-setup:
-
-- The **operator's** reachability probe + schema inspection still build the DSN
-  from a static password.
-- The **schema Job** (`setup-schema`) still reads a static `SQL_PASSWORD`.
-
-Tracking issue: [#47](https://github.com/bmorton/temporal-operator/issues/47).
-Until it lands, bootstrap the schema with password auth (apply
-`cluster-azure-postgres-flexible` once to create the schema), or grant the
-operator/job identity temporary password access.
+This resolved [#47](https://github.com/bmorton/temporal-operator/issues/47).
 
 ## How it works
 
@@ -30,19 +17,38 @@ operator/job identity temporary password access.
    `AZURE_FEDERATED_TOKEN_FILE`, and `AZURE_AUTHORITY_HOST` into every container.
 3. `podTemplate.spec` adds the `azure-token-refresher` sidecar, which performs a
    federated `az login` and writes a fresh Entra access token to a shared
-   `emptyDir` (`/azure/pgpass`) every 30 minutes.
-4. `passwordCommandSecretRef` tells Temporal to read the token file per
-   connection, so expiring tokens are picked up automatically.
+   `emptyDir` (`/azure/pgpass`) every 30 minutes. Server pods read the token via
+   `passwordCommandSecretRef` on every connection.
+4. `schemaJob.podTemplate` gives the schema setup/update Jobs the same
+   ServiceAccount and WI label, plus a one-shot `initContainer` that writes an
+   Entra token to `/azure/pgpass` before the schema container starts.
+5. The operator itself is installed with `workloadIdentity.enable=true` so its
+   reachability probe also obtains a token via `passwordCommand`.
 
 ## Prerequisites
 
 - AKS with the OIDC issuer and Workload Identity enabled
   (`az aks update --enable-oidc-issuer --enable-workload-identity`).
 - A managed identity (or app registration) with a federated credential bound to
-  this ServiceAccount.
+  the `temporal-azure` ServiceAccount in the cluster's namespace.
 - The identity mapped to a Postgres role on the Flexible Server:
   `SELECT pgaadauth_create_principal('temporal-identity', false, false);`
 - Microsoft Entra authentication enabled on the Flexible Server.
+- The **operator's** managed identity must also be federated to the
+  `temporal-operator-controller-manager` ServiceAccount in the `temporal-system`
+  namespace, and mapped to a Postgres role via `pgaadauth_create_principal`. The
+  operator and the Temporal cluster can share a single managed identity or use
+  separate ones; if separate, each needs its own federated credential and Postgres
+  role.
+
+## Install the operator
+
+```sh
+helm install temporal-operator oci://ghcr.io/bmorton/charts/temporal-operator \
+  --namespace temporal-system --create-namespace \
+  --set workloadIdentity.enable=true \
+  --set workloadIdentity.clientId=<operator-managed-identity-client-id>
+```
 
 ## Apply
 

@@ -1,7 +1,7 @@
-# PREVIEW: passwordless Flexible Server auth via Azure Workload Identity.
-# This makes the Temporal SERVER pods passwordless. The operator's own
-# reachability probe and the schema Job still need credentials today — see the
-# README and the tracking issue.
+# Passwordless Flexible Server auth via Azure Workload Identity. The Temporal
+# SERVER pods, the operator's reachability probe, and the schema Job all
+# authenticate with short-lived Microsoft Entra access tokens — no static
+# passwords. Install the operator with workloadIdentity.enable=true (see README).
 apiVersion: v1
 kind: Secret
 metadata:
@@ -37,7 +37,7 @@ spec:
                   mountPath: /azure
             # Sidecar refreshes an Entra access token for Flexible Server.
             - name: azure-token-refresher
-              image: mcr.microsoft.com/azure-cli:latest
+              image: mcr.microsoft.com/azure-cli:2.87.0
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -60,6 +60,42 @@ spec:
             - name: azure-token
               emptyDir: {}
   persistence:
+    # The schema Jobs run setup-schema/update-schema; give them the same
+    # Workload Identity so they obtain an Entra token. A one-shot initContainer
+    # writes the token before the schema container reads it via passwordCommand.
+    schemaJob:
+      podTemplate:
+        labels:
+          azure.workload.identity/use: "true"
+        spec:
+          serviceAccountName: temporal-azure
+          containers:
+            # Patch the generated schema container (merged by name) to mount the
+            # shared token volume so it can read /azure/pgpass.
+            - name: schema
+              volumeMounts:
+                - name: azure-token
+                  mountPath: /azure
+          initContainers:
+            - name: azure-token
+              image: mcr.microsoft.com/azure-cli:2.87.0
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  az login --service-principal \
+                    -u "$AZURE_CLIENT_ID" \
+                    --tenant "$AZURE_TENANT_ID" \
+                    --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")" \
+                    --allow-no-subscriptions
+                  az account get-access-token --resource-type oss-rdbms \
+                    --query accessToken -o tsv > /azure/pgpass
+              volumeMounts:
+                - name: azure-token
+                  mountPath: /azure
+          volumes:
+            - name: azure-token
+              emptyDir: {}
     defaultStore:
       sql:
         pluginName: postgres12
