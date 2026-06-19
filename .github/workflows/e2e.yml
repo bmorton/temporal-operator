@@ -116,13 +116,14 @@ jobs:
           images=""
           for v in $versions; do
             if echo "${{ matrix.combo.suite }}" | grep -q "^devserver"; then
-              # The dev server runs the temporalio/temporal CLI image, which is
-              # versioned independently of the server (its tags are the CLI
-              # releases, e.g. 1.7.x, not server versions like 1.31.x). Only the
-              # CLI image is derived from spec.version here; admin-tools (used by
-              # the test's health-check script) is pinned separately and picked
-              # up by the literal-image harvest below.
-              images="$images temporalio/temporal:$v"
+              # The dev server's spec.version is a Temporal *server* version, but
+              # it runs the temporalio/temporal *CLI* image, which is versioned
+              # independently (its tags are CLI releases, e.g. 1.7.x, not server
+              # versions like 1.31.x). Resolve the CLI image via the operator's
+              # own version-matrix mapping so this stays correct as the matrix
+              # changes. admin-tools (used by the test's health-check script) is
+              # pinned separately and picked up by the literal-image harvest.
+              images="$images $(go run hack/devserver-image.go "$v")"
             else
               images="$images temporalio/server:$v temporalio/admin-tools:$v"
             fi
