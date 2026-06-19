@@ -67,10 +67,13 @@ jobs:
             version="${base}-pr.${short}"
           fi
 
-          # Validate SemVer so chart packaging cannot fail late.
-          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
-          if ! printf '%s' "$version" | grep -Eq "$semver"; then
-            echo "::error::Resolved version '$version' is not valid SemVer" >&2
+          # Validate the whole value as SemVer. Use bash [[ =~ ]] on the scalar
+          # (not line-based grep, which would accept a multi-line value), and
+          # disallow build metadata ('+'): preview versions are prereleases and
+          # '+' is not a valid OCI tag character.
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'
+          if [[ ! "$version" =~ $semver ]]; then
+            echo "::error::Resolved version '$version' is not a valid preview SemVer (no build metadata)" >&2
             exit 1
           fi
 
