@@ -2,6 +2,7 @@
 resources:
 - temporal_v1alpha1_temporalcluster.yaml
 - temporal_v1alpha1_temporalnamespace.yaml
+- temporal_v1alpha1_temporalmigration.yaml
 - temporal_v1alpha1_temporalsearchattribute.yaml
 - temporal_v1alpha1_temporalclusterclient.yaml
 - temporal_v1alpha1_temporalschedule.yaml

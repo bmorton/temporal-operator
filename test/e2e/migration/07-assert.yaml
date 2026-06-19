@@ -1,0 +1,6 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: client-cutover
+status:
+  succeeded: 1

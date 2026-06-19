@@ -10,7 +10,7 @@ on:
       suite:
         description: Which suite(s) to run
         type: choice
-        options: [default, devserver, mtls, upgrade, opensearch, all]
+        options: [default, devserver, mtls, upgrade, opensearch, migration, all]
         default: default
 
 permissions:
@@ -35,15 +35,17 @@ jobs:
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
           upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
           opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
+          migration='{"temporal":"1.31.1","persistence":"postgres","suite":"migration"}'
           if [ "$EVENT" = "schedule" ]; then
-            echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$migration]" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             case "$SUITE" in
               devserver)  echo "combos=[$devserver]" >> "$GITHUB_OUTPUT" ;;
               mtls)       echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
               upgrade)    echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
               opensearch) echo "combos=[$opensearch]" >> "$GITHUB_OUTPUT" ;;
-              all)        echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch]" >> "$GITHUB_OUTPUT" ;;
+              migration)  echo "combos=[$migration]" >> "$GITHUB_OUTPUT" ;;
+              all)        echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$migration]" >> "$GITHUB_OUTPUT" ;;
               *)          echo "combos=[$postgres,$devserver]" >> "$GITHUB_OUTPUT" ;;
             esac
           else
@@ -80,6 +82,12 @@ jobs:
           make docker-build IMG=temporal-operator:e2e
           make kind-load IMG=temporal-operator:e2e
 
+      - name: Build and load migration runner image
+        if: matrix.combo.suite == 'migration'
+        run: |
+          docker build -t migration-runner:e2e test/e2e/migration/runner
+          kind load docker-image migration-runner:e2e --name temporal-operator-test-e2e
+
       - name: Install cert-manager and CloudNativePG
         run: |
           kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
@@ -114,17 +122,22 @@ jobs:
           versions=$( { grep -rhoE 'version: *"?1\.[0-9]+\.[0-9]+' "$root" || true; } \
             | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
           images=""
+          # Decide which images a suite needs from the KINDS it declares, not
+          # the suite name: the migration suite mixes a TemporalDevServer
+          # (source) and a TemporalCluster (target) and needs both image sets.
+          has_devserver=$( { grep -rql 'kind: TemporalDevServer' "$root" && echo yes; } || true)
+          has_cluster=$( { grep -rql 'kind: TemporalCluster' "$root" && echo yes; } || true)
           for v in $versions; do
-            if echo "${{ matrix.combo.suite }}" | grep -q "^devserver"; then
+            if [ "$has_devserver" = "yes" ]; then
               # The dev server's spec.version is a Temporal *server* version, but
               # it runs the temporalio/temporal *CLI* image, which is versioned
               # independently (its tags are CLI releases, e.g. 1.7.x, not server
               # versions like 1.31.x). Resolve the CLI image via the operator's
               # own version-matrix mapping so this stays correct as the matrix
-              # changes. admin-tools (used by the test's health-check script) is
-              # pinned separately and picked up by the literal-image harvest.
+              # changes.
               images="$images $(go run hack/devserver-image.go "$v")"
-            else
+            fi
+            if [ "$has_cluster" = "yes" ]; then
               images="$images temporalio/server:$v temporalio/admin-tools:$v"
             fi
           done

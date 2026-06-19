@@ -105,6 +105,7 @@ rules:
   - temporalclusterclients
   - temporalclusters
   - temporaldevservers
+  - temporalmigrations
   - temporalnamespaces
   - temporalschedules
   - temporalsearchattributes
@@ -122,6 +123,7 @@ rules:
   - temporalclusterclients/finalizers
   - temporalclusters/finalizers
   - temporaldevservers/finalizers
+  - temporalmigrations/finalizers
   - temporalnamespaces/finalizers
   - temporalschedules/finalizers
   - temporalsearchattributes/finalizers
@@ -133,6 +135,7 @@ rules:
   - temporalclusterclients/status
   - temporalclusters/status
   - temporaldevservers/status
+  - temporalmigrations/status
   - temporalnamespaces/status
   - temporalschedules/status
   - temporalsearchattributes/status

@@ -1,0 +1,14 @@
+# Register the "migration" namespace on the target cluster. The source dev
+# server already creates it via spec.namespaces. The registered Temporal
+# namespace name is taken from metadata.name, so this object is named
+# "migration".
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: migration
+spec:
+  clusterRef:
+    name: target
+    kind: TemporalCluster
+  retentionPeriod: "24h"
+  description: "Migration e2e namespace (target)"

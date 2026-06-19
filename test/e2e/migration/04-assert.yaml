@@ -1,0 +1,14 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalMigration
+metadata:
+  name: orders-migration
+status:
+  phase: Passthrough
+  (proxyEndpoint != null && proxyEndpoint != ''): true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-migration-proxy
+status:
+  (readyReplicas > `0`): true

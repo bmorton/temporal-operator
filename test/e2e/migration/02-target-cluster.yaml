@@ -1,0 +1,34 @@
+# Target cluster being migrated to: a full TemporalCluster backed by the CNPG
+# Postgres provisioned earlier. Its frontend Service is "target-frontend:7233".
+#
+# The operator pings the datastore from temporal-system, so the host must be a
+# namespace-qualified FQDN; chainsaw substitutes the ephemeral test namespace
+# via the built-in $namespace binding.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: target
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password

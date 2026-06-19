@@ -238,6 +238,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalDevServer")
 		os.Exit(1)
 	}
+	if err := (&controller.TemporalMigrationReconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		ProxyImage: os.Getenv("MIGRATION_PROXY_IMAGE"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TemporalMigration")
+		os.Exit(1)
+	}
 	webhooksEnabled := os.Getenv("ENABLE_WEBHOOKS") != "false"
 	if webhooksEnabled {
 		if err := webhookv1alpha1.SetupTemporalClusterWebhookWithManager(mgr); err != nil {

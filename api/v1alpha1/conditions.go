@@ -36,6 +36,16 @@ const (
 	ConditionUpgradeBlocked = "UpgradeBlocked"
 	// ConditionShardCountLocked indicates the immutable shard count is locked in.
 	ConditionShardCountLocked = "ShardCountLocked"
+	// ConditionProxyReady indicates the migration proxy is provisioned and serving.
+	ConditionProxyReady = "ProxyReady"
+	// ConditionSourceReachable indicates the source frontend is reachable.
+	ConditionSourceReachable = "SourceReachable"
+	// ConditionTargetReachable indicates the target frontend is reachable.
+	ConditionTargetReachable = "TargetReachable"
+	// ConditionMigrationDraining indicates the source cluster is draining.
+	ConditionMigrationDraining = "MigrationDraining"
+	// ConditionMigrationComplete indicates the source cluster has fully drained.
+	ConditionMigrationComplete = "MigrationComplete"
 )
 
 // Condition reasons reported on Temporal resource status.
@@ -60,4 +70,16 @@ const (
 	ReasonAllServicesReady = "AllServicesReady"
 	// ReasonDeletionPrevented indicates deletion was blocked by preventDeletion.
 	ReasonDeletionPrevented = "DeletionPrevented"
+	// ReasonProxyProvisioning indicates the proxy Deployment is being created.
+	ReasonProxyProvisioning = "ProxyProvisioning"
+	// ReasonPassthrough indicates the proxy is forwarding all traffic to the source.
+	ReasonPassthrough = "Passthrough"
+	// ReasonCutoverEnabled indicates new workflows route to the target.
+	ReasonCutoverEnabled = "CutoverEnabled"
+	// ReasonDraining indicates the source still has running workflows.
+	ReasonDraining = "Draining"
+	// ReasonDrained indicates the source has no running workflows.
+	ReasonDrained = "Drained"
+	// ReasonUnreachable indicates a frontend could not be reached.
+	ReasonUnreachable = "Unreachable"
 )

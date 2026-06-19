@@ -1,0 +1,12 @@
+# Source cluster being migrated away from: a disposable dev server (SQLite).
+# Its frontend Service is "source-devserver:7233". The "migration" namespace is
+# created here via spec.namespaces (registered on the target via a
+# TemporalNamespace in a later step).
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalDevServer
+metadata:
+  name: source
+spec:
+  version: "1.31.1"
+  namespaces:
+    - migration

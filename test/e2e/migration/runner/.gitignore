@@ -1,0 +1,5 @@
+# Compiled binary emitted by `go build ./...` in this module (named after the
+# directory). Not a build artifact we ever commit; also keeps it out of the
+# Docker build context.
+/runner
+/migration-runner
