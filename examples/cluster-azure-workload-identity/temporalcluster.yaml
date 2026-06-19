@@ -1,7 +1,11 @@
-# Passwordless Flexible Server auth via Azure Workload Identity. The Temporal
-# SERVER pods, the operator's reachability probe, and the schema Job all
-# authenticate with short-lived Microsoft Entra access tokens — no static
-# passwords. Install the operator with workloadIdentity.enable=true (see README).
+# Passwordless Flexible Server auth via Azure Workload Identity.
+# - Temporal SERVER pods: azure-token-refresher sidecar writes /azure/pgpass;
+#   Temporal reads it via passwordCommand on every connection.
+# - Schema Job: one-shot initContainer writes /azure/pgpass; same passwordCommand.
+# - Operator probe + schema inspection: obtains an Entra token NATIVELY in-process
+#   (Go Azure SDK, no shell required on the distroless image) when
+#   sql.azureWorkloadIdentity: {} is set on each store.
+# Install the operator with workloadIdentity.enable=true (see README).
 apiVersion: v1
 kind: Secret
 metadata:
@@ -106,6 +110,10 @@ spec:
         # pgaadauth_create_principal (usually the identity's display name).
         user: temporal-identity
         passwordCommandSecretRef: { name: temporal-azure-pwcmd, key: command }
+        # The operator obtains its own Entra token natively in-process (Go Azure
+        # SDK, no shell needed on the distroless operator image) for its
+        # reachability probe and schema inspection.
+        azureWorkloadIdentity: {}
         tls: { enabled: true }
     visibilityStore:
       sql:
@@ -115,4 +123,8 @@ spec:
         database: temporal_visibility
         user: temporal-identity
         passwordCommandSecretRef: { name: temporal-azure-pwcmd, key: command }
+        # The operator obtains its own Entra token natively in-process (Go Azure
+        # SDK, no shell needed on the distroless operator image) for its
+        # reachability probe and schema inspection.
+        azureWorkloadIdentity: {}
         tls: { enabled: true }

@@ -2,9 +2,13 @@
 
 Demonstrates fully passwordless authentication to Azure Database for PostgreSQL
 Flexible Server using [Azure Workload Identity](https://azure.github.io/azure-workload-identity/)
-and Microsoft Entra access tokens. The **Temporal server pods**, the **operator's
-reachability probe**, and the **schema Job** all authenticate with short-lived
-Entra tokens — no static passwords anywhere.
+and Microsoft Entra access tokens. No static passwords anywhere.
+
+| Actor | Token mechanism |
+|---|---|
+| **Temporal server pods** | `azure-token-refresher` sidecar writes `/azure/pgpass`; Temporal reads it via `passwordCommand` on every connection |
+| **Schema Job** | one-shot `initContainer` writes `/azure/pgpass`; schema container reads it via `passwordCommand` |
+| **Operator** (probe + schema inspection) | obtains an Entra token **natively in-process** via the Go Azure Workload Identity SDK — no sidecar, no shell required on the distroless image; enabled by `sql.azureWorkloadIdentity: {}` on each store |
 
 This resolved [#47](https://github.com/bmorton/temporal-operator/issues/47).
 
@@ -22,8 +26,11 @@ This resolved [#47](https://github.com/bmorton/temporal-operator/issues/47).
 4. `schemaJob.podTemplate` gives the schema setup/update Jobs the same
    ServiceAccount and WI label, plus a one-shot `initContainer` that writes an
    Entra token to `/azure/pgpass` before the schema container starts.
-5. The operator itself is installed with `workloadIdentity.enable=true` so its
-   reachability probe also obtains a token via `passwordCommand`.
+5. The operator itself obtains its Entra token **natively in-process** (Go Azure
+   Workload Identity SDK) — it runs on a distroless image that has no shell, so it
+   cannot use `passwordCommand`. Set `sql.azureWorkloadIdentity: {}` on each store
+   to enable this. The operator pod needs only the WI label + SA annotation (no
+   sidecar on the operator pod).
 
 ## Prerequisites
 
@@ -49,6 +56,11 @@ helm install temporal-operator oci://ghcr.io/bmorton/charts/temporal-operator \
   --set workloadIdentity.enable=true \
   --set workloadIdentity.clientId=<operator-managed-identity-client-id>
 ```
+
+`workloadIdentity.enable=true` adds the `azure.workload.identity/use: "true"`
+label and the `azure.workload.identity/client-id` annotation to the operator's
+ServiceAccount. The operator needs **no token-refresher sidecar** — it fetches
+the Entra token natively in-process.
 
 ## Apply
 

@@ -37,23 +37,33 @@ Example:
 
 ## Passwordless auth with Microsoft Entra + Workload Identity
 
-The operator drives the Temporal **server pods**, its own **reachability probe**,
-and the **schema Job** passwordlessly using Azure Workload Identity and Entra
-access tokens, via the `podTemplate` override (`serviceAccountName`, the
-`azure.workload.identity/use` label, and a token-refresher sidecar) and the new
-`schemaJob.podTemplate` field.
+Each actor in the system obtains an Entra token through a different mechanism:
+
+| Actor | Token mechanism |
+|---|---|
+| **Temporal server pods** | `azure-token-refresher` sidecar writes a token to a shared `emptyDir`; Temporal reads it via `passwordCommand` (`podTemplate` override) |
+| **Schema Job** | one-shot `initContainer` writes a token before the schema container starts; schema container reads it via `passwordCommand` (`schemaJob.podTemplate`) |
+| **Operator** (probe + schema inspection) | obtains an Entra token **natively in-process** via the Go Azure Workload Identity SDK — no sidecar; enabled by setting `sql.azureWorkloadIdentity: {}` on each datastore |
+
+The operator runs on a distroless image with no shell, so it cannot use
+`passwordCommand`. Instead, set `sql.azureWorkloadIdentity: {}` on each store and
+install the operator with Workload Identity enabled so the Go SDK picks up the
+projected OIDC token automatically — no token-refresher sidecar on the operator pod.
 
 1. Enable the OIDC issuer and Workload Identity on AKS:
    `az aks update -g <rg> -n <cluster> --enable-oidc-issuer --enable-workload-identity`.
 2. Create a managed identity and a federated credential bound to the
    `temporal-azure` ServiceAccount (for cluster pods and schema Jobs) and another
    bound to the `temporal-operator-controller-manager` ServiceAccount in
-   `temporal-system` (for the operator's probe). These can be the same identity or
-   separate ones; each needs a federated credential and a Postgres role.
+   `temporal-system` (for the operator's native in-process token). These can be the
+   same identity or separate ones; each needs a federated credential and a Postgres
+   role.
 3. Enable Entra auth on the Flexible Server and map each identity to a Postgres
    role with `pgaadauth_create_principal`.
 4. Install the operator with Workload Identity enabled:
    `helm install temporal-operator oci://ghcr.io/bmorton/charts/temporal-operator --set workloadIdentity.enable=true --set workloadIdentity.clientId=<client-id>`.
+   This adds the WI label and SA annotation to the operator pod; no sidecar is
+   added to the operator.
 
 Full passwordless support (operator probe + schema Job + server pods) is available
 as of this release. Issue
