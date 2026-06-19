@@ -7,9 +7,10 @@ Secret. Workers and client applications can then mount that Secret to connect to
 the cluster's frontend over mTLS.
 
 > **Requirement:** this CRD only works against an mTLS-enabled `TemporalCluster`
-> (`mtls.provider: cert-manager`). It does **not** apply to non-mTLS clusters or
-> `TemporalDevServer` — those have no issuer, and the controller will report a
-> `ClusterMTLSDisabled` condition instead of issuing a certificate.
+> (`mtls.provider: cert-manager`). Against a non-mTLS `TemporalCluster` the
+> controller reports a `ClusterMTLSDisabled` condition, and against a
+> `TemporalDevServer` it reports `DevServerUnsupported` — in both cases it issues
+> no certificate.
 
 **Prerequisites:** [cert-manager](https://cert-manager.io/) must be installed in
 the cluster.
