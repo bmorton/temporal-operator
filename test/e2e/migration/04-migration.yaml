@@ -1,0 +1,16 @@
+# Provision the upgrade proxy from the source dev server to the target cluster.
+# source.address must be an FQDN: the operator dials it from temporal-system to
+# count draining workflows. namespaces[].source must match the namespace name
+# created on the source and registered on the target ("migration").
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalMigration
+metadata:
+  name: orders-migration
+spec:
+  source:
+    address: (join('.', ['source-devserver', $namespace, 'svc.cluster.local:7233']))
+  targetRef:
+    name: target
+  namespaces:
+    - source: migration
+  cutover: false
