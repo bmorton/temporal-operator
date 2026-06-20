@@ -108,8 +108,8 @@ cmd_up() {
   local PG_HOST; PG_HOST="$(az postgres flexible-server show -g "$AZURE_RG" -n "$PG_NAME" --query fullyQualifiedDomainName -o tsv)"
 
   log "Creating databases and mapping the managed identity to a Postgres role"
-  az postgres flexible-server db create -g "$AZURE_RG" -s "$PG_NAME" -d temporal >/dev/null
-  az postgres flexible-server db create -g "$AZURE_RG" -s "$PG_NAME" -d temporal_visibility >/dev/null
+  az postgres flexible-server db create -g "$AZURE_RG" -s "$PG_NAME" -n temporal >/dev/null
+  az postgres flexible-server db create -g "$AZURE_RG" -s "$PG_NAME" -n temporal_visibility >/dev/null
   # Map the workload identity as an Entra principal so it can log in to Postgres.
   # The admin authenticates with a fresh oss-rdbms Entra token.
   local PG_TOKEN; PG_TOKEN="$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)"
