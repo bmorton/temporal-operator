@@ -44,6 +44,9 @@ PG_SKU="${PG_SKU:-Standard_B1ms}"
 PG_TIER="${PG_TIER:-Burstable}"
 PG_VERSION="${PG_VERSION:-16}"
 E2E_TAG="${E2E_TAG:-app=temporal-operator-e2e}"
+# Namespace the Chainsaw suite runs in. Must match the federated credential
+# subject created in 'up' (see cmd_test).
+AZURE_TEST_NS="${AZURE_TEST_NS:-azure-e2e}"
 
 preflight() {
   command -v az >/dev/null || { err "az CLI not found"; exit 1; }
@@ -69,7 +72,8 @@ cmd_up() {
   AZURE_RG="${AZURE_RG:-temporal-operator-e2e-$sfx}"
   ACR_NAME="${ACR_NAME:-tempope2e$sfx}"
   local AKS_NAME="aks-$sfx" PG_NAME="pg-$sfx" UAMI_NAME="id-$sfx"
-  local SA_NAME="temporal-workload-identity" NS="azure-e2e"
+  local SA_NAME="temporal-workload-identity" NS="$AZURE_TEST_NS"
+  local OPERATOR_NS="temporal-system" OPERATOR_SA="temporal-operator-controller-manager"
 
   log "Creating resource group $AZURE_RG ($AZURE_LOCATION)"
   az group create -n "$AZURE_RG" -l "$AZURE_LOCATION" \
@@ -88,12 +92,20 @@ cmd_up() {
   az aks get-credentials -g "$AZURE_RG" -n "$AKS_NAME" --overwrite-existing
   local OIDC_ISSUER; OIDC_ISSUER="$(az aks show -g "$AZURE_RG" -n "$AKS_NAME" --query oidcIssuerProfile.issuerUrl -o tsv)"
 
-  log "Creating user-assigned managed identity + federated credential"
+  log "Creating user-assigned managed identity + federated credentials"
   az identity create -g "$AZURE_RG" -n "$UAMI_NAME" >/dev/null
   local CLIENT_ID; CLIENT_ID="$(az identity show -g "$AZURE_RG" -n "$UAMI_NAME" --query clientId -o tsv)"
+  # Federated credential for the workload SA (Temporal server pods + schema Job).
   az identity federated-credential create -g "$AZURE_RG" -n "fc-$sfx" \
     --identity-name "$UAMI_NAME" --issuer "$OIDC_ISSUER" \
     --subject "system:serviceaccount:$NS:$SA_NAME" \
+    --audience api://AzureADTokenExchange >/dev/null
+  # The operator shares this identity for its native in-process Entra token but
+  # runs as a different ServiceAccount in temporal-system, so it needs its own
+  # federated credential (else: AADSTS700213 "no matching federated identity").
+  az identity federated-credential create -g "$AZURE_RG" -n "fc-operator-$sfx" \
+    --identity-name "$UAMI_NAME" --issuer "$OIDC_ISSUER" \
+    --subject "system:serviceaccount:$OPERATOR_NS:$OPERATOR_SA" \
     --audience api://AzureADTokenExchange >/dev/null
 
   log "Creating Flexible Server ($PG_SKU, Entra auth, password auth disabled)"
@@ -106,10 +118,22 @@ cmd_up() {
     --admin-display-name "$PG_ADMIN" --admin-object-id "$PG_ADMIN_OID" \
     --admin-type User --public-access 0.0.0.0 --yes >/dev/null
   local PG_HOST; PG_HOST="$(az postgres flexible-server show -g "$AZURE_RG" -n "$PG_NAME" --query fullyQualifiedDomainName -o tsv)"
+  # Temporal's SQL visibility schema needs btree_gin (and pg_trgm). Azure
+  # Flexible Server requires extensions to be allow-listed before CREATE
+  # EXTENSION works (else: "extension ... is not allow-listed"). Dynamic param,
+  # no restart.
+  az postgres flexible-server parameter set -g "$AZURE_RG" -s "$PG_NAME" \
+    --name azure.extensions --value btree_gin,pg_trgm >/dev/null
 
   log "Creating databases and mapping the managed identity to a Postgres role"
   az postgres flexible-server db create -g "$AZURE_RG" -s "$PG_NAME" -n temporal >/dev/null
   az postgres flexible-server db create -g "$AZURE_RG" -s "$PG_NAME" -n temporal_visibility >/dev/null
+  # The psql calls below run from THIS host (outside Azure); the 0.0.0.0 rule
+  # only admits Azure-internal traffic (the operator/pods), so add a firewall
+  # rule for the runner's public IP.
+  local MYIP; MYIP="$(curl -fsS --max-time 10 https://api.ipify.org || curl -fsS --max-time 10 https://ifconfig.me)"
+  az postgres flexible-server firewall-rule create -g "$AZURE_RG" -s "$PG_NAME" \
+    -n runner-host --start-ip-address "$MYIP" --end-ip-address "$MYIP" >/dev/null
   # Map the workload identity as an Entra principal so it can log in to Postgres.
   # The admin authenticates with a fresh oss-rdbms Entra token.
   local PG_TOKEN; PG_TOKEN="$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)"
@@ -117,6 +141,21 @@ cmd_up() {
     -v ON_ERROR_STOP=1 \
     -c "select * from pgaadauth_create_principal_with_oid('$UAMI_NAME', '$CLIENT_ID', 'service', false, false);" || \
     err "principal mapping failed (may already exist); continuing"
+  # PostgreSQL 16 no longer grants CREATE on the public schema to all roles, so
+  # the schema Job (running as the managed-identity role) needs explicit grants
+  # to create Temporal's tables.
+  local db
+  for db in temporal temporal_visibility; do
+    PGPASSWORD="$PG_TOKEN" psql "host=$PG_HOST port=5432 dbname=$db user=$PG_ADMIN sslmode=require" \
+      -v ON_ERROR_STOP=1 \
+      -c "GRANT ALL PRIVILEGES ON DATABASE \"$db\" TO \"$UAMI_NAME\";" \
+      -c "GRANT ALL ON SCHEMA public TO \"$UAMI_NAME\";" \
+      -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$UAMI_NAME\";" >/dev/null
+  done
+
+  log "Installing cert-manager (required by the operator webhook certs)"
+  kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml >/dev/null
+  kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
 
   log "Installing operator via Helm (Workload Identity enabled)"
   helm install temporal-operator dist/chart \
@@ -146,7 +185,11 @@ cmd_test() {
   preflight
   [ -f "$VALUES_FILE" ] || { err "No $VALUES_FILE; run 'azure-e2e.sh up' first."; exit 1; }
   log "Running Chainsaw Azure suite"
-  "$CHAINSAW" test --test-dir test/e2e/azure --config .chainsaw.yaml --values "$VALUES_FILE"
+  # Pin the namespace to azure-e2e so the test ServiceAccount's subject matches
+  # the federated credential created in 'up' (chainsaw otherwise generates a
+  # random namespace, which would fail Workload Identity token exchange).
+  "$CHAINSAW" test --test-dir test/e2e/azure --config .chainsaw.yaml \
+    --namespace "$AZURE_TEST_NS" --values "$VALUES_FILE"
 }
 
 cmd_down() {

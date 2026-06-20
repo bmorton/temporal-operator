@@ -24,12 +24,23 @@ resource group** so teardown is a single `az group delete`:
 - an Azure Container Registry and a **remote** image build of the current branch
   (no local Docker needed);
 - an AKS cluster (`--enable-oidc-issuer --enable-workload-identity`, 1 node);
-- a user-assigned managed identity + **federated credential** bound to the test
-  ServiceAccount (`azure-e2e:temporal-workload-identity`);
+- a user-assigned managed identity with **two federated credentials** — one for
+  the workload ServiceAccount (`azure-e2e:temporal-workload-identity`, used by
+  the server pods and schema Job) and one for the operator ServiceAccount
+  (`temporal-system:temporal-operator-controller-manager`, used by the
+  operator's native in-process Entra token);
 - an Azure Database for PostgreSQL Flexible Server (Entra auth, password auth
-  disabled, TLS) with `temporal` and `temporal_visibility` databases, and a
-  Postgres role mapped to the managed identity via `pgaadauth_create_principal`;
+  disabled, TLS) with `temporal` and `temporal_visibility` databases, the
+  `azure.extensions` allow-list set to `btree_gin,pg_trgm` (required by Temporal's
+  SQL visibility schema), a Postgres role mapped to the managed identity via
+  `pgaadauth_create_principal`, PostgreSQL 16 `public`-schema grants for that
+  role, and a firewall rule for the runner's public IP (for the setup `psql`);
+- **cert-manager** (required by the operator's webhook serving certificates);
 - a Helm install of the operator with `workloadIdentity.enable=true`.
+
+The Chainsaw suite is pinned to the `azure-e2e` namespace (`--namespace`) so the
+test ServiceAccount's subject matches its federated credential; a random
+namespace would fail Workload Identity token exchange (`AADSTS700213`).
 
 ## Prerequisites
 
@@ -91,6 +102,7 @@ left behind.
 | `PG_TIER` | `Burstable` | Flexible Server tier. |
 | `PG_VERSION` | `16` | PostgreSQL major version. |
 | `ACR_NAME` | `tempope2e<rand>` | Container registry name. |
+| `AZURE_TEST_NS` | `azure-e2e` | Namespace the Chainsaw suite runs in (must match the workload federated credential). |
 | `E2E_TAG` | `app=temporal-operator-e2e` | Tag used by `azure-e2e-clean`. |
 
 ## Moving to CI
