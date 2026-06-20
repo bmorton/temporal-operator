@@ -119,24 +119,33 @@ selected per store:
 - **Command/Workload-Identity path — `JobInspectorBackend`.** When the credential
   is only obtainable via the cluster's identity (i.e. `azureWorkloadIdentity` is
   configured), the operator does **not** connect. Instead it runs a short-lived
-  **inspector Job** per store in the cluster namespace (init container mints the
-  token; main container is a minimal Postgres client image — an internal operator
-  default, e.g. `postgres:16-alpine`, not part of the CRD API) that runs:
+  **inspector Job** per store in the cluster namespace. The Job's init container
+  mints the token (azure-cli, cluster identity, writes `/azure/pgpass`); its main
+  container is the **operator's own image** run with an `inspect` subcommand
+  (`manager inspect --store <name> ...`). The inspector subcommand **reads the
+  token from `/azure/pgpass`** (generic `passwordCommand`-style file read — no
+  Azure SDK in the operator) and runs the operator's **existing**
+  `SQLProber.Probe` + `CurrentSchemaVersion` Go code against:
 
   ```
   SELECT curr_version FROM schema_version WHERE db_name = '<db>'
   ```
 
-  and writes a small JSON result to the pod's **termination message**
+  writing a small JSON result to the pod's **termination message**
   (`terminationMessagePath`), distinguishing three outcomes:
   - connect failure → `{"reachable": false, "error": "..."}`
   - connected, table absent → `{"reachable": true, "version": ""}` (needs setup)
   - version found → `{"reachable": true, "version": "1.13"}`
 
-  The operator reads `containerStatuses[].state.terminated.message`, parses it,
-  and feeds the **existing** reconcile logic: `PersistenceReachable` from
-  `reachable`, `Status.Persistence.SchemaVersions` from `version`, and the
-  unchanged setup-vs-update decision from the version. The inspector Job uses
+  Reusing the operator image means **no `psql`, no third image to mirror, and no
+  duplicated query logic** (admin-tools ships no `psql` and `temporal-sql-tool`
+  has no read-only version/ping command, so it cannot serve a read-only probe).
+  The operator discovers its own image via the downward API (its pod's container
+  image) so the inspector always matches the running operator. The operator reads
+  `containerStatuses[].state.terminated.message`, parses it, and feeds the
+  **existing** reconcile logic: `PersistenceReachable` from `reachable`,
+  `Status.Persistence.SchemaVersions` from `version`, and the unchanged
+  setup-vs-update decision from the version. The inspector Job uses
   `ttlSecondsAfterFinished` to self-clean; the backend runs it **once per
   reconcile** and caches `{reachable, version}` so `Probe` and `SchemaVersion`
   don't spawn two Jobs.
@@ -211,12 +220,14 @@ The separate `serviceaccount.yaml` is removed (the operator generates the SA).
 
 ### 7. Testing
 
-- **Unit:** `JobInspectorBackend` parses termination-message JSON into
-  `{reachable, version}`; the three outcomes (unreachable / no-table / versioned)
-  drive the right conditions and setup-vs-update decision (fake Job client). The
-  resource builder produces the expected SA, sidecar, initContainer, volume,
-  mounts, injected `passwordCommand`, and inspector Job from
-  `azureWorkloadIdentity`. Static-password path unchanged (existing tests).
+- **Unit:** the `inspect` subcommand emits the right `{reachable, version}` JSON
+  for the three outcomes (connect failure / no-table / versioned) given a token
+  file and DSN params (using the existing `SQLProber`/fake DB). `JobInspectorBackend`
+  parses that JSON and drives the right conditions and setup-vs-update decision
+  (fake Job client). The resource builder produces the expected SA, sidecar,
+  initContainer, volume, mounts, injected `passwordCommand`, and inspector Job
+  (operator image) from `azureWorkloadIdentity`. Static-password path unchanged
+  (existing tests).
 - **envtest/controller:** reconcile with `azureWorkloadIdentity` set creates the
   SA + inspector Job and surfaces conditions from a faked inspector result.
 - **e2e:** the real Azure suite above.
@@ -240,10 +251,14 @@ The separate `serviceaccount.yaml` is removed (the operator generates the SA).
   `PersistenceSpec.azureWorkloadIdentity` (cluster-level). Regenerate CRDs +
   `dist/chart` CRDs by hand.
 - Delete `internal/persistence/azure.go` and the in-process token branch.
+- Add an `inspect` subcommand to the manager binary (`cmd/`) that reads the token
+  file and runs the existing `SQLProber` probe + version query, emitting JSON to
+  the termination message.
 - Add `JobInspectorBackend` + the Azure wiring builder (SA, sidecar,
-  initContainer, inspector Job) in `internal/resources`.
+  initContainer, inspector Job using the operator image) in `internal/resources`.
 - Controller: select backend per store; generate the SA + Azure pod wiring when
-  `azureWorkloadIdentity` is set.
+  `azureWorkloadIdentity` is set; discover the operator's own image via the
+  downward API for the inspector Job.
 - Helm chart: remove operator `workloadIdentity.*`.
 - Example + Azure e2e: collapse to the single field; update `hack/azure-e2e.sh`
   federated-credential wiring.
