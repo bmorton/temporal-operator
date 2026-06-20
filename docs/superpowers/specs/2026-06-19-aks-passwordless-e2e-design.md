@@ -1,7 +1,17 @@
 # AKS passwordless e2e + full Workload Identity auth (#47) — design
 
 Date: 2026-06-19
-Status: Approved
+Status: Superseded in part (see note)
+
+> **Evolution (2026-06-20).** The operator's **in-process** Entra token approach
+> described here (operator authenticates its own probe/schema inspection via
+> `sql.azureWorkloadIdentity` and `internal/persistence/azure.go`) is being
+> replaced by a cluster-scoped, multi-identity model where the operator never
+> holds a database credential and instead inspects via short-lived Jobs in the
+> cluster's namespace. The PR2 e2e was also folded into PR #85. See
+> `2026-06-20-cluster-scoped-passwordless-identity-design.md`. The PR1
+> persistence/schema-Job/`passwordCommand` work and the e2e harness from this
+> document remain accurate.
 
 ## Problem
 
