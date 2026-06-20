@@ -1,15 +1,8 @@
-{{- if and .Values.workloadIdentity.enable (not .Values.workloadIdentity.clientId) }}
-{{- fail "workloadIdentity.enable=true requires workloadIdentity.clientId to be set" }}
-{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
     labels:
         app.kubernetes.io/managed-by: {{ .Release.Service }}
         app.kubernetes.io/name: temporal-operator
-    {{- if .Values.workloadIdentity.enable }}
-    annotations:
-        azure.workload.identity/client-id: {{ .Values.workloadIdentity.clientId | quote }}
-    {{- end }}
     name: temporal-operator-controller-manager
     namespace: {{ .Release.Namespace }}

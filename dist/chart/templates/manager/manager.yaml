@@ -20,9 +20,6 @@ spec:
             labels:
                 app.kubernetes.io/name: temporal-operator
                 control-plane: controller-manager
-                {{- if .Values.workloadIdentity.enable }}
-                azure.workload.identity/use: "true"
-                {{- end }}
         spec:
             containers:
                 - args:
@@ -41,6 +38,9 @@ spec:
                     {{- end }}
                   command:
                     - /manager
+                  env:
+                    - name: OPERATOR_IMAGE
+                      value: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
                   image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
                   imagePullPolicy: {{ .Values.manager.image.pullPolicy }}
                   livenessProbe:

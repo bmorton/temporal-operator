@@ -75,15 +75,3 @@ webhook:
 prometheus:
   enable: false
 
-# workloadIdentity wires Azure Workload Identity onto the operator pod so it can
-# obtain a Microsoft Entra access token in-process for passwordless database
-# auth (used when a datastore sets sql.azureWorkloadIdentity). The Azure
-# Workload Identity webhook injects the token from the pod label + ServiceAccount
-# annotation below; no sidecar is needed. Disabled by default; non-Azure installs
-# are unaffected.
-workloadIdentity:
-  enable: false
-  # clientId is the managed identity client ID set as the ServiceAccount
-  # annotation azure.workload.identity/client-id. Required when enable=true.
-  clientId: ""
-
