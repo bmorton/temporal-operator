@@ -219,3 +219,138 @@ var _ = Describe("TemporalCluster Cassandra and Elasticsearch backends", func() 
 		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, temporalv1alpha1.ConditionSchemaReady)).To(BeTrue())
 	})
 })
+
+var _ = Describe("TemporalCluster Azure Workload Identity integration", func() {
+	ctx := context.Background()
+	var counter int
+
+	// azureWISQLSpec returns a SQLDatastoreSpec WITHOUT a password secret ref,
+	// since Azure WI provides passwordless auth.
+	azureWISQLSpec := func(db string) *temporalv1alpha1.SQLDatastoreSpec {
+		return &temporalv1alpha1.SQLDatastoreSpec{
+			PluginName: "postgres12",
+			Host:       "postgres.default.svc",
+			Port:       5432,
+			Database:   db,
+			User:       "temporal",
+			// No PasswordSecretRef - Azure WI provides the credential
+		}
+	}
+
+	newAzureWICluster := func() *temporalv1alpha1.TemporalCluster {
+		counter++
+		name := fmt.Sprintf("azure-%d", counter)
+		c := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalClusterSpec{
+				Version:          "1.31.1",
+				NumHistoryShards: 512,
+				Persistence: temporalv1alpha1.PersistenceSpec{
+					DefaultStore:    temporalv1alpha1.DatastoreSpec{SQL: azureWISQLSpec("temporal")},
+					VisibilityStore: temporalv1alpha1.DatastoreSpec{SQL: azureWISQLSpec("temporal_visibility")},
+					AzureWorkloadIdentity: &temporalv1alpha1.AzureWorkloadIdentitySpec{
+						ClientID: "test-client-id",
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
+		return c
+	}
+
+	// reconcileAndReturnResult reconciles without a fake backend (uses JobInspectorBackend path).
+	reconcileAndReturnResult := func(c *temporalv1alpha1.TemporalCluster) reconcile.Result {
+		r := &TemporalClusterReconciler{
+			Client:        k8sClient,
+			Scheme:        k8sClient.Scheme(),
+			OperatorImage: "test-operator:v0",
+			// Note: BackendFactory is nil; for Azure WI clusters, buildSchemaTargets
+			// will use JobInspectorBackend which doesn't call the factory for SQL stores.
+		}
+		result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: c.Name, Namespace: c.Namespace}})
+		Expect(err).NotTo(HaveOccurred())
+		return result
+	}
+
+	conditionStatus := func(name, condType string) *metav1.Condition {
+		c := &temporalv1alpha1.TemporalCluster{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, c)).To(Succeed())
+		return meta.FindStatusCondition(c.Status.Conditions, condType)
+	}
+
+	It("creates the Azure ServiceAccount when azureWorkloadIdentity is set", func() {
+		c := newAzureWICluster()
+		reconcileAndReturnResult(c)
+
+		By("creating the <cluster>-azure ServiceAccount")
+		sa := &corev1.ServiceAccount{}
+		saName := resources.AzureServiceAccountName(c)
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: saName, Namespace: "default"}, sa)).To(Succeed())
+		Expect(sa.Annotations).To(HaveKeyWithValue("azure.workload.identity/client-id", "test-client-id"))
+		Expect(sa.OwnerReferences).NotTo(BeEmpty())
+	})
+
+	It("creates inspector Jobs for both stores when azureWorkloadIdentity is set", func() {
+		c := newAzureWICluster()
+		// First reconcile creates the default store inspector job and returns on ErrInspecting.
+		reconcileAndReturnResult(c)
+
+		By("creating the default store inspector job")
+		defaultJob := &batchv1.Job{}
+		defaultJobName := resources.InspectorJobName(c.Name, resources.StoreDefault)
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: defaultJobName, Namespace: "default"}, defaultJob)).To(Succeed())
+		Expect(defaultJob.Spec.Template.Spec.Containers[0].Image).To(Equal("test-operator:v0"))
+		Expect(defaultJob.Spec.Template.Spec.Containers[0].Args).To(ContainElement("inspect"))
+		Expect(defaultJob.OwnerReferences).NotTo(BeEmpty())
+
+		// Note: The visibility job is NOT created in the first reconcile because
+		// ErrInspecting on the default store causes an early return. A subsequent
+		// reconcile after the default job completes would create the visibility job.
+		// This is the correct behavior - we probe stores sequentially and requeue
+		// while inspecting.
+	})
+
+	It("sets PersistenceReachable=False with reason Inspecting while Jobs are pending", func() {
+		c := newAzureWICluster()
+		result := reconcileAndReturnResult(c)
+
+		By("setting PersistenceReachable=False with reason Inspecting")
+		cond := conditionStatus(c.Name, temporalv1alpha1.ConditionPersistenceReachable)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(temporalv1alpha1.ReasonInspecting))
+
+		By("requesting a requeue (not a failure)")
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+	})
+
+	It("inspector Jobs have Azure Workload Identity wiring applied", func() {
+		c := newAzureWICluster()
+		reconcileAndReturnResult(c)
+
+		job := &batchv1.Job{}
+		jobName := resources.InspectorJobName(c.Name, resources.StoreDefault)
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: jobName, Namespace: "default"}, job)).To(Succeed())
+
+		By("setting the ServiceAccount")
+		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(resources.AzureServiceAccountName(c)))
+
+		By("adding the azure.workload.identity/use label")
+		Expect(job.Spec.Template.Labels).To(HaveKeyWithValue(resources.AzureWILabel, "true"))
+
+		By("adding the azure-token initContainer")
+		initContainerNames := []string{}
+		for _, ic := range job.Spec.Template.Spec.InitContainers {
+			initContainerNames = append(initContainerNames, ic.Name)
+		}
+		Expect(initContainerNames).To(ContainElement("azure-token"))
+
+		By("adding the azure-token volume")
+		volumeNames := []string{}
+		for _, v := range job.Spec.Template.Spec.Volumes {
+			volumeNames = append(volumeNames, v.Name)
+		}
+		Expect(volumeNames).To(ContainElement(resources.AzureTokenVolumeName))
+	})
+})

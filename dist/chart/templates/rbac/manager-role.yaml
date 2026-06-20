@@ -26,6 +26,15 @@ rules:
         - create
         - patch
     - apiGroups:
+        - ""
+      resources:
+        - serviceaccounts
+      verbs:
+        - create
+        - get
+        - list
+        - watch
+    - apiGroups:
         - apps
       resources:
         - deployments

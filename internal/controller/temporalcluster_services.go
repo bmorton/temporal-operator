@@ -60,7 +60,20 @@ func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, clust
 	if err != nil {
 		return err
 	}
+
+	// Apply Azure Workload Identity wiring to Deployments when WI is enabled.
+	wiEnabled := resources.AzureWorkloadIdentityEnabled(cluster)
 	for _, p := range planned {
+		if wiEnabled {
+			if dep, ok := p.Object.(*appsv1.Deployment); ok {
+				resources.ApplyAzureServerWorkloadIdentity(
+					&dep.Spec.Template.ObjectMeta,
+					&dep.Spec.Template.Spec,
+					cluster,
+					"temporal", // The server container is named "temporal".
+				)
+			}
+		}
 		if err := r.apply(ctx, cluster, p.Object); err != nil {
 			return err
 		}
@@ -93,6 +106,14 @@ func (r *TemporalClusterReconciler) renderConfig(ctx context.Context, cluster *t
 		PublicClientHostPort: fmt.Sprintf("%s.%s.svc:%d",
 			resources.FrontendServiceName(cluster.Name), cluster.Namespace, temporal.DefaultServicePorts()["frontend"].GRPCPort),
 	}
+
+	// When Azure Workload Identity is enabled, override the password commands
+	// to use the token file-based command.
+	if resources.AzureWorkloadIdentityEnabled(cluster) {
+		opts.DefaultStorePasswordCommand = resources.AzurePasswordCommand()
+		opts.VisibilityStorePasswordCommand = resources.AzurePasswordCommand()
+	}
+
 	cfg, err := temporal.RenderClusterConfig(cluster, opts)
 	if err != nil {
 		return renderedConfig{}, fmt.Errorf("rendering config: %w", err)

@@ -46,6 +46,10 @@ type TemporalClusterReconciler struct {
 	// BackendFactory builds datastore backends and is injectable for testing;
 	// when nil the default real implementation is used.
 	BackendFactory persistence.BackendFactory
+
+	// OperatorImage is the operator's own image, used for inspector Jobs.
+	// Populated from OPERATOR_IMAGE env by cmd/main.go.
+	OperatorImage string
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalclusters,verbs=get;list;watch;create;update;patch;delete
@@ -60,6 +64,7 @@ type TemporalClusterReconciler struct {
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates;issuers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create
 
 // Reconcile drives the TemporalCluster toward its desired state. At this
 // milestone it reconciles persistence (reachability + schema) and reports the
