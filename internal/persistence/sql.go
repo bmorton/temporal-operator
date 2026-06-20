@@ -172,4 +172,4 @@ func (b *sqlBackend) EnsureSchema(_ context.Context, _ string) (bool, error) {
 	return false, nil
 }
 
-func (b *sqlBackend) Kind() string { return "sql" }
+func (b *sqlBackend) Kind() string { return KindSQL }

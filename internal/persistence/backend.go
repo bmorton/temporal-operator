@@ -23,6 +23,11 @@ import (
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
 
+const (
+	// KindSQL identifies a SQL backend.
+	KindSQL = "sql"
+)
+
 // Backend abstracts a Temporal datastore (SQL, Cassandra, or Elasticsearch) for
 // reachability probing and schema management.
 type Backend interface {

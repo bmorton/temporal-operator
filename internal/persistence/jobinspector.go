@@ -119,5 +119,5 @@ func (b *JobInspectorBackend) EnsureSchema(ctx context.Context, minVersion strin
 
 // Kind returns "sql".
 func (b *JobInspectorBackend) Kind() string {
-	return "sql"
+	return KindSQL
 }

@@ -38,6 +38,12 @@ const (
 	DefaultAzureScope = "https://ossrdbms-aad.database.windows.net/.default"
 	// AzureWILabel is the Azure Workload Identity pod label.
 	AzureWILabel = "azure.workload.identity/use"
+	// AzureWILabelValue is the value for the Azure Workload Identity pod label.
+	AzureWILabelValue = "true"
+	// azureTokenRefresherName is the sidecar container name.
+	azureTokenRefresherName = "azure-token-refresher"
+	// azureTokenInitName is the initContainer name.
+	azureTokenInitName = "azure-token"
 )
 
 const (
@@ -100,7 +106,7 @@ az account get-access-token --scope %s \
   --query accessToken -o tsv > /azure/pgpass`, scope)
 
 	return corev1.Container{
-		Name:    "azure-token",
+		Name:    azureTokenInitName,
 		Image:   image,
 		Command: []string{"/bin/sh", "-c"},
 		Args:    []string{script},
@@ -128,7 +134,7 @@ func AzureTokenRefresherSidecar(cluster *temporalv1alpha1.TemporalCluster) corev
 
 	refreshInterval := defaultRefreshIntervalSeconds
 	if spec.RefreshInterval != nil {
-		refreshInterval = int(spec.RefreshInterval.Duration.Seconds())
+		refreshInterval = int(spec.RefreshInterval.Seconds())
 	}
 
 	script := fmt.Sprintf(`set -e
@@ -145,7 +151,7 @@ while true; do
 done`, scope, refreshInterval)
 
 	return corev1.Container{
-		Name:    "azure-token-refresher",
+		Name:    azureTokenRefresherName,
 		Image:   image,
 		Command: []string{"/bin/sh", "-c"},
 		Args:    []string{script},
@@ -169,7 +175,7 @@ func ApplyAzureServerWorkloadIdentity(podMeta *metav1.ObjectMeta, podSpec *corev
 	if podMeta.Labels == nil {
 		podMeta.Labels = make(map[string]string)
 	}
-	podMeta.Labels[AzureWILabel] = "true"
+	podMeta.Labels[AzureWILabel] = AzureWILabelValue
 
 	// Add token volume if not present
 	volumeExists := false
@@ -214,7 +220,7 @@ func ApplyAzureServerWorkloadIdentity(podMeta *metav1.ObjectMeta, podSpec *corev
 	// Add sidecar if not present
 	sidecarExists := false
 	for _, container := range podSpec.Containers {
-		if container.Name == "azure-token-refresher" {
+		if container.Name == azureTokenRefresherName {
 			sidecarExists = true
 			break
 		}
@@ -235,7 +241,7 @@ func ApplyAzureSchemaWorkloadIdentity(podMeta *metav1.ObjectMeta, podSpec *corev
 	if podMeta.Labels == nil {
 		podMeta.Labels = make(map[string]string)
 	}
-	podMeta.Labels[AzureWILabel] = "true"
+	podMeta.Labels[AzureWILabel] = AzureWILabelValue
 
 	// Add token volume if not present
 	volumeExists := false
@@ -280,7 +286,7 @@ func ApplyAzureSchemaWorkloadIdentity(podMeta *metav1.ObjectMeta, podSpec *corev
 	// Add init container if not present
 	initExists := false
 	for _, container := range podSpec.InitContainers {
-		if container.Name == "azure-token" {
+		if container.Name == azureTokenInitName {
 			initExists = true
 			break
 		}

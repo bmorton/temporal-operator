@@ -20,11 +20,57 @@ import (
 	"slices"
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
+
+// requireInitContainerByName fails the test if the initContainer is not found.
+func requireInitContainerByName(t *testing.T, job *batchv1.Job, name string) {
+	t.Helper()
+	for _, ic := range job.Spec.Template.Spec.InitContainers {
+		if ic.Name == name {
+			return
+		}
+	}
+	t.Errorf("%s initContainer not found", name)
+}
+
+// requireJobVolume fails the test if the volume is not found.
+func requireJobVolume(t *testing.T, job *batchv1.Job, name string) {
+	t.Helper()
+	for _, vol := range job.Spec.Template.Spec.Volumes {
+		if vol.Name == name {
+			return
+		}
+	}
+	t.Errorf("%s volume not found", name)
+}
+
+// requireJobVolumeMount fails the test if the container doesn't have the mount.
+func requireJobVolumeMount(t *testing.T, container *corev1.Container, volumeName, mountPath string) {
+	t.Helper()
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == volumeName && mount.MountPath == mountPath {
+			return
+		}
+	}
+	t.Errorf("%s volume mount not found on container", volumeName)
+}
+
+// requireArgsContain fails the test if the args don't contain the expected values.
+func requireArgsContain(t *testing.T, args []string, key, value string) {
+	t.Helper()
+	if !slices.Contains(args, key) {
+		t.Errorf("args missing %s", key)
+		return
+	}
+	if value != "" && !slices.Contains(args, value) {
+		t.Errorf("args missing %s %s", key, value)
+	}
+}
 
 func TestInspectorJobName(t *testing.T) {
 	got := InspectorJobName("tc", StoreDefault)
@@ -94,39 +140,19 @@ func TestBuildInspectorJob(t *testing.T) {
 	}
 
 	// Verify WI pod label
-	wiLabel := job.Spec.Template.ObjectMeta.Labels[AzureWILabel]
-	if wiLabel != "true" {
-		t.Errorf("Azure WI label = %q, want %q", wiLabel, "true")
+	wiLabel := job.Spec.Template.Labels[AzureWILabel]
+	if wiLabel != wiLabelValue {
+		t.Errorf("Azure WI label = %q, want %q", wiLabel, wiLabelValue)
 	}
 
-	// Verify azure-token initContainer
-	if len(job.Spec.Template.Spec.InitContainers) == 0 {
-		t.Fatal("No initContainers found, expected azure-token")
-	}
-	foundAzureInit := false
-	for _, ic := range job.Spec.Template.Spec.InitContainers {
-		if ic.Name == "azure-token" {
-			foundAzureInit = true
-			break
-		}
-	}
-	if !foundAzureInit {
-		t.Error("azure-token initContainer not found")
-	}
+	requireInitContainerByName(t, job, azureTokenInitName)
+	requireJobVolume(t, job, AzureTokenVolumeName)
 
-	// Verify /azure volume
-	foundAzureVolume := false
-	for _, vol := range job.Spec.Template.Spec.Volumes {
-		if vol.Name == AzureTokenVolumeName {
-			foundAzureVolume = true
-			break
-		}
-	}
-	if !foundAzureVolume {
-		t.Error("azure-token volume not found")
-	}
+	verifyInspectorJobContainer(t, job)
+}
 
-	// Verify main container
+func verifyInspectorJobContainer(t *testing.T, job *batchv1.Job) {
+	t.Helper()
 	if len(job.Spec.Template.Spec.Containers) == 0 {
 		t.Fatal("No containers found")
 	}
@@ -146,41 +172,21 @@ func TestBuildInspectorJob(t *testing.T) {
 	}
 
 	// Verify --password-file /azure/pgpass
-	if !slices.Contains(main.Args, "--password-file") {
-		t.Error("args missing --password-file")
-	}
 	idx := slices.Index(main.Args, "--password-file")
 	if idx == -1 || idx+1 >= len(main.Args) || main.Args[idx+1] != AzureTokenFile {
 		t.Errorf("--password-file value = %v, want %q", main.Args, AzureTokenFile)
 	}
 
-	// Verify --host, --db, --user
-	if !slices.Contains(main.Args, "--host") || !slices.Contains(main.Args, "pg.example.com") {
-		t.Error("args missing --host pg.example.com")
-	}
-	if !slices.Contains(main.Args, "--db") || !slices.Contains(main.Args, "temporal") {
-		t.Error("args missing --db temporal")
-	}
-	if !slices.Contains(main.Args, "--user") || !slices.Contains(main.Args, "temporal") {
-		t.Error("args missing --user temporal")
-	}
+	requireArgsContain(t, main.Args, "--host", "pg.example.com")
+	requireArgsContain(t, main.Args, "--db", "temporal")
+	requireArgsContain(t, main.Args, "--user", "temporal")
 
 	// Verify TerminationMessagePolicy
 	if main.TerminationMessagePolicy != corev1.TerminationMessageFallbackToLogsOnError {
 		t.Errorf("TerminationMessagePolicy = %q, want FallbackToLogsOnError", main.TerminationMessagePolicy)
 	}
 
-	// Verify /azure volume mount on main container
-	foundMount := false
-	for _, mount := range main.VolumeMounts {
-		if mount.Name == AzureTokenVolumeName && mount.MountPath == AzureTokenMountPath {
-			foundMount = true
-			break
-		}
-	}
-	if !foundMount {
-		t.Error("azure-token volume mount not found on main container")
-	}
+	requireJobVolumeMount(t, &main, AzureTokenVolumeName, AzureTokenMountPath)
 }
 
 func TestBuildInspectorJobWithTLS(t *testing.T) {

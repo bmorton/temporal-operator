@@ -57,6 +57,10 @@ const PostgresSchemaDir = "v12"
 const (
 	schemaJobBackoffLimit   int32 = 3
 	schemaJobTTLAfterFinish int32 = 600
+	// schemaDirTemporal is the subdirectory for the default store schema.
+	schemaDirTemporal = "temporal"
+	// schemaDirVisibility is the subdirectory for the visibility store schema.
+	schemaDirVisibility = "visibility"
 
 	// passwordEnvVar is the env var temporal-sql-tool reads the password from.
 	passwordEnvVar          = "SQL_PASSWORD"
@@ -94,17 +98,17 @@ func SchemaJobName(clusterName string, store SchemaStore, action SchemaAction) s
 }
 
 func sqlSchemaDir(version string, store SchemaStore) string {
-	sub := "temporal"
+	sub := schemaDirTemporal
 	if store == StoreVisibility {
-		sub = "visibility"
+		sub = schemaDirVisibility
 	}
 	return fmt.Sprintf("/etc/temporal/schema/postgresql/%s/%s/versioned", version, sub)
 }
 
 func cassandraSchemaDir(store SchemaStore) string {
-	sub := "temporal"
+	sub := schemaDirTemporal
 	if store == StoreVisibility {
-		sub = "visibility"
+		sub = schemaDirVisibility
 	}
 	return fmt.Sprintf("/etc/temporal/schema/cassandra/%s/versioned", sub)
 }

@@ -26,6 +26,67 @@ import (
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
 
+const testAzureClusterSuffix = "azure-e2e-azure"
+
+// requireVolume fails the test if the volume is not found.
+func requireVolume(t *testing.T, spec *corev1.PodSpec, name string) {
+	t.Helper()
+	for _, vol := range spec.Volumes {
+		if vol.Name == name && vol.EmptyDir != nil {
+			return
+		}
+	}
+	t.Errorf("%s emptyDir volume not found", name)
+}
+
+// requireVolumeMount fails the test if the container doesn't have the mount.
+func requireVolumeMount(t *testing.T, spec *corev1.PodSpec, containerName, volumeName, mountPath string) {
+	t.Helper()
+	for _, container := range spec.Containers {
+		if container.Name == containerName {
+			for _, mount := range container.VolumeMounts {
+				if mount.Name == volumeName && mount.MountPath == mountPath {
+					return
+				}
+			}
+			break
+		}
+	}
+	t.Errorf("%s volume mount not found on %s container", volumeName, containerName)
+}
+
+// requireContainer fails the test if the container is not found.
+func requireContainer(t *testing.T, spec *corev1.PodSpec, name string) {
+	t.Helper()
+	for _, container := range spec.Containers {
+		if container.Name == name {
+			return
+		}
+	}
+	t.Errorf("%s container not found", name)
+}
+
+// requireInitContainer fails the test if the initContainer is not found.
+func requireInitContainer(t *testing.T, spec *corev1.PodSpec, name string) {
+	t.Helper()
+	for _, container := range spec.InitContainers {
+		if container.Name == name {
+			return
+		}
+	}
+	t.Errorf("%s initContainer not found", name)
+}
+
+// requireNoContainer fails the test if the container is found.
+func requireNoContainer(t *testing.T, spec *corev1.PodSpec, name string) {
+	t.Helper()
+	for _, container := range spec.Containers {
+		if container.Name == name {
+			t.Errorf("%s container should not be present", name)
+		}
+	}
+}
+
 func TestAzureWorkloadIdentityEnabled(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -142,8 +203,8 @@ func TestBuildAzureServiceAccount(t *testing.T) {
 		t.Fatal("BuildAzureServiceAccount() returned nil")
 	}
 
-	if sa.Name != "azure-e2e-azure" {
-		t.Errorf("sa.Name = %q, want %q", sa.Name, "azure-e2e-azure")
+	if sa.Name != testAzureClusterSuffix {
+		t.Errorf("sa.Name = %q, want %q", sa.Name, testAzureClusterSuffix)
 	}
 
 	if sa.Namespace != "test-ns" {
@@ -256,50 +317,13 @@ func TestApplyAzureServerWorkloadIdentity(t *testing.T) {
 	}
 
 	// Check ServiceAccount
-	if spec.ServiceAccountName != "azure-e2e-azure" {
-		t.Errorf("spec.ServiceAccountName = %q, want %q", spec.ServiceAccountName, "azure-e2e-azure")
+	if spec.ServiceAccountName != testAzureClusterSuffix {
+		t.Errorf("spec.ServiceAccountName = %q, want %q", spec.ServiceAccountName, testAzureClusterSuffix)
 	}
 
-	// Check volume
-	foundVolume := false
-	for _, vol := range spec.Volumes {
-		if vol.Name == AzureTokenVolumeName && vol.EmptyDir != nil {
-			foundVolume = true
-			break
-		}
-	}
-	if !foundVolume {
-		t.Error("azure-token emptyDir volume not found")
-	}
-
-	// Check mount on main container
-	foundMount := false
-	for _, container := range spec.Containers {
-		if container.Name == "temporal" {
-			for _, mount := range container.VolumeMounts {
-				if mount.Name == AzureTokenVolumeName && mount.MountPath == AzureTokenMountPath {
-					foundMount = true
-					break
-				}
-			}
-			break
-		}
-	}
-	if !foundMount {
-		t.Error("azure-token volume mount not found on temporal container")
-	}
-
-	// Check sidecar
-	foundSidecar := false
-	for _, container := range spec.Containers {
-		if container.Name == "azure-token-refresher" {
-			foundSidecar = true
-			break
-		}
-	}
-	if !foundSidecar {
-		t.Error("azure-token-refresher sidecar not found")
-	}
+	requireVolume(t, &spec, AzureTokenVolumeName)
+	requireVolumeMount(t, &spec, "temporal", AzureTokenVolumeName, AzureTokenMountPath)
+	requireContainer(t, &spec, azureTokenRefresherName)
 }
 
 func TestApplyAzureServerWorkloadIdentityIdempotent(t *testing.T) {
@@ -377,57 +401,14 @@ func TestApplyAzureSchemaWorkloadIdentity(t *testing.T) {
 	}
 
 	// Check ServiceAccount
-	if spec.ServiceAccountName != "azure-e2e-azure" {
-		t.Errorf("spec.ServiceAccountName = %q, want %q", spec.ServiceAccountName, "azure-e2e-azure")
+	if spec.ServiceAccountName != testAzureClusterSuffix {
+		t.Errorf("spec.ServiceAccountName = %q, want %q", spec.ServiceAccountName, testAzureClusterSuffix)
 	}
 
-	// Check volume
-	foundVolume := false
-	for _, vol := range spec.Volumes {
-		if vol.Name == AzureTokenVolumeName && vol.EmptyDir != nil {
-			foundVolume = true
-			break
-		}
-	}
-	if !foundVolume {
-		t.Error("azure-token emptyDir volume not found")
-	}
-
-	// Check mount on main container
-	foundMount := false
-	for _, container := range spec.Containers {
-		if container.Name == "schema" {
-			for _, mount := range container.VolumeMounts {
-				if mount.Name == AzureTokenVolumeName && mount.MountPath == AzureTokenMountPath {
-					foundMount = true
-					break
-				}
-			}
-			break
-		}
-	}
-	if !foundMount {
-		t.Error("azure-token volume mount not found on schema container")
-	}
-
-	// Check initContainer
-	foundInit := false
-	for _, container := range spec.InitContainers {
-		if container.Name == "azure-token" {
-			foundInit = true
-			break
-		}
-	}
-	if !foundInit {
-		t.Error("azure-token initContainer not found")
-	}
-
-	// Should NOT have sidecar
-	for _, container := range spec.Containers {
-		if container.Name == "azure-token-refresher" {
-			t.Error("azure-token-refresher sidecar should not be present for schema workload")
-		}
-	}
+	requireVolume(t, &spec, AzureTokenVolumeName)
+	requireVolumeMount(t, &spec, "schema", AzureTokenVolumeName, AzureTokenMountPath)
+	requireInitContainer(t, &spec, "azure-token")
+	requireNoContainer(t, &spec, azureTokenRefresherName)
 }
 
 func TestApplyAzureSchemaWorkloadIdentityIdempotent(t *testing.T) {
