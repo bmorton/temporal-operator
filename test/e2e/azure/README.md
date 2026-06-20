@@ -83,7 +83,7 @@ left behind.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `AZURE_LOCATION` | `eastus` | Azure region. |
+| `AZURE_LOCATION` | `centralus` | Azure region (see note below). |
 | `AZURE_RG` | `temporal-operator-e2e-<rand>` | Resource group (persisted in the env file). |
 | `AKS_NODE_SIZE` | `Standard_B2s` | AKS node VM size. |
 | `AKS_NODE_COUNT` | `1` | AKS node count. |
@@ -98,6 +98,25 @@ left behind.
 Every input is an env var, so a future GitHub Actions workflow can `azure/login`
 with OIDC and call the same `make azure-e2e` target — no script changes needed.
 No workflow is added here on purpose (the run is slow and incurs Azure cost).
+
+## Choosing a region
+
+Azure Database for PostgreSQL Flexible Server is **region-restricted on many
+subscriptions** — Visual Studio / MSDN credit subscriptions, for example,
+restrict popular regions like `eastus`, `eastus2`, and `westus2`, and creation
+fails with `ERROR: The location is restricted from performing this operation`.
+The default is `centralus`, which is broadly available. To find a region your
+subscription allows, check which ones expose the Burstable SKU (the capabilities
+API reflects per-subscription offer restrictions):
+
+```sh
+for r in centralus westus3 westus canadacentral eastus eastus2 westus2; do
+  n=$(az postgres flexible-server list-skus -l "$r" -o json 2>/dev/null | grep -c Standard_B1ms)
+  echo "$r: $n"   # non-zero => Standard_B1ms is available to you there
+done
+```
+
+Then run with, e.g., `AZURE_LOCATION=westus3 make azure-e2e-up`.
 
 ## First-run notes
 

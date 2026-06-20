@@ -13,7 +13,7 @@
 #   hack/azure-e2e.sh clean     # delete ANY resource group with our tag (leak backstop)
 #
 # Env (defaults):
-#   AZURE_LOCATION      eastus
+#   AZURE_LOCATION      centralus
 #   AZURE_RG            temporal-operator-e2e-<rand>   (persisted in env file)
 #   AKS_NODE_SIZE       Standard_B2s
 #   AKS_NODE_COUNT      1
@@ -33,7 +33,11 @@ CHAINSAW="${CHAINSAW:-$REPO_ROOT/bin/chainsaw}"
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 err() { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; }
 
-AZURE_LOCATION="${AZURE_LOCATION:-eastus}"
+# Azure Database for PostgreSQL Flexible Server is region-restricted on many
+# subscriptions (e.g. Visual Studio / MSDN credit subscriptions restrict eastus,
+# eastus2, westus2). centralus is broadly available; override AZURE_LOCATION if
+# your subscription restricts it (see README for how to find an allowed region).
+AZURE_LOCATION="${AZURE_LOCATION:-centralus}"
 AKS_NODE_SIZE="${AKS_NODE_SIZE:-Standard_B2s}"
 AKS_NODE_COUNT="${AKS_NODE_COUNT:-1}"
 PG_SKU="${PG_SKU:-Standard_B1ms}"
