@@ -12,12 +12,6 @@ spec:
     apply: 2m
     assert: 15m
   steps:
-    - name: identity-and-secret
-      try:
-        - apply:
-            file: 01-serviceaccount.yaml
-        - apply:
-            file: 02-secret.yaml
     - name: cluster-ready
       try:
         - apply:

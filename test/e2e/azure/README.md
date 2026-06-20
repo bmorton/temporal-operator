@@ -7,14 +7,20 @@ passwords**. It validates the #47 changes end-to-end across every actor:
 
 | Actor | How it authenticates |
 |---|---|
-| **Operator** probe + schema inspection | native in-process Entra token (`sql.azureWorkloadIdentity`); the operator runs on a distroless image with no shell, so it cannot run a `passwordCommand` |
-| **Temporal server** pods | `passwordCommand` fed by an `azure-token-refresher` sidecar |
-| **Schema Job** | `passwordCommand` fed by a one-shot token initContainer |
+| **Operator** probe + schema inspection | native in-process Entra token; the operator runs on a distroless image with no shell, so it cannot run a `passwordCommand` |
+| **Temporal server** pods | `passwordCommand` fed by an operator-generated `azure-token-refresher` sidecar |
+| **Schema Job** | `passwordCommand` fed by an operator-generated one-shot token initContainer |
 
 Unlike the kind (`.github/workflows/e2e.yml`) and nsc (`hack/nsc-e2e.sh`) flows —
 which never exercise Workload Identity, Entra auth, or Flexible Server TLS — this
 suite stands up actual Azure infrastructure. It is **not** part of CI; it is run
 on demand from a developer machine with an Azure subscription.
+
+The operator generates **all** the Azure Workload Identity wiring (ServiceAccount,
+sidecars, initContainers, passwordCommand, inspector Jobs) from a single
+cluster-level `persistence.azureWorkloadIdentity.clientId` field. The suite
+applies only the `TemporalCluster`; no hand-written ServiceAccount or Secret is
+needed.
 
 ## What gets created
 
@@ -24,11 +30,10 @@ resource group** so teardown is a single `az group delete`:
 - an Azure Container Registry and a **remote** image build of the current branch
   (no local Docker needed);
 - an AKS cluster (`--enable-oidc-issuer --enable-workload-identity`, 1 node);
-- a user-assigned managed identity with **two federated credentials** — one for
-  the workload ServiceAccount (`azure-e2e:temporal-workload-identity`, used by
-  the server pods and schema Job) and one for the operator ServiceAccount
-  (`temporal-system:temporal-operator-controller-manager`, used by the
-  operator's native in-process Entra token);
+- a user-assigned managed identity with a federated credential bound to the
+  **operator-generated** ServiceAccount `azure-e2e-azure` in the `azure-e2e`
+  namespace (the operator creates this ServiceAccount when the TemporalCluster is
+  applied);
 - an Azure Database for PostgreSQL Flexible Server (Entra auth, password auth
   disabled, TLS) with `temporal` and `temporal_visibility` databases, the
   `azure.extensions` allow-list set to `btree_gin,pg_trgm` (required by Temporal's
@@ -36,11 +41,10 @@ resource group** so teardown is a single `az group delete`:
   `pgaadauth_create_principal`, PostgreSQL 16 `public`-schema grants for that
   role, and a firewall rule for the runner's public IP (for the setup `psql`);
 - **cert-manager** (required by the operator's webhook serving certificates);
-- a Helm install of the operator with `workloadIdentity.enable=true`.
+- a Helm install of the operator.
 
 The Chainsaw suite is pinned to the `azure-e2e` namespace (`--namespace`) so the
-test ServiceAccount's subject matches its federated credential; a random
-namespace would fail Workload Identity token exchange (`AADSTS700213`).
+operator-generated ServiceAccount's subject matches the federated credential.
 
 ## Prerequisites
 

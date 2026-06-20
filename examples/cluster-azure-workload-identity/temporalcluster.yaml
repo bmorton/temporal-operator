@@ -1,21 +1,7 @@
 # Passwordless Flexible Server auth via Azure Workload Identity.
-# - Temporal SERVER pods: azure-token-refresher sidecar writes /azure/pgpass;
-#   Temporal reads it via passwordCommand on every connection.
-# - Schema Job: one-shot initContainer writes /azure/pgpass; same passwordCommand.
-# - Operator probe + schema inspection: obtains an Entra token NATIVELY in-process
-#   (Go Azure SDK, no shell required on the distroless image) when
-#   sql.azureWorkloadIdentity: {} is set on each store.
-# Install the operator with workloadIdentity.enable=true (see README).
-apiVersion: v1
-kind: Secret
-metadata:
-  name: temporal-azure-pwcmd
-type: Opaque
-stringData:
-  # Temporal runs this command per connection to obtain the DB password.
-  # It waits for the sidecar to write the first token, then prints it.
-  command: "sh -c 'until [ -s /azure/pgpass ]; do sleep 1; done; cat /azure/pgpass'"
----
+# The operator generates ALL the wiring (ServiceAccount, sidecars,
+# initContainers, passwordCommand, inspector Jobs) from a single
+# `persistence.azureWorkloadIdentity.clientId` field.
 apiVersion: temporal.bmor10.com/v1alpha1
 kind: TemporalCluster
 metadata:
@@ -25,81 +11,9 @@ spec:
   numHistoryShards: 512
   ui:
     enabled: true
-  services:
-    overrides:
-      podTemplate:
-        labels:
-          azure.workload.identity/use: "true"
-        spec:
-          serviceAccountName: temporal-azure
-          containers:
-            # Patch the generated server container (merged by name) to mount the
-            # shared token volume.
-            - name: temporal
-              volumeMounts:
-                - name: azure-token
-                  mountPath: /azure
-            # Sidecar refreshes an Entra access token for Flexible Server.
-            - name: azure-token-refresher
-              image: mcr.microsoft.com/azure-cli:2.87.0
-              command: ["/bin/sh", "-c"]
-              args:
-                - |
-                  set -e
-                  az login --service-principal \
-                    -u "$AZURE_CLIENT_ID" \
-                    --tenant "$AZURE_TENANT_ID" \
-                    --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")" \
-                    --allow-no-subscriptions
-                  while true; do
-                    az account get-access-token --resource-type oss-rdbms \
-                      --query accessToken -o tsv > /azure/pgpass.tmp
-                    mv /azure/pgpass.tmp /azure/pgpass
-                    sleep 1800
-                  done
-              volumeMounts:
-                - name: azure-token
-                  mountPath: /azure
-          volumes:
-            - name: azure-token
-              emptyDir: {}
   persistence:
-    # The schema Jobs run setup-schema/update-schema; give them the same
-    # Workload Identity so they obtain an Entra token. A one-shot initContainer
-    # writes the token before the schema container reads it via passwordCommand.
-    schemaJob:
-      podTemplate:
-        labels:
-          azure.workload.identity/use: "true"
-        spec:
-          serviceAccountName: temporal-azure
-          containers:
-            # Patch the generated schema container (merged by name) to mount the
-            # shared token volume so it can read /azure/pgpass.
-            - name: schema
-              volumeMounts:
-                - name: azure-token
-                  mountPath: /azure
-          initContainers:
-            - name: azure-token
-              image: mcr.microsoft.com/azure-cli:2.87.0
-              command: ["/bin/sh", "-c"]
-              args:
-                - |
-                  set -e
-                  az login --service-principal \
-                    -u "$AZURE_CLIENT_ID" \
-                    --tenant "$AZURE_TENANT_ID" \
-                    --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")" \
-                    --allow-no-subscriptions
-                  az account get-access-token --resource-type oss-rdbms \
-                    --query accessToken -o tsv > /azure/pgpass
-              volumeMounts:
-                - name: azure-token
-                  mountPath: /azure
-          volumes:
-            - name: azure-token
-              emptyDir: {}
+    azureWorkloadIdentity:
+      clientId: REPLACE_WITH_MANAGED_IDENTITY_CLIENT_ID
     defaultStore:
       sql:
         pluginName: postgres12
@@ -109,11 +23,6 @@ spec:
         # The Postgres role created for the managed identity via
         # pgaadauth_create_principal (usually the identity's display name).
         user: temporal-identity
-        passwordCommandSecretRef: { name: temporal-azure-pwcmd, key: command }
-        # The operator obtains its own Entra token natively in-process (Go Azure
-        # SDK, no shell needed on the distroless operator image) for its
-        # reachability probe and schema inspection.
-        azureWorkloadIdentity: {}
         tls: { enabled: true }
     visibilityStore:
       sql:
@@ -122,9 +31,4 @@ spec:
         port: 5432
         database: temporal_visibility
         user: temporal-identity
-        passwordCommandSecretRef: { name: temporal-azure-pwcmd, key: command }
-        # The operator obtains its own Entra token natively in-process (Go Azure
-        # SDK, no shell needed on the distroless operator image) for its
-        # reachability probe and schema inspection.
-        azureWorkloadIdentity: {}
         tls: { enabled: true }
