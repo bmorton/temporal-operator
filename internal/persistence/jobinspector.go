@@ -56,7 +56,7 @@ func NewJobInspectorBackend(c client.Client, dbName string, ensureJob func(ctx c
 // inspectOnce calls ensureJob to get the Job, finds its pod, and reads the termination message.
 // Returns ErrInspecting if the pod hasn't completed yet. Caches the first successful result.
 func (b *JobInspectorBackend) inspectOnce(ctx context.Context) (InspectResult, error) {
-	if b.cachedCalled && b.cached != nil {
+	if b.cachedCalled {
 		return *b.cached, nil
 	}
 

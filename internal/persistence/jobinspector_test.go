@@ -78,6 +78,16 @@ func TestJobInspectorBackend_PodNotTerminated(t *testing.T) {
 	if ensureCalls != 1 {
 		t.Errorf("ensureJob called %d times, want 1", ensureCalls)
 	}
+
+	// Prove ErrInspecting is not cached: call Probe() again and verify ensureJob is invoked again
+	err = backend.Probe(context.Background())
+	if !errors.Is(err, ErrInspecting) {
+		t.Errorf("Probe() second call error = %v, want ErrInspecting", err)
+	}
+
+	if ensureCalls != 2 {
+		t.Errorf("ensureJob called %d times after second Probe(), want 2", ensureCalls)
+	}
 }
 
 func TestJobInspectorBackend_PodTerminatedReachable(t *testing.T) {
