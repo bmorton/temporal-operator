@@ -60,6 +60,9 @@ func init() {
 
 //nolint:gocyclo
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "inspect" {
+		os.Exit(runInspect(os.Args[2:]))
+	}
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
