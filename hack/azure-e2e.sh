@@ -98,8 +98,8 @@ cmd_up() {
   az postgres flexible-server create -g "$AZURE_RG" -n "$PG_NAME" \
     --location "$AZURE_LOCATION" --tier "$PG_TIER" --sku-name "$PG_SKU" \
     --version "$PG_VERSION" --storage-size 32 \
-    --active-directory-auth Enabled --password-auth Disabled \
-    --microsoft-entra-admin "$PG_ADMIN" --admin-object-id "$PG_ADMIN_OID" \
+    --microsoft-entra-auth Enabled --password-auth Disabled \
+    --admin-display-name "$PG_ADMIN" --admin-object-id "$PG_ADMIN_OID" \
     --admin-type User --public-access 0.0.0.0 --yes >/dev/null
   local PG_HOST; PG_HOST="$(az postgres flexible-server show -g "$AZURE_RG" -n "$PG_NAME" --query fullyQualifiedDomainName -o tsv)"
 

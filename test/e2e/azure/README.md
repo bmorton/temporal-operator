@@ -102,8 +102,15 @@ No workflow is added here on purpose (the run is slow and incurs Azure cost).
 ## First-run notes
 
 The exact `az postgres flexible-server create` flags and the
-`pgaadauth_create_principal*` signature vary slightly by `az` / `pgaadauth`
-extension version. If `make azure-e2e-up` fails at the Flexible Server creation
-or the principal-mapping step, reconcile against
+`pgaadauth_create_principal*` signature vary by `az` / `pgaadauth` version. The
+script targets **az CLI 2.87.0**, which uses `--microsoft-entra-auth Enabled`,
+`--admin-display-name`, `--admin-object-id`, and `--admin-type User` (older docs
+showed `--active-directory-auth` / `--microsoft-entra-admin`). If
+`make azure-e2e-up` fails at Flexible Server creation or the principal-mapping
+step on a different `az` version, reconcile against
 `az postgres flexible-server create --help` and the server's installed
 `pgaadauth` functions, then commit the fix (`fix(e2e): ...`) and re-run.
+
+> A failed `up` leaves a partially-provisioned, tagged resource group behind.
+> Run `make azure-e2e-clean` to delete any leftover
+> `app=temporal-operator-e2e` resource groups before retrying.
