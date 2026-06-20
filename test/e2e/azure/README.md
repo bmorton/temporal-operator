@@ -7,7 +7,6 @@ passwords**. It validates the #47 changes end-to-end across every actor:
 
 | Actor | How it authenticates |
 |---|---|
-| **Operator** probe + schema inspection | native in-process Entra token; the operator runs on a distroless image with no shell, so it cannot run a `passwordCommand` |
 | **Temporal server** pods | `passwordCommand` fed by an operator-generated `azure-token-refresher` sidecar |
 | **Schema Job** | `passwordCommand` fed by an operator-generated one-shot token initContainer |
 
@@ -30,10 +29,11 @@ resource group** so teardown is a single `az group delete`:
 - an Azure Container Registry and a **remote** image build of the current branch
   (no local Docker needed);
 - an AKS cluster (`--enable-oidc-issuer --enable-workload-identity`, 1 node);
-- a user-assigned managed identity with a federated credential bound to the
-  **operator-generated** ServiceAccount `azure-e2e-azure` in the `azure-e2e`
-  namespace (the operator creates this ServiceAccount when the TemporalCluster is
-  applied);
+- a user-assigned managed identity with a **single** federated credential bound
+  to the **operator-generated** cluster ServiceAccount `azure-e2e-azure` in the
+  `azure-e2e` namespace (the operator creates this ServiceAccount when the
+  TemporalCluster is applied; the operator itself no longer needs Azure Workload
+  Identity);
 - an Azure Database for PostgreSQL Flexible Server (Entra auth, password auth
   disabled, TLS) with `temporal` and `temporal_visibility` databases, the
   `azure.extensions` allow-list set to `btree_gin,pg_trgm` (required by Temporal's
@@ -41,7 +41,7 @@ resource group** so teardown is a single `az group delete`:
   `pgaadauth_create_principal`, PostgreSQL 16 `public`-schema grants for that
   role, and a firewall rule for the runner's public IP (for the setup `psql`);
 - **cert-manager** (required by the operator's webhook serving certificates);
-- a Helm install of the operator.
+- a Helm install of the operator (no operator Workload Identity Helm values).
 
 The Chainsaw suite is pinned to the `azure-e2e` namespace (`--namespace`) so the
 operator-generated ServiceAccount's subject matches the federated credential.

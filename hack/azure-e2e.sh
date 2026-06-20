@@ -72,8 +72,7 @@ cmd_up() {
   AZURE_RG="${AZURE_RG:-temporal-operator-e2e-$sfx}"
   ACR_NAME="${ACR_NAME:-tempope2e$sfx}"
   local AKS_NAME="aks-$sfx" PG_NAME="pg-$sfx" UAMI_NAME="id-$sfx"
-  local SA_NAME="temporal-workload-identity" NS="$AZURE_TEST_NS"
-  local OPERATOR_NS="temporal-system" OPERATOR_SA="temporal-operator-controller-manager"
+  local SA_NAME="azure-e2e-azure" NS="$AZURE_TEST_NS"
 
   log "Creating resource group $AZURE_RG ($AZURE_LOCATION)"
   az group create -n "$AZURE_RG" -l "$AZURE_LOCATION" \
@@ -92,20 +91,14 @@ cmd_up() {
   az aks get-credentials -g "$AZURE_RG" -n "$AKS_NAME" --overwrite-existing
   local OIDC_ISSUER; OIDC_ISSUER="$(az aks show -g "$AZURE_RG" -n "$AKS_NAME" --query oidcIssuerProfile.issuerUrl -o tsv)"
 
-  log "Creating user-assigned managed identity + federated credentials"
+  log "Creating user-assigned managed identity + federated credential"
   az identity create -g "$AZURE_RG" -n "$UAMI_NAME" >/dev/null
   local CLIENT_ID; CLIENT_ID="$(az identity show -g "$AZURE_RG" -n "$UAMI_NAME" --query clientId -o tsv)"
-  # Federated credential for the workload SA (Temporal server pods + schema Job).
+  # Federated credential for the operator-generated cluster SA (Temporal server
+  # pods + schema Job). The operator no longer needs Workload Identity.
   az identity federated-credential create -g "$AZURE_RG" -n "fc-$sfx" \
     --identity-name "$UAMI_NAME" --issuer "$OIDC_ISSUER" \
     --subject "system:serviceaccount:$NS:$SA_NAME" \
-    --audience api://AzureADTokenExchange >/dev/null
-  # The operator shares this identity for its native in-process Entra token but
-  # runs as a different ServiceAccount in temporal-system, so it needs its own
-  # federated credential (else: AADSTS700213 "no matching federated identity").
-  az identity federated-credential create -g "$AZURE_RG" -n "fc-operator-$sfx" \
-    --identity-name "$UAMI_NAME" --issuer "$OIDC_ISSUER" \
-    --subject "system:serviceaccount:$OPERATOR_NS:$OPERATOR_SA" \
     --audience api://AzureADTokenExchange >/dev/null
 
   log "Creating Flexible Server ($PG_SKU, Entra auth, password auth disabled)"
@@ -157,13 +150,11 @@ cmd_up() {
   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml >/dev/null
   kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
 
-  log "Installing operator via Helm (Workload Identity enabled)"
+  log "Installing operator via Helm"
   helm install temporal-operator dist/chart \
     --namespace temporal-system --create-namespace \
     --set manager.image.repository="$ACR_LOGIN/temporal-operator" \
-    --set manager.image.tag="$sfx" \
-    --set workloadIdentity.enable=true \
-    --set workloadIdentity.clientId="$CLIENT_ID" >/dev/null
+    --set manager.image.tag="$sfx" >/dev/null
   kubectl -n temporal-system rollout status deploy/temporal-operator-controller-manager --timeout=180s
 
   log "Writing $ENV_FILE and $VALUES_FILE"
