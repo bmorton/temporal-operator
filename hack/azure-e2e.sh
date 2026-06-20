@@ -69,7 +69,7 @@ cmd_up() {
 
   log "Creating resource group $AZURE_RG ($AZURE_LOCATION)"
   az group create -n "$AZURE_RG" -l "$AZURE_LOCATION" \
-    --tags "${E2E_TAG/=/ }" run="$sfx" >/dev/null
+    --tags "$E2E_TAG" run="$sfx" >/dev/null
 
   log "Building operator image in ACR (remote build from the current branch)"
   az acr create -g "$AZURE_RG" -n "$ACR_NAME" --sku Basic >/dev/null
@@ -156,9 +156,14 @@ cmd_down() {
 
 cmd_clean() {
   local key="${E2E_TAG%%=*}" val="${E2E_TAG##*=}"
-  log "Deleting ALL resource groups tagged $E2E_TAG"
-  local rgs; rgs="$(az group list --tag "$key=$val" --query '[].name' -o tsv)"
-  [ -n "$rgs" ] || { log "No tagged resource groups found."; return 0; }
+  log "Deleting resource groups tagged $E2E_TAG or named temporal-operator-e2e-*"
+  # Match by tag (covers custom AZURE_RG names) and by the default name prefix
+  # (a backstop that also catches groups created before the tag was correct).
+  local rgs
+  rgs="$( { az group list --tag "$key=$val" --query '[].name' -o tsv;
+            az group list --query "[?starts_with(name, 'temporal-operator-e2e-')].name" -o tsv; } \
+          | sort -u)"
+  [ -n "$rgs" ] || { log "No matching resource groups found."; return 0; }
   for rg in $rgs; do log "Deleting $rg"; az group delete -n "$rg" --yes --no-wait; done
 }
 
