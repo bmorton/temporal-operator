@@ -149,37 +149,11 @@ func BuildPostgresDSN(spec *temporalv1alpha1.SQLDatastoreSpec, password, dbName 
 	return u.String()
 }
 
-// azureTokenTimeout bounds an Entra token acquisition so a slow token endpoint
-// cannot hang the reconcile worker.
-const azureTokenTimeout = 10 * time.Second
-
 // sqlBackend adapts the SQL prober to the Backend interface.
 type sqlBackend struct {
 	spec   *temporalv1alpha1.SQLDatastoreSpec
 	cred   ResolvedCredential
 	dbName string
-	// tokens obtains Entra access tokens when the credential uses Azure Workload
-	// Identity. Defaults to the process-wide provider when nil.
-	tokens tokenProvider
-}
-
-// resolvePassword returns the DB password for the operator's own connection.
-// When the credential uses Azure Workload Identity, it obtains a fresh Entra
-// access token (bounded by azureTokenTimeout); otherwise it returns the static
-// password. The operator never executes passwordCommand (it runs on a distroless
-// image with no shell); passwordCommand is used only by the server pods and the
-// schema Job.
-func (b *sqlBackend) resolvePassword(ctx context.Context) (string, error) {
-	if b.cred.AzureWorkloadIdentity != nil {
-		provider := b.tokens
-		if provider == nil {
-			provider = defaultTokenProvider
-		}
-		tctx, cancel := context.WithTimeout(ctx, azureTokenTimeout)
-		defer cancel()
-		return provider.Token(tctx, b.cred.AzureWorkloadIdentity.Scope)
-	}
-	return b.cred.Password, nil
 }
 
 func (b *sqlBackend) dsn(password string) string {
@@ -187,19 +161,11 @@ func (b *sqlBackend) dsn(password string) string {
 }
 
 func (b *sqlBackend) Probe(ctx context.Context) error {
-	password, err := b.resolvePassword(ctx)
-	if err != nil {
-		return err
-	}
-	return SQLProber{}.Probe(ctx, b.dsn(password))
+	return SQLProber{}.Probe(ctx, b.dsn(b.cred.Password))
 }
 
 func (b *sqlBackend) SchemaVersion(ctx context.Context) (string, error) {
-	password, err := b.resolvePassword(ctx)
-	if err != nil {
-		return "", err
-	}
-	return SQLProber{}.CurrentSchemaVersion(ctx, b.dsn(password), b.dbName)
+	return SQLProber{}.CurrentSchemaVersion(ctx, b.dsn(b.cred.Password), b.dbName)
 }
 
 func (b *sqlBackend) EnsureSchema(_ context.Context, _ string) (bool, error) {

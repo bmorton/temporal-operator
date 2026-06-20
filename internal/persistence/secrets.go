@@ -30,26 +30,13 @@ import (
 )
 
 // ResolvedCredential is the resolved authentication material for a datastore.
-// Password or PasswordCommand may be set for the server / schema Job;
-// AzureWorkloadIdentity may additionally be set for operator-side token auth.
+// Password or PasswordCommand may be set for the server / schema Job.
 type ResolvedCredential struct {
 	// Password is a static password (password-auth).
 	Password string
 	// PasswordCommand is a command that emits a short-lived credential
 	// (Temporal 1.31+ IAM auth). When set, Password is empty.
 	PasswordCommand string
-	// AzureWorkloadIdentity, when non-nil, tells the operator to obtain a
-	// Microsoft Entra access token via Azure Workload Identity for its own
-	// database connections (probe + schema inspection). It is additive: the same
-	// store may also carry Password/PasswordCommand for the server / schema Job.
-	AzureWorkloadIdentity *AzureWorkloadIdentityCredential
-}
-
-// AzureWorkloadIdentityCredential carries the resolved Entra token scope for
-// operator-side Azure Workload Identity auth.
-type AzureWorkloadIdentityCredential struct {
-	// Scope is the Entra token scope.
-	Scope string
 }
 
 // DefaultAzureOSSRDBMSScope is the default Entra token scope for Azure Database
@@ -90,18 +77,10 @@ func (r *SecretResolver) getSecretValue(ctx context.Context, ref *temporalv1alph
 	return string(value), nil
 }
 
-// ResolveSQL resolves the credential for a SQL datastore. AzureWorkloadIdentity
-// is additive and set whenever the spec enables it. PasswordCommand takes
+// ResolveSQL resolves the credential for a SQL datastore. PasswordCommand takes
 // precedence over a static password when both password refs are set.
 func (r *SecretResolver) ResolveSQL(ctx context.Context, spec *temporalv1alpha1.SQLDatastoreSpec) (ResolvedCredential, error) {
 	var cred ResolvedCredential
-	if spec.AzureWorkloadIdentity != nil {
-		scope := spec.AzureWorkloadIdentity.Scope
-		if scope == "" {
-			scope = DefaultAzureOSSRDBMSScope
-		}
-		cred.AzureWorkloadIdentity = &AzureWorkloadIdentityCredential{Scope: scope}
-	}
 	switch {
 	case spec.PasswordCommandSecretRef != nil:
 		cmd, err := r.getSecretValue(ctx, spec.PasswordCommandSecretRef)
