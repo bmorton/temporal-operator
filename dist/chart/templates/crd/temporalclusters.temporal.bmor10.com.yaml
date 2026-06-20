@@ -233,6 +233,42 @@ spec:
                             persistence:
                                 description: Persistence configures the default and visibility datastores. Required.
                                 properties:
+                                    azureWorkloadIdentity:
+                                        description: |-
+                                            AzureWorkloadIdentity, when set, makes this cluster authenticate to its
+                                            SQL datastore(s) passwordlessly using Azure Workload Identity. The operator
+                                            generates a ServiceAccount, token sidecar/initContainers, and the
+                                            passwordCommand wiring in the cluster's namespace; the operator itself
+                                            holds no database credential. SQL stores only.
+                                        properties:
+                                            clientId:
+                                                description: |-
+                                                    ClientID is the Azure managed-identity / app-registration client ID used
+                                                    for the ServiceAccount's azure.workload.identity/client-id annotation.
+                                                type: string
+                                            image:
+                                                description: |-
+                                                    Image overrides the azure-cli image used by the token sidecar /
+                                                    initContainers (default "mcr.microsoft.com/azure-cli:2.87.0").
+                                                type: string
+                                            refreshInterval:
+                                                description: |-
+                                                    RefreshInterval is how often the server-pod sidecar refreshes the token
+                                                    (default 30m).
+                                                type: string
+                                            scope:
+                                                description: |-
+                                                    Scope is the Entra token scope requested for the database. Defaults to
+                                                    "https://ossrdbms-aad.database.windows.net/.default".
+                                                type: string
+                                            serviceAccountName:
+                                                description: |-
+                                                    ServiceAccountName overrides the generated ServiceAccount name
+                                                    (default "<cluster>-azure").
+                                                type: string
+                                        required:
+                                            - clientId
+                                        type: object
                                     defaultStore:
                                         description: |-
                                             DefaultStore holds workflow execution state. Exactly one of sql or
@@ -412,22 +448,6 @@ spec:
                                             sql:
                                                 description: SQLDatastoreSpec configures a SQL (Postgres/MySQL) datastore.
                                                 properties:
-                                                    azureWorkloadIdentity:
-                                                        description: |-
-                                                            AzureWorkloadIdentity, when set, makes the OPERATOR authenticate its own
-                                                            reachability probe and schema-version inspection using a Microsoft Entra
-                                                            access token obtained via Azure Workload Identity (no static password or
-                                                            passwordCommand needed for the operator). The Temporal server pods and the
-                                                            schema Job authenticate independently (typically via passwordCommand). The
-                                                            operator pod must run with Azure Workload Identity enabled.
-                                                        properties:
-                                                            scope:
-                                                                description: |-
-                                                                    Scope is the Entra token scope requested for the database. Defaults to
-                                                                    "https://ossrdbms-aad.database.windows.net/.default" (Azure Database for
-                                                                    PostgreSQL Flexible Server).
-                                                                type: string
-                                                        type: object
                                                     connectAttributes:
                                                         additionalProperties:
                                                             type: string
@@ -752,22 +772,6 @@ spec:
                                             sql:
                                                 description: SQLDatastoreSpec configures a SQL (Postgres/MySQL) datastore.
                                                 properties:
-                                                    azureWorkloadIdentity:
-                                                        description: |-
-                                                            AzureWorkloadIdentity, when set, makes the OPERATOR authenticate its own
-                                                            reachability probe and schema-version inspection using a Microsoft Entra
-                                                            access token obtained via Azure Workload Identity (no static password or
-                                                            passwordCommand needed for the operator). The Temporal server pods and the
-                                                            schema Job authenticate independently (typically via passwordCommand). The
-                                                            operator pod must run with Azure Workload Identity enabled.
-                                                        properties:
-                                                            scope:
-                                                                description: |-
-                                                                    Scope is the Entra token scope requested for the database. Defaults to
-                                                                    "https://ossrdbms-aad.database.windows.net/.default" (Azure Database for
-                                                                    PostgreSQL Flexible Server).
-                                                                type: string
-                                                        type: object
                                                     connectAttributes:
                                                         additionalProperties:
                                                             type: string

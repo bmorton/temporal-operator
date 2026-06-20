@@ -34,6 +34,14 @@ type PersistenceSpec struct {
 	// SchemaJob customizes the schema setup/update Jobs the operator runs.
 	// +optional
 	SchemaJob *SchemaJobSpec `json:"schemaJob,omitempty"`
+
+	// AzureWorkloadIdentity, when set, makes this cluster authenticate to its
+	// SQL datastore(s) passwordlessly using Azure Workload Identity. The operator
+	// generates a ServiceAccount, token sidecar/initContainers, and the
+	// passwordCommand wiring in the cluster's namespace; the operator itself
+	// holds no database credential. SQL stores only.
+	// +optional
+	AzureWorkloadIdentity *AzureWorkloadIdentitySpec `json:"azureWorkloadIdentity,omitempty"`
 }
 
 // SchemaJobSpec customizes the schema management Jobs (setup-schema /
@@ -91,15 +99,6 @@ type SQLDatastoreSpec struct {
 	// +optional
 	PasswordCommandSecretRef *SecretKeyReference `json:"passwordCommandSecretRef,omitempty"`
 
-	// AzureWorkloadIdentity, when set, makes the OPERATOR authenticate its own
-	// reachability probe and schema-version inspection using a Microsoft Entra
-	// access token obtained via Azure Workload Identity (no static password or
-	// passwordCommand needed for the operator). The Temporal server pods and the
-	// schema Job authenticate independently (typically via passwordCommand). The
-	// operator pod must run with Azure Workload Identity enabled.
-	// +optional
-	AzureWorkloadIdentity *AzureWorkloadIdentitySpec `json:"azureWorkloadIdentity,omitempty"`
-
 	// +optional
 	ConnectAttributes map[string]string `json:"connectAttributes,omitempty"`
 
@@ -118,15 +117,34 @@ type SQLDatastoreSpec struct {
 	TLS *DatastoreTLSSpec `json:"tls,omitempty"`
 }
 
-// AzureWorkloadIdentitySpec configures Microsoft Entra (Azure AD) token auth for
-// the operator's own database connections via Azure Workload Identity. Its
-// presence enables the feature.
+// AzureWorkloadIdentitySpec configures passwordless Microsoft Entra auth for a
+// cluster's SQL datastores via Azure Workload Identity. The operator expands it
+// into a ServiceAccount, token sidecar/initContainers, and passwordCommand
+// wiring in the cluster's namespace.
 type AzureWorkloadIdentitySpec struct {
+	// ClientID is the Azure managed-identity / app-registration client ID used
+	// for the ServiceAccount's azure.workload.identity/client-id annotation.
+	ClientID string `json:"clientId"`
+
 	// Scope is the Entra token scope requested for the database. Defaults to
-	// "https://ossrdbms-aad.database.windows.net/.default" (Azure Database for
-	// PostgreSQL Flexible Server).
+	// "https://ossrdbms-aad.database.windows.net/.default".
 	// +optional
 	Scope string `json:"scope,omitempty"`
+
+	// ServiceAccountName overrides the generated ServiceAccount name
+	// (default "<cluster>-azure").
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// Image overrides the azure-cli image used by the token sidecar /
+	// initContainers (default "mcr.microsoft.com/azure-cli:2.87.0").
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// RefreshInterval is how often the server-pod sidecar refreshes the token
+	// (default 30m).
+	// +optional
+	RefreshInterval *metav1.Duration `json:"refreshInterval,omitempty"`
 }
 
 // CassandraDatastoreSpec configures a Cassandra datastore.
