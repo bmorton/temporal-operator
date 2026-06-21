@@ -74,6 +74,29 @@ All-in-one, unattended (a `trap` **always** tears down, even on failure):
 make azure-e2e
 ```
 
+### Standing up a usable cluster (not just the test)
+
+`azure-e2e-up` installs the **operator** but does not deploy a `TemporalCluster`,
+and `azure-e2e-test` deploys one only to assert on it and then tears it down. To
+get a **standing, usable** `TemporalCluster` you can connect to, deploy one
+against the provisioned environment:
+
+```sh
+make azure-e2e-up-deploy   # provision everything, then leave a usable cluster, OR
+make azure-e2e-deploy      # deploy against an environment a previous 'up' provisioned
+```
+
+This applies a `TemporalCluster` named `azure-e2e` in the `azure-e2e` namespace
+(the name/namespace are fixed so the operator-generated ServiceAccount matches
+the federated credential) and waits for it to become `Ready`. Reach it with:
+
+```sh
+kubectl -n azure-e2e port-forward svc/azure-e2e-frontend 7233:7233
+```
+
+Delete just the standing cluster with `kubectl delete namespace azure-e2e`, or
+tear down everything with `make azure-e2e-down`.
+
 Leak backstop — delete **any** resource group carrying our tag, in case a run was
 interrupted before teardown:
 

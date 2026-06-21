@@ -6,11 +6,13 @@
 # (hack/nsc-e2e.sh) e2e flows.
 #
 # Usage:
-#   hack/azure-e2e.sh up        # provision everything, write hack/.azure-e2e.env
-#   hack/azure-e2e.sh test      # run the chainsaw suite against the standing cluster
-#   hack/azure-e2e.sh down      # delete the resource group (everything)
-#   hack/azure-e2e.sh all       # up -> test -> down (always tears down via trap)
-#   hack/azure-e2e.sh clean     # delete ANY resource group with our tag (leak backstop)
+#   hack/azure-e2e.sh up         # provision everything, write hack/.azure-e2e.env
+#   hack/azure-e2e.sh test       # run the chainsaw suite against the standing cluster
+#   hack/azure-e2e.sh deploy     # apply a standing, usable TemporalCluster (no teardown)
+#   hack/azure-e2e.sh up-deploy  # up -> deploy (provision, then leave a usable cluster)
+#   hack/azure-e2e.sh down       # delete the resource group (everything)
+#   hack/azure-e2e.sh all        # up -> test -> down (always tears down via trap)
+#   hack/azure-e2e.sh clean      # delete ANY resource group with our tag (leak backstop)
 #
 # Env (defaults):
 #   AZURE_LOCATION      centralus
@@ -211,11 +213,57 @@ cmd_all() {
   cmd_test
 }
 
+# cmd_deploy applies a STANDING TemporalCluster (named azure-e2e, in the
+# AZURE_TEST_NS namespace) against an already-provisioned environment, so you can
+# actually use Temporal instead of having Chainsaw create and immediately tear it
+# down. The cluster name/namespace are fixed because the federated credential is
+# bound to system:serviceaccount:$AZURE_TEST_NS:azure-e2e-azure.
+cmd_deploy() {
+  command -v kubectl >/dev/null || { err "kubectl not found"; exit 1; }
+  [ -f "$ENV_FILE" ] || { err "No $ENV_FILE; run 'azure-e2e.sh up' first."; exit 1; }
+  # shellcheck source=/dev/null
+  . "$ENV_FILE"
+  : "${PG_HOST:?missing PG_HOST in $ENV_FILE}" \
+    "${PG_USER:?missing PG_USER in $ENV_FILE}" \
+    "${CLIENT_ID:?missing CLIENT_ID in $ENV_FILE}"
+
+  local manifest="$REPO_ROOT/test/e2e/azure/03-temporalcluster.yaml"
+  log "Deploying standing TemporalCluster 'azure-e2e' in namespace $AZURE_TEST_NS"
+  kubectl create namespace "$AZURE_TEST_NS" >/dev/null 2>&1 || true
+  # Substitute the Chainsaw ($values.*) bindings with the provisioned values.
+  sed -e "s|(\$values.clientId)|$CLIENT_ID|g" \
+      -e "s|(\$values.pgHost)|$PG_HOST|g" \
+      -e "s|(\$values.pgUser)|$PG_USER|g" \
+      "$manifest" | kubectl -n "$AZURE_TEST_NS" apply -f -
+
+  log "Waiting for the cluster to become Ready (up to 10m)"
+  if ! kubectl -n "$AZURE_TEST_NS" wait --for=condition=Ready --timeout=600s \
+      temporalcluster/azure-e2e; then
+    log "Not Ready yet — inspect with: kubectl -n $AZURE_TEST_NS get temporalcluster azure-e2e -o wide"
+  fi
+  cat <<EOF
+
+Standing TemporalCluster is up in namespace $AZURE_TEST_NS.
+  Frontend (in-cluster):  azure-e2e-frontend.$AZURE_TEST_NS.svc:7233
+  Port-forward locally:   kubectl -n $AZURE_TEST_NS port-forward svc/azure-e2e-frontend 7233:7233
+  Enable the web UI:      add 'ui: { enabled: true }' under spec and re-apply, then port-forward azure-e2e-ui
+  Remove just this cluster: kubectl delete namespace $AZURE_TEST_NS
+  Tear down everything:   make azure-e2e-down
+EOF
+}
+
+cmd_up_deploy() {
+  cmd_up
+  cmd_deploy
+}
+
 case "${1:-}" in
-  up)    cmd_up ;;
-  test)  cmd_test ;;
-  down)  cmd_down ;;
-  clean) cmd_clean ;;
-  all)   cmd_all ;;
-  *) err "usage: $0 {up|test|down|clean|all}"; exit 1 ;;
+  up)        cmd_up ;;
+  test)      cmd_test ;;
+  deploy)    cmd_deploy ;;
+  up-deploy) cmd_up_deploy ;;
+  down)      cmd_down ;;
+  clean)     cmd_clean ;;
+  all)       cmd_all ;;
+  *) err "usage: $0 {up|test|deploy|up-deploy|down|clean|all}"; exit 1 ;;
 esac

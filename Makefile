@@ -294,12 +294,20 @@ nsc-clean: ## Destroy ALL nsc clusters labeled app=temporal-operator-e2e (leaves
 	fi
 
 .PHONY: azure-e2e-up
-azure-e2e-up: chainsaw ## Provision AKS + Flexible Server and install the operator (Workload Identity).
+azure-e2e-up: chainsaw ## Provision AKS + Flexible Server and install the operator.
 	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh up
 
 .PHONY: azure-e2e-test
 azure-e2e-test: chainsaw ## Run the Azure passwordless Chainsaw suite against the standing cluster.
 	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh test
+
+.PHONY: azure-e2e-deploy
+azure-e2e-deploy: ## Deploy a standing, usable TemporalCluster against an already-provisioned environment.
+	./hack/azure-e2e.sh deploy
+
+.PHONY: azure-e2e-up-deploy
+azure-e2e-up-deploy: chainsaw ## Provision everything, then leave a standing, usable TemporalCluster.
+	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh up-deploy
 
 .PHONY: azure-e2e-down
 azure-e2e-down: ## Delete the Azure e2e resource group (everything).
