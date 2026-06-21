@@ -1,0 +1,7 @@
+# Assert the authz cluster is fully Ready.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-authz
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"

@@ -1,0 +1,44 @@
+# TemporalCluster with JWKS-based JWT authorization enabled.
+#
+# Points jwtKeyProvider.keySourceURIs at the in-cluster nginx JWKS server
+# deployed by 01-jwks.yaml.  Persistence reuses the CNPG Postgres fixtures
+# from ../postgres/ (provisioned in the provision-postgres step).
+#
+# Chainsaw templating substitutes $namespace so the host resolves correctly
+# from the operator's temporal-system namespace.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-authz
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  authorization:
+    authorizer: "default"
+    claimMapper: "default"
+    permissionsClaimName: "roles"
+    jwtKeyProvider:
+      keySourceURIs:
+        - (join('', ['http://jwks.', $namespace, '.svc/jwks.json']))
+      refreshInterval: "1m"
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password

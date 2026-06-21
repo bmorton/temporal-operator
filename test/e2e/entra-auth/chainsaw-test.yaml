@@ -1,0 +1,122 @@
+# Chainsaw e2e suite: hermetic JWKS server-JWT authorization.
+#
+# Provisions a CNPG Postgres cluster, deploys an nginx JWKS server, brings up
+# a TemporalCluster with JWT authorization enabled (pointing at the in-cluster
+# JWKS endpoint), then verifies:
+#   - a request bearing a valid RS256 Bearer token is authorized (exit 0)
+#   - a request with no auth metadata is rejected (exit non-zero, wrapped to exit 0)
+#
+# Prerequisites (must already be installed in the cluster):
+#   - CNPG operator
+#   - temporal-operator
+#
+# Run this suite:
+#   chainsaw test --test-dir test/e2e/entra-auth --config .chainsaw.yaml
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: entra-auth
+spec:
+  timeouts:
+    apply: 2m
+    assert: 10m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+        - apply:
+            file: ../postgres/02-secrets.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: create-visibility-db
+              status:
+                succeeded: 1
+      catch:
+        - describe:
+            apiVersion: postgresql.cnpg.io/v1
+            kind: Cluster
+        - events: {}
+
+    - name: deploy-jwks
+      try:
+        - apply:
+            file: 01-jwks.yaml
+        - assert:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: jwks
+              status:
+                (readyReplicas > `0`): true
+      catch:
+        - describe:
+            apiVersion: apps/v1
+            kind: Deployment
+            selector: app=jwks
+        - podLogs:
+            selector: app=jwks
+            tail: 50
+        - events: {}
+
+    - name: cluster-ready
+      try:
+        - apply:
+            file: 02-temporalcluster.yaml
+        - assert:
+            file: 02-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster
+        - describe:
+            apiVersion: apps/v1
+            kind: Deployment
+        - podLogs:
+            selector: app.kubernetes.io/instance=temporal-authz
+            tail: 200
+        - events: {}
+
+    - name: authz-checks
+      try:
+        - apply:
+            file: 03-authz-checks.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: authz-allow
+              status:
+                succeeded: 1
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: authz-deny
+              status:
+                succeeded: 1
+      catch:
+        - describe:
+            apiVersion: batch/v1
+            kind: Job
+        - podLogs:
+            selector: job-name=authz-allow
+            tail: 100
+        - podLogs:
+            selector: job-name=authz-deny
+            tail: 100
+        - events: {}

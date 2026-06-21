@@ -1,0 +1,72 @@
+# Authorization check Jobs:
+#   authz-allow — runs temporal namespace list WITH a valid Bearer token; must exit 0.
+#   authz-deny  — runs the same command WITHOUT auth metadata; command must fail
+#                 (wrapped so the Job exits 0 when the CLI exits non-zero).
+#
+# Tokens are mounted read-only from a ConfigMap.
+#
+# Auth metadata flag: --grpc-meta "authorization=Bearer <token>"
+# (Temporal CLI uses --grpc-meta for arbitrary gRPC metadata key=value pairs.)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: e2e-tokens
+data:
+  token-valid.txt: |
+    eyJhbGciOiJSUzI1NiIsImtpZCI6ImUyZSIsInR5cCI6IkpXVCJ9.eyJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImRlZmF1bHQ6cmVhZCIsImRlZmF1bHQ6d3JpdGUiLCJ0ZW1wb3JhbC1zeXN0ZW06YWRtaW4iXSwic3ViIjoiZTJlIn0.VKS1JheLn0Gy_VeuGrI2oZK7WDDEl6h1WDBVdO71KegWNXXvM3jYUNPMd3c0X7HGgc31Ln9rYOf5XBE3lctkaPsGAMJl2L_pOQSPukD8LAewaInIjBqHxH6k2tpPBrMgPPd8v4hbW33_8g0JmoWEqaUrO9f0pbwACtVf6hXP0nelc04YdlnUgSwgHoT21l719BbKcfJJBKbbwgfGaRWeZiAn-pxnz3h8_KTPHfuagOeyDDmjnQ-Qn-oyrzMQSykG1j9-5j77izTku3zbJMQuI85QqOS_-uHSPt1vM9Wdl9nFWkYj4NMy56r5fTenVMb8kxRLIcmGMUSEyYlDDlzPXg
+---
+# authz-allow: valid JWT → frontend must accept the request (exit 0).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authz-allow
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: check
+          image: temporalio/admin-tools:1.31.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              TOKEN=$(cat /tokens/token-valid.txt | tr -d '\n')
+              temporal operator namespace list \
+                --address temporal-authz-frontend:7233 \
+                --grpc-meta "authorization=Bearer ${TOKEN}"
+          volumeMounts:
+            - name: tokens
+              mountPath: /tokens
+              readOnly: true
+      volumes:
+        - name: tokens
+          configMap:
+            name: e2e-tokens
+---
+# authz-deny: no auth metadata → frontend must reject the request.
+# The wrapper inverts the exit code so the Job reports succeeded:1 on rejection.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authz-deny
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: check
+          image: temporalio/admin-tools:1.31.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              if temporal operator namespace list \
+                   --address temporal-authz-frontend:7233; then
+                echo "FAIL: unauthenticated request was accepted — expected rejection"
+                exit 1
+              else
+                echo "PASS: unauthenticated request was correctly rejected"
+                exit 0
+              fi
