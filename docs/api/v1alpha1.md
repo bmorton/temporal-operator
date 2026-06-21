@@ -61,7 +61,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `authorizer` _string_ | Authorizer is the Temporal authorizer plugin. Defaults to "default" when<br />JWT validation is configured. Use "" for the no-op (allow-all) authorizer. |  | Optional: \{\} <br /> |
+| `authorizer` _string_ | Authorizer selects the Temporal authorizer plugin. If unset, it defaults<br />to "default" (per-namespace RBAC) when JWT validation is configured.<br />Set it to "" to select the no-op (allow-all) authorizer for<br />authenticate-only mode. |  | Optional: \{\} <br /> |
 | `claimMapper` _string_ | ClaimMapper is the Temporal claim mapper. Defaults to "default" when JWT<br />validation is configured. |  | Optional: \{\} <br /> |
 | `permissionsClaimName` _string_ | PermissionsClaimName maps to global.authorization.permissionsClaimName.<br />Defaults to "roles" when Entra is set, otherwise "permissions". |  | Optional: \{\} <br /> |
 | `jwtKeyProvider` _[JWTKeyProviderSpec](#jwtkeyproviderspec)_ | JWTKeyProvider configures JWKS-based token signature validation. |  | Optional: \{\} <br /> |

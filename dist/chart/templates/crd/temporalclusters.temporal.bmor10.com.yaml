@@ -69,8 +69,10 @@ spec:
                                 properties:
                                     authorizer:
                                         description: |-
-                                            Authorizer is the Temporal authorizer plugin. Defaults to "default" when
-                                            JWT validation is configured. Use "" for the no-op (allow-all) authorizer.
+                                            Authorizer selects the Temporal authorizer plugin. If unset, it defaults
+                                            to "default" (per-namespace RBAC) when JWT validation is configured.
+                                            Set it to "" to select the no-op (allow-all) authorizer for
+                                            authenticate-only mode.
                                         type: string
                                     claimMapper:
                                         description: |-
