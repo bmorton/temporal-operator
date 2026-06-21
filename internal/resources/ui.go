@@ -93,6 +93,8 @@ func uiEnv(cluster *temporalv1alpha1.TemporalCluster) []corev1.EnvVar {
 			corev1.EnvVar{Name: "TEMPORAL_AUTH_CALLBACK_URL", Value: a.CallbackURL},
 		)
 		if a.ClientSecretRef != nil {
+			// Mirror the SecretKeyReference CRD default (+kubebuilder:default=password)
+			// so direct/unset keys behave consistently with passwordSecretRef.
 			key := a.ClientSecretRef.Key
 			if key == "" {
 				key = "password"

@@ -92,3 +92,41 @@ func TestBuildUIDeployment_NoAuthByDefault(t *testing.T) {
 		t.Errorf("auth env should be absent when UI.Auth is nil")
 	}
 }
+
+func TestBuildUIDeployment_AuthDisabled(t *testing.T) {
+	c := uiAuthCluster()
+	c.Spec.UI.Auth.Enabled = false
+	dep := BuildUIDeployment(c)
+	if _, ok := envByName(dep.Spec.Template.Spec.Containers[0].Env, "TEMPORAL_AUTH_ENABLED"); ok {
+		t.Errorf("auth env should be absent when UI.Auth.Enabled is false")
+	}
+}
+
+func TestBuildUIDeployment_DirectProviderURL(t *testing.T) {
+	c := &temporalv1alpha1.TemporalCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "direct", Namespace: "default"},
+		Spec: temporalv1alpha1.TemporalClusterSpec{
+			Version: "1.31.1",
+			UI: &temporalv1alpha1.UISpec{
+				Enabled: true,
+				Auth: &temporalv1alpha1.UIAuthSpec{
+					Enabled:         true,
+					ProviderURL:     "https://issuer.example/v2.0",
+					ClientID:        "client-456",
+					ClientSecretRef: &temporalv1alpha1.SecretKeyReference{Name: "ui-secret", Key: "secret"},
+					CallbackURL:     "https://temporal.example.test/auth/sso/callback",
+				},
+			},
+		},
+	}
+	dep := BuildUIDeployment(c)
+	env := dep.Spec.Template.Spec.Containers[0].Env
+
+	e, ok := envByName(env, "TEMPORAL_AUTH_PROVIDER_URL")
+	if !ok {
+		t.Fatalf("missing env TEMPORAL_AUTH_PROVIDER_URL")
+	}
+	if e.Value != "https://issuer.example/v2.0" {
+		t.Errorf("TEMPORAL_AUTH_PROVIDER_URL = %q, want %q", e.Value, "https://issuer.example/v2.0")
+	}
+}
