@@ -10,6 +10,9 @@
 # Available/Ready are essential here: PersistenceReachable and SchemaReady use
 # auth paths that never touch the server config.yaml, so without asserting the
 # server pods are up a broken server passwordCommand would slip through.
+#   - Web UI:               the azure-e2e-ui Deployment reaches readyReplicas>=1,
+#                           which (via its HTTP readiness probe on "/") proves the
+#                           UI is serving and wired to the frontend.
 apiVersion: temporal.bmor10.com/v1alpha1
 kind: TemporalCluster
 metadata:
@@ -22,3 +25,19 @@ status:
   (conditions[?type == 'SchemaReady'].status | [0]): "True"
   (conditions[?type == 'Available'].status | [0]): "True"
   (conditions[?type == 'Ready'].status | [0]): "True"
+---
+# The operator brings up the Web UI (spec.ui.enabled). Its Deployment has an
+# HTTP readiness probe on "/", so readyReplicas>0 proves the UI is serving.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azure-e2e-ui
+status:
+  (readyReplicas > `0`): true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: azure-e2e-ui
+spec:
+  (ports[?name == 'http'].port | [0]): 8080
