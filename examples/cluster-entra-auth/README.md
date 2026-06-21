@@ -26,7 +26,7 @@ authentication on two layers:
 - A running PostgreSQL instance accessible as `temporal-pg-rw:5432`, with a
   `temporal-pg-app` secret containing a `password` key.
 
-## Customise
+## Customize
 
 Replace the placeholder values before applying:
 
@@ -60,4 +60,4 @@ Temporal UI's OIDC provider automatically.
 
 ## Further reading
 
-- `docs/content/operations/authentication.md` — full authentication reference
+- [authentication reference](../../docs/content/operations/authentication.md) — full authentication reference

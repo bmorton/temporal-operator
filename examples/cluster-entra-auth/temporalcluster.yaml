@@ -9,8 +9,9 @@ spec:
     defaultStore:
       sql:
         pluginName: postgres12
-        databaseName: temporal
-        connectAddr: temporal-pg-rw:5432
+        database: temporal
+        host: temporal-pg-rw
+        port: 5432
         user: temporal
         passwordSecretRef:
           name: temporal-pg-app
@@ -18,8 +19,9 @@ spec:
     visibilityStore:
       sql:
         pluginName: postgres12
-        databaseName: temporal_visibility
-        connectAddr: temporal-pg-rw:5432
+        database: temporal_visibility
+        host: temporal-pg-rw
+        port: 5432
         user: temporal
         passwordSecretRef:
           name: temporal-pg-app
