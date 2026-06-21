@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -144,6 +145,69 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 		cond := conditionStatus(c.Name, temporalv1alpha1.ConditionSchemaReady)
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(cond.Reason).To(Equal("SchemaMigrationFailed"))
+	})
+
+	It("deletes the stale inspector Job after schema jobs complete so the next probe is fresh", func() {
+		c := newCluster()
+
+		// Build the setup and update schema jobs already marked Complete so
+		// reconcileJobSchema sees the migration as finished.
+		makeCompletedJob := func(name string) {
+			job := &batchv1.Job{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							RestartPolicy: corev1.RestartPolicyNever,
+							Containers:    []corev1.Container{{Name: "schema", Image: "x"}},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, job)).To(Succeed())
+			now := metav1.Now()
+			job.Status.StartTime = &now
+			job.Status.CompletionTime = &now
+			job.Status.Conditions = []batchv1.JobCondition{
+				{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue},
+				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+			}
+			Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
+		}
+		makeCompletedJob(resources.SchemaJobName(c.Name, resources.StoreDefault, resources.ActionSetup))
+		makeCompletedJob(resources.SchemaJobName(c.Name, resources.StoreDefault, resources.ActionUpdate))
+
+		By("seeding a stale inspector Job from a pre-migration probe")
+		inspectorName := resources.InspectorJobName(c.Name, resources.StoreDefault)
+		inspectorJob := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: inspectorName, Namespace: "default"},
+			Spec: batchv1.JobSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						RestartPolicy: corev1.RestartPolicyNever,
+						Containers:    []corev1.Container{{Name: "inspect", Image: "x"}},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, inspectorJob)).To(Succeed())
+
+		r := &TemporalClusterReconciler{
+			Client:        k8sClient,
+			Scheme:        k8sClient.Scheme(),
+			OperatorImage: "test-operator:v0",
+		}
+		target := schemaTarget{store: resources.StoreDefault, spec: c.Spec.Persistence.DefaultStore}
+
+		res, err := r.reconcileJobSchema(ctx, c, target, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.failed).To(BeFalse())
+
+		By("deleting the stale inspector Job so a fresh probe runs instead of waiting out its TTL")
+		Eventually(func() bool {
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: inspectorName, Namespace: "default"}, &batchv1.Job{})
+			return apierrors.IsNotFound(err)
+		}).Should(BeTrue())
 	})
 })
 

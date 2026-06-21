@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -261,6 +262,16 @@ func (r *TemporalClusterReconciler) reconcileJobSchema(ctx context.Context, clus
 	if update == jobFailed {
 		return storeResult{failed: true, message: fmt.Sprintf("%s update-schema job failed", t.store)}, nil
 	}
+	if update == jobSucceeded {
+		// The setup/update Jobs have finished, so the schema version is now current.
+		// The schema version we read this pass came from an inspector Job that ran
+		// before migration and reports the old (often empty) version. Delete that
+		// stale inspector Job so the next reconcile re-probes the updated version
+		// immediately, instead of waiting out the inspector Job's TTL.
+		if err := r.deleteInspectorJob(ctx, cluster, t.store); err != nil {
+			return storeResult{}, err
+		}
+	}
 	return storeResult{}, nil
 }
 
@@ -353,6 +364,22 @@ func (r *TemporalClusterReconciler) ensureInspectorJob(ctx context.Context, clus
 		return nil, err
 	}
 	return &job, nil
+}
+
+// deleteInspectorJob deletes the inspector Job for a store if it exists, so a
+// subsequent probe creates a fresh one that reflects the current schema version.
+// A missing Job is not an error.
+func (r *TemporalClusterReconciler) deleteInspectorJob(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, store resources.SchemaStore) error {
+	name := resources.InspectorJobName(cluster.Name, store)
+	var job batchv1.Job
+	if err := r.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, &job); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	policy := metav1.DeletePropagationBackground
+	if err := r.Delete(ctx, &job, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	return nil
 }
 
 // schemaJobPodTemplate returns the configured schema Job podTemplate override,
