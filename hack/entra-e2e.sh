@@ -46,6 +46,14 @@ preflight() {
 cmd_up() {
   preflight
 
+  # Finding 3: guard against re-running 'up' on an existing registration.
+  # 'az ad app credential reset' revokes prior secrets, so a second 'up' would
+  # silently invalidate any live credential.
+  if [ -f "$ENV_FILE" ]; then
+    err "Env file $ENV_FILE already exists — app may already be registered. Run 'hack/entra-e2e.sh down' first."
+    exit 1
+  fi
+
   local ENTRA_TENANT_ID
   ENTRA_TENANT_ID="${ENTRA_TENANT_ID:-$(az account show --query tenantId -o tsv)}"
 
@@ -81,6 +89,8 @@ cmd_up() {
   }
 ]
 ROLES_EOF
+  # Finding 2: always clean up the temp roles file, even if az commands fail.
+  trap 'rm -f "$ROLES_FILE"' EXIT
 
   log "Creating app registration '$APP_NAME'"
   local APP_ID
@@ -92,7 +102,6 @@ ROLES_EOF
   az ad app update --id "$APP_ID" \
     --identifier-uris "api://$APP_ID" \
     --app-roles "@$ROLES_FILE"
-  rm -f "$ROLES_FILE"
 
   log "Creating service principal for app $APP_ID"
   az ad sp create --id "$APP_ID" >/dev/null
@@ -107,13 +116,15 @@ ROLES_EOF
   local JWKS_URL="https://login.microsoftonline.com/$ENTRA_TENANT_ID/discovery/v2.0/keys"
 
   log "Writing $ENV_FILE"
-  cat > "$ENV_FILE" <<EOF
-ENTRA_TENANT_ID=$ENTRA_TENANT_ID
-ENTRA_APP_ID=$APP_ID
-ENTRA_CLIENT_ID=$APP_ID
-ENTRA_CLIENT_SECRET=$CLIENT_SECRET
-ENTRA_APP_NAME=$APP_NAME
-EOF
+  # Finding 1: use printf %q for the secret so special characters ($, backticks,
+  # spaces, quotes) are shell-escaped and survive `. "$ENV_FILE"` correctly.
+  {
+    printf 'ENTRA_TENANT_ID=%s\n'     "$ENTRA_TENANT_ID"
+    printf 'ENTRA_APP_ID=%s\n'        "$APP_ID"
+    printf 'ENTRA_CLIENT_ID=%s\n'     "$APP_ID"
+    printf 'ENTRA_CLIENT_SECRET=%q\n' "$CLIENT_SECRET"
+    printf 'ENTRA_APP_NAME=%s\n'      "$APP_NAME"
+  } > "$ENV_FILE"
 
   cat <<EOF
 
