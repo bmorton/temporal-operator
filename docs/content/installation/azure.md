@@ -35,6 +35,20 @@ annotations.
 Example:
 [`examples/cluster-azure-aks-ingress`](https://github.com/bmorton/temporal-operator/tree/main/examples/cluster-azure-aks-ingress).
 
+## Accessing the UI without an ingress
+
+When the UI is enabled (`ui.enabled: true`) but no ingress is configured — for
+example the standing cluster from `make azure-e2e-deploy` — reach it with a
+port-forward to the operator-generated `<cluster>-ui` Service (ClusterIP, port
+8080):
+
+```sh
+kubectl -n azure-e2e port-forward svc/azure-e2e-ui 8080:8080
+# open http://localhost:8080
+```
+
+Substitute your namespace and `<cluster>-ui` Service name for other clusters.
+
 ## Passwordless auth with Microsoft Entra + Workload Identity
 
 Each actor in the system obtains an Entra token through a different mechanism:
