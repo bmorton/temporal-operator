@@ -123,10 +123,9 @@ type UISpec struct {
 	// +optional
 	Ingress *UIIngressSpec `json:"ingress,omitempty"`
 
-	// Auth is a passthrough for temporal-ui authentication config.
-	// +kubebuilder:pruning:PreserveUnknownFields
+	// Auth configures temporal-ui authentication (OIDC, e.g. Microsoft Entra).
 	// +optional
-	Auth *runtime.RawExtension `json:"auth,omitempty"`
+	Auth *UIAuthSpec `json:"auth,omitempty"`
 
 	// +optional
 	CodecServer *UICodecServerSpec `json:"codecServer,omitempty"`
@@ -153,6 +152,39 @@ type UICodecServerSpec struct {
 	PassAccessToken bool `json:"passAccessToken,omitempty"`
 	// +optional
 	IncludeCredentials bool `json:"includeCredentials,omitempty"`
+}
+
+// UIAuthSpec configures temporal-ui OIDC authentication.
+type UIAuthSpec struct {
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+	// Entra derives ProviderURL from a Microsoft Entra tenant ID.
+	// +optional
+	Entra *EntraUIAuthSpec `json:"entra,omitempty"`
+	// ProviderURL is the OIDC issuer URL (set directly or via Entra).
+	// +optional
+	ProviderURL string `json:"providerURL,omitempty"`
+	// +optional
+	ClientID string `json:"clientID,omitempty"`
+	// ClientSecretRef references a Secret key holding the OIDC client secret.
+	// +optional
+	ClientSecretRef *SecretKeyReference `json:"clientSecretRef,omitempty"`
+	// Scopes default to ["openid", "profile", "email"].
+	// +optional
+	Scopes []string `json:"scopes,omitempty"`
+	// +optional
+	CallbackURL string `json:"callbackURL,omitempty"`
+	// ExtraEnv is a passthrough of additional temporal-ui auth env vars
+	// (map of string to string).
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +optional
+	ExtraEnv *runtime.RawExtension `json:"extraEnv,omitempty"`
+}
+
+// EntraUIAuthSpec is a Microsoft Entra convenience for UI OIDC login.
+type EntraUIAuthSpec struct {
+	// +kubebuilder:validation:MinLength=1
+	TenantID string `json:"tenantID"`
 }
 
 // MetricsSpec configures Prometheus integration.
