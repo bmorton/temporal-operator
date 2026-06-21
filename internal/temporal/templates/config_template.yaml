@@ -120,8 +120,28 @@ global:
 {{- end }}
 {{- if .Authorization }}
     authorization:
+{{- if .Authorization.Authorizer }}
         authorizer: {{ .Authorization.Authorizer | quote }}
+{{- end }}
+{{- if .Authorization.ClaimMapper }}
         claimMapper: {{ .Authorization.ClaimMapper | quote }}
+{{- end }}
+{{- if .Authorization.PermissionsClaimName }}
+        permissionsClaimName: {{ .Authorization.PermissionsClaimName | quote }}
+{{- end }}
+{{- if .Authorization.KeySourceURIs }}
+        jwtKeyProvider:
+            keySourceURIs:
+{{- range .Authorization.KeySourceURIs }}
+                - {{ . }}
+{{- end }}
+{{- if .Authorization.RefreshInterval }}
+            refreshInterval: {{ .Authorization.RefreshInterval | quote }}
+{{- end }}
+{{- end }}
+{{- if .Authorization.ExtraConfig }}
+{{ toYaml .Authorization.ExtraConfig | indent 8 }}
+{{- end }}
 {{- end }}
 
 services:

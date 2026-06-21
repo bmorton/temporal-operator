@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
+	"sigs.k8s.io/yaml"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
@@ -133,8 +135,12 @@ type MetricsConfig struct {
 
 // AuthConfig holds resolved authorization settings.
 type AuthConfig struct {
-	Authorizer  string
-	ClaimMapper string
+	Authorizer           string
+	ClaimMapper          string
+	PermissionsClaimName string
+	KeySourceURIs        []string
+	RefreshInterval      string
+	ExtraConfig          map[string]interface{}
 }
 
 // ArchivalConfig holds resolved archival settings.
@@ -351,12 +357,56 @@ func buildMTLS(cluster *temporalv1alpha1.TemporalCluster) MTLSConfig {
 	}
 }
 
-func buildAuth(cluster *temporalv1alpha1.TemporalCluster) *AuthConfig {
+func buildAuth(cluster *temporalv1alpha1.TemporalCluster) (*AuthConfig, error) {
 	auth := cluster.Spec.Authorization
-	if auth == nil || (auth.Authorizer == "" && auth.ClaimMapper == "") {
-		return nil
+	if auth == nil {
+		return nil, nil
 	}
-	return &AuthConfig{Authorizer: auth.Authorizer, ClaimMapper: auth.ClaimMapper}
+
+	cfg := &AuthConfig{
+		Authorizer:           auth.Authorizer,
+		ClaimMapper:          auth.ClaimMapper,
+		PermissionsClaimName: auth.PermissionsClaimName,
+	}
+	if auth.JWTKeyProvider != nil {
+		cfg.KeySourceURIs = append(cfg.KeySourceURIs, auth.JWTKeyProvider.KeySourceURIs...)
+		if auth.JWTKeyProvider.RefreshInterval != nil {
+			cfg.RefreshInterval = auth.JWTKeyProvider.RefreshInterval.Duration.String()
+		}
+	}
+	if auth.Entra != nil {
+		cfg.KeySourceURIs = append(cfg.KeySourceURIs,
+			fmt.Sprintf("https://login.microsoftonline.com/%s/discovery/v2.0/keys", auth.Entra.TenantID))
+		if cfg.PermissionsClaimName == "" {
+			cfg.PermissionsClaimName = "roles"
+		}
+	}
+
+	jwtConfigured := len(cfg.KeySourceURIs) > 0
+	if jwtConfigured {
+		if cfg.Authorizer == "" {
+			cfg.Authorizer = "default"
+		}
+		if cfg.ClaimMapper == "" {
+			cfg.ClaimMapper = "default"
+		}
+		if cfg.PermissionsClaimName == "" {
+			cfg.PermissionsClaimName = "permissions"
+		}
+	}
+
+	if auth.Config != nil && len(auth.Config.Raw) > 0 {
+		extra := map[string]interface{}{}
+		if err := yaml.Unmarshal(auth.Config.Raw, &extra); err != nil {
+			return nil, fmt.Errorf("authorization.config: %w", err)
+		}
+		cfg.ExtraConfig = extra
+	}
+
+	if cfg.Authorizer == "" && cfg.ClaimMapper == "" && !jwtConfigured && cfg.ExtraConfig == nil {
+		return nil, nil
+	}
+	return cfg, nil
 }
 
 func applyClusterMetadata(data *ConfigData, cm *temporalv1alpha1.ClusterMetadataSpec) {
@@ -429,8 +479,13 @@ func BuildConfigData(cluster *temporalv1alpha1.TemporalCluster, opts BuildOption
 		UseInternalFrontend:      useInternalFrontend,
 		Metrics:                  buildMetrics(cluster),
 		MTLS:                     buildMTLS(cluster),
-		Authorization:            buildAuth(cluster),
 	}
+
+	auth, err := buildAuth(cluster)
+	if err != nil {
+		return nil, fmt.Errorf("authorization: %w", err)
+	}
+	data.Authorization = auth
 
 	if cluster.Spec.Archival != nil {
 		data.Archival = &ArchivalConfig{HistoryState: "enabled", VisibilityState: "enabled"}
@@ -467,6 +522,13 @@ func RenderConfig(data *ConfigData) (string, error) {
 	funcs := sprig.TxtFuncMap()
 	t := template.New("config_template.yaml").Funcs(funcs)
 	funcs["include"] = includeFunc(t)
+	funcs["toYaml"] = func(v interface{}) (string, error) {
+		out, err := yaml.Marshal(v)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSuffix(string(out), "\n"), nil
+	}
 	t = t.Funcs(funcs)
 
 	parsed, err := t.ParseFS(configTemplateFS, "templates/config_template.yaml")

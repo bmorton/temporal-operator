@@ -22,8 +22,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -340,5 +342,55 @@ func TestRenderConfigMTLSSystemWorker(t *testing.T) {
 	}
 	if strings.Contains(plain, "systemWorker:") {
 		t.Errorf("non-mtls config must not contain systemWorker block\n%s", plain)
+	}
+}
+
+func TestRenderConfig_AuthorizationEntra(t *testing.T) {
+	cluster := baseCluster()
+	cluster.Spec.Authorization = &temporalv1alpha1.AuthorizationSpec{
+		Entra: &temporalv1alpha1.EntraAuthSpec{TenantID: "11111111-2222-3333-4444-555555555555"},
+	}
+
+	out, err := RenderClusterConfig(cluster, BuildOptions{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	for _, want := range []string{
+		"authorization:",
+		`authorizer: "default"`,
+		`claimMapper: "default"`,
+		`permissionsClaimName: "roles"`,
+		"jwtKeyProvider:",
+		"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/discovery/v2.0/keys",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rendered config missing %q\n---\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderConfig_AuthorizationExplicitAndPassthrough(t *testing.T) {
+	cluster := baseCluster()
+	cluster.Spec.Authorization = &temporalv1alpha1.AuthorizationSpec{
+		JWTKeyProvider: &temporalv1alpha1.JWTKeyProviderSpec{
+			KeySourceURIs:   []string{"https://example.test/jwks"},
+			RefreshInterval: &metav1.Duration{Duration: 2 * time.Minute},
+		},
+		Config: &runtime.RawExtension{Raw: []byte(`{"permissionsClaimName":"perms"}`)},
+	}
+
+	out, err := RenderClusterConfig(cluster, BuildOptions{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	for _, want := range []string{
+		"https://example.test/jwks",
+		`refreshInterval: "2m0s"`,
+		"permissionsClaimName: perms",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rendered config missing %q\n---\n%s", want, out)
+		}
 	}
 }

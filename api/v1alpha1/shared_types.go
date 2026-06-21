@@ -190,16 +190,51 @@ type ArchivalSpec struct {
 	Visibility *runtime.RawExtension `json:"visibility,omitempty"`
 }
 
-// AuthorizationSpec configures the authorizer and claim mapper.
+// AuthorizationSpec configures the frontend authorizer, claim mapper, and JWT
+// key provider used to validate inbound bearer tokens.
 type AuthorizationSpec struct {
+	// Authorizer is the Temporal authorizer plugin. Defaults to "default" when
+	// JWT validation is configured. Use "" for the no-op (allow-all) authorizer.
 	// +optional
 	Authorizer string `json:"authorizer,omitempty"`
+	// ClaimMapper is the Temporal claim mapper. Defaults to "default" when JWT
+	// validation is configured.
 	// +optional
 	ClaimMapper string `json:"claimMapper,omitempty"`
-	// Config is a passthrough for authorization provider configuration.
+	// PermissionsClaimName maps to global.authorization.permissionsClaimName.
+	// Defaults to "roles" when Entra is set, otherwise "permissions".
+	// +optional
+	PermissionsClaimName string `json:"permissionsClaimName,omitempty"`
+	// JWTKeyProvider configures JWKS-based token signature validation.
+	// +optional
+	JWTKeyProvider *JWTKeyProviderSpec `json:"jwtKeyProvider,omitempty"`
+	// Entra derives the Entra JWKS keySourceURI from a tenant ID and applies
+	// sensible JWT defaults.
+	// +optional
+	Entra *EntraAuthSpec `json:"entra,omitempty"`
+	// Config is a passthrough merged into the authorization block for any knob
+	// not modeled above.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +optional
 	Config *runtime.RawExtension `json:"config,omitempty"`
+}
+
+// JWTKeyProviderSpec configures JWKS-based JWT validation.
+type JWTKeyProviderSpec struct {
+	// KeySourceURIs are JWKS endpoints used to validate token signatures.
+	// +optional
+	KeySourceURIs []string `json:"keySourceURIs,omitempty"`
+	// RefreshInterval controls how often keys are refreshed, e.g. "1m".
+	// +optional
+	RefreshInterval *metav1.Duration `json:"refreshInterval,omitempty"`
+}
+
+// EntraAuthSpec is a Microsoft Entra convenience for server JWT validation.
+type EntraAuthSpec struct {
+	// TenantID is the Entra (Azure AD) tenant. Derives the JWKS keySourceURI
+	// https://login.microsoftonline.com/{tenantID}/discovery/v2.0/keys.
+	// +kubebuilder:validation:MinLength=1
+	TenantID string `json:"tenantID"`
 }
 
 // ClusterMetadataSpec configures multi-cluster replication.
