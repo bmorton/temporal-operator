@@ -8,6 +8,15 @@ spec:
   persistence:
     azureWorkloadIdentity:
       clientId: ($values.clientId)
+    # Connection budget: the e2e Flexible Server is a Burstable Standard_B1ms with
+    # max_connections=50, of which Azure reserves superuser_reserved_connections(10)
+    # + reserved_connections(5), leaving ~35 usable for the workload-identity role.
+    # Every Temporal server pod opens a pool against BOTH stores, so the peak
+    # connection count is: (#pods) x (2 stores) x maxConns. With the default
+    # replicas=1 (frontend+history+matching+worker = 4 pods), maxConns=4 caps usage
+    # at 4 x 2 x 4 = 32 <= 35. Raising maxConns or the replica counts here without a
+    # bigger Postgres tier will exhaust connections and crash-loop the pods with
+    # "remaining connection slots are reserved ...".
     defaultStore:
       sql:
         pluginName: postgres12
@@ -16,6 +25,8 @@ spec:
         database: temporal
         user: ($values.pgUser)
         tls: { enabled: true }
+        maxConns: 4
+        maxIdleConns: 2
     visibilityStore:
       sql:
         pluginName: postgres12
@@ -24,3 +35,5 @@ spec:
         database: temporal_visibility
         user: ($values.pgUser)
         tls: { enabled: true }
+        maxConns: 4
+        maxIdleConns: 2
