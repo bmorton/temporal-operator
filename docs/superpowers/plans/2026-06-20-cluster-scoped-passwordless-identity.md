@@ -1,5 +1,12 @@
 # Cluster-scoped passwordless identity Implementation Plan
 
+> **Status: shipped in PR #85 (`feat/azure-passwordless-47`).** This is the
+> as-built record. It incorporates the foundational `passwordCommand` server-pod
+> and schema-Job wiring that closes #47 (originally scoped as a separate PR) as
+> well as the cluster-scoped, operator-credential-free refactor that replaced the
+> earlier in-process Entra approach. See the design at
+> `docs/superpowers/specs/2026-06-20-cluster-scoped-passwordless-identity-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make a `TemporalCluster` reach `Ready` passwordlessly via a single

@@ -1,29 +1,45 @@
 # Cluster-scoped passwordless identity (full support) — design
 
 Date: 2026-06-20
-Status: Approved
+Status: Implemented (shipped in PR #85, `feat/azure-passwordless-47`)
+
+> This is the consolidated, as-shipped design for PR #85. An earlier iteration
+> had the operator acquire its own Microsoft Entra token **in-process**
+> (Azure-specific, single-identity, operator-coupled) and split the work across
+> two PRs; that approach was replaced during development by the cluster-scoped,
+> Job-based model described here, and the e2e landed in the same PR.
 
 ## Context
 
-PR #85 (`feat/azure-passwordless-47`) made a `TemporalCluster` reach `Ready`
-against Azure Database for PostgreSQL Flexible Server with zero static passwords,
-and added a real AKS + Flexible Server e2e (`test/e2e/azure`, `hack/azure-e2e.sh`)
-that we have run green end-to-end. That first cut, however, has two limitations
-this design removes:
+Issue #47: a `TemporalCluster` configured for passwordless auth against Azure
+Database for PostgreSQL Flexible Server never reached `Ready`. Besides the
+Temporal **server pods**, two actors needed a database credential and had no way
+to obtain one without a static password:
 
-1. **The operator authenticates its own probe/schema inspection in-process**
-   (`internal/persistence/azure.go`, native Microsoft Entra token via
-   `sql.azureWorkloadIdentity`). That token is acquired by the **operator**, with
-   the **operator's** ServiceAccount in `temporal-system`, so it supports exactly
-   **one** identity and couples database identity to the operator. Adding the
-   operator's federated credential is a confusing, operator-scoped step
-   (`AADSTS700213` if forgotten).
-2. **A passwordless cluster requires extensive hand-written configuration** — the
-   user must author `services.overrides.podTemplate` (sidecar, volume,
-   container-by-name mount), `persistence.schemaJob.podTemplate` (token
-   initContainer), and a `passwordCommandSecretRef` Secret. The example
-   (`examples/cluster-azure-workload-identity`) is ~130 lines. This is not
-   developer-friendly.
+- the **operator's** reachability probe and schema-version inspection
+  (`internal/persistence`, `internal/controller`), and
+- the **schema setup/update Jobs** (`internal/resources/schemajob.go`).
+
+This PR closes #47 and ships a real AKS + Flexible Server end-to-end test
+(`test/e2e/azure`, `hack/azure-e2e.sh`). The shipped design has two pillars:
+
+1. **Generic `passwordCommand` credential wiring for in-cluster actors.** The
+   Temporal server pods and the schema Jobs obtain a short-lived Microsoft Entra
+   access token via an Azure Workload Identity sidecar/initContainer that writes
+   it to a shared file, and read it through Temporal's `passwordCommand`
+   mechanism. This mechanism is provider-agnostic — any non-Azure provider can
+   wire its own sidecar + `passwordCommand` the same way.
+
+2. **Cluster-scoped, operator-credential-free identity.** The database identity
+   is specified by the cluster and lives in the cluster's own namespace, never on
+   the operator. The operator container runs on `gcr.io/distroless/static:nonroot`
+   (no shell), so it cannot run a `passwordCommand`; instead of holding a
+   credential, it learns reachability and schema version by running short-lived
+   **inspector Jobs** in the cluster namespace (same identity, same token
+   mechanism). A single high-level `spec.persistence.azureWorkloadIdentity` field
+   expands into all the required wiring, so a passwordless cluster is a few lines
+   of YAML instead of hand-written `services.overrides.podTemplate`,
+   `persistence.schemaJob.podTemplate`, and a `passwordCommandSecretRef` Secret.
 
 ## Goals
 
@@ -104,7 +120,7 @@ This wiring is built by a single internal helper so the server-pod, schema-Job,
 and inspector-Job plumbing stay consistent. The same helper is the seam a future
 non-Azure provider would reuse.
 
-### 3. Operator probe/schema under model "D" (Job-based inspection)
+### 3. Operator probe/schema: Job-based inspection (no operator DB credential)
 
 `internal/persistence/azure.go` and the in-process token branch in
 `internal/persistence/sql.go` (`resolvePassword`'s `AzureWorkloadIdentity` case)
@@ -217,6 +233,9 @@ The separate `serviceaccount.yaml` is removed (the operator generates the SA).
   grants, cert-manager) stays.
 - Keep validating by running `make azure-e2e-up && make azure-e2e-test &&
   make azure-e2e-down` (tearing down between iterations).
+- `make azure-e2e-up-deploy` / `make azure-e2e-deploy` leave a **standing, usable**
+  `TemporalCluster` (named `azure-e2e` in the `azure-e2e` namespace) for manual
+  use — the Chainsaw suite otherwise creates and tears down its own cluster.
 
 ### 7. Testing
 
@@ -234,7 +253,7 @@ The separate `serviceaccount.yaml` is removed (the operator generates the SA).
 
 ## Trade-offs
 
-- **Reachability is not continuously probed.** Under D the operator learns
+- **Reachability is not continuously probed.** The operator learns
   reachability from inspector Jobs during active reconciliation and on spec
   changes, not on a steady interval. A DB that fails *after* `SchemaReady` will
   surface through the Temporal pods, not a flipped `PersistenceReachable`. This is
@@ -259,6 +278,11 @@ The separate `serviceaccount.yaml` is removed (the operator generates the SA).
 - Controller: select backend per store; generate the SA + Azure pod wiring when
   `azureWorkloadIdentity` is set; discover the operator's own image via the
   downward API for the inspector Job.
-- Helm chart: remove operator `workloadIdentity.*`.
+- Controller RBAC: grant the operator `pods` get/list/watch (the inspector
+  backend reads the inspector pod's termination message) and `serviceaccounts`
+  create/get/list/watch (it generates the cluster's ServiceAccount).
+- Helm chart: remove operator `workloadIdentity.*`; pass `OPERATOR_IMAGE` to the
+  manager (used as the inspector Job image).
 - Example + Azure e2e: collapse to the single field; update `hack/azure-e2e.sh`
-  federated-credential wiring.
+  federated-credential wiring; add `azure-e2e-deploy`/`up-deploy` for a standing
+  usable cluster.
