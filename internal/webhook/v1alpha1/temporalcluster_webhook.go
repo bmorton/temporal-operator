@@ -133,7 +133,7 @@ func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.
 
 	if cluster.Spec.UI != nil && cluster.Spec.UI.Auth != nil && cluster.Spec.UI.Auth.Enabled {
 		a := cluster.Spec.UI.Auth
-		base := field.NewPath("spec", "ui", "auth")
+		base := specPath.Child("ui", "auth")
 		if a.ClientID == "" {
 			errs = append(errs, field.Required(base.Child("clientID"), "clientID is required when ui.auth.enabled"))
 		}
@@ -143,8 +143,14 @@ func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.
 		if a.CallbackURL == "" {
 			errs = append(errs, field.Required(base.Child("callbackURL"), "callbackURL is required when ui.auth.enabled"))
 		}
-		if a.Entra == nil && a.ProviderURL == "" {
-			errs = append(errs, field.Required(base.Child("providerURL"), "set ui.auth.entra.tenantID or ui.auth.providerURL"))
+		entraSet := a.Entra != nil && a.Entra.TenantID != ""
+		switch {
+		case !entraSet && a.ProviderURL == "":
+			errs = append(errs, field.Required(base.Child("providerURL"),
+				"set exactly one of ui.auth.entra.tenantID or ui.auth.providerURL"))
+		case entraSet && a.ProviderURL != "":
+			errs = append(errs, field.Invalid(base.Child("providerURL"), a.ProviderURL,
+				"set exactly one of ui.auth.entra.tenantID or ui.auth.providerURL, not both"))
 		}
 		if a.ExtraEnv != nil && len(a.ExtraEnv.Raw) > 0 {
 			var m map[string]string

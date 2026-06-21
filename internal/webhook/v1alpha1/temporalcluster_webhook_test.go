@@ -310,6 +310,40 @@ var _ = Describe("TemporalCluster Webhook", func() {
 			}
 			_, err := validator.ValidateCreate(ctx, obj)
 			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("clientID"))
+		})
+
+		It("rejects ui.auth when both entra.tenantID and providerURL are set", func() {
+			obj.Spec.UI = &temporalv1alpha1.UISpec{
+				Enabled: true,
+				Auth: &temporalv1alpha1.UIAuthSpec{
+					Enabled:         true,
+					Entra:           &temporalv1alpha1.EntraUIAuthSpec{TenantID: "t"},
+					ProviderURL:     "https://example.com/oidc",
+					ClientID:        "c",
+					ClientSecretRef: &temporalv1alpha1.SecretKeyReference{Name: "s", Key: "k"},
+					CallbackURL:     "https://x/cb",
+				},
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not both"))
+		})
+
+		It("rejects ui.auth when entra is non-nil but tenantID is empty and no providerURL", func() {
+			obj.Spec.UI = &temporalv1alpha1.UISpec{
+				Enabled: true,
+				Auth: &temporalv1alpha1.UIAuthSpec{
+					Enabled:         true,
+					Entra:           &temporalv1alpha1.EntraUIAuthSpec{},
+					ClientID:        "c",
+					ClientSecretRef: &temporalv1alpha1.SecretKeyReference{Name: "s", Key: "k"},
+					CallbackURL:     "https://x/cb",
+				},
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("providerURL"))
 		})
 
 		It("admits a complete ui.auth OIDC configuration", func() {
