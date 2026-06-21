@@ -225,10 +225,12 @@ type ArchivalSpec struct {
 // AuthorizationSpec configures the frontend authorizer, claim mapper, and JWT
 // key provider used to validate inbound bearer tokens.
 type AuthorizationSpec struct {
-	// Authorizer is the Temporal authorizer plugin. Defaults to "default" when
-	// JWT validation is configured. Use "" for the no-op (allow-all) authorizer.
+	// Authorizer selects the Temporal authorizer plugin. If unset, it defaults
+	// to "default" (per-namespace RBAC) when JWT validation is configured.
+	// Set it to "" to select the no-op (allow-all) authorizer for
+	// authenticate-only mode.
 	// +optional
-	Authorizer string `json:"authorizer,omitempty"`
+	Authorizer *string `json:"authorizer,omitempty"`
 	// ClaimMapper is the Temporal claim mapper. Defaults to "default" when JWT
 	// validation is configured.
 	// +optional

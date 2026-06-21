@@ -397,3 +397,31 @@ func TestRenderConfig_AuthorizationExplicitAndPassthrough(t *testing.T) {
 		t.Errorf("passthrough should override the modeled permissionsClaimName, got duplicate\n---\n%s", out)
 	}
 }
+
+func TestRenderConfig_AuthorizationAuthenticateOnly(t *testing.T) {
+	cluster := baseCluster()
+	cluster.Spec.Authorization = &temporalv1alpha1.AuthorizationSpec{
+		Entra:      &temporalv1alpha1.EntraAuthSpec{TenantID: "tid"},
+		Authorizer: ptr[string](""),
+	}
+
+	out, err := RenderClusterConfig(cluster, BuildOptions{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	// Explicit empty string must emit authorizer: "" (no-op), never "default".
+	if !strings.Contains(out, `authorizer: ""`) {
+		t.Errorf(`rendered config missing authorizer: ""\n---\n%s`, out)
+	}
+	if strings.Contains(out, `authorizer: "default"`) {
+		t.Errorf(`rendered config must not contain authorizer: "default" when explicit "" is set\n---\n%s`, out)
+	}
+	// JWT / Entra config must still be present.
+	if !strings.Contains(out, "https://login.microsoftonline.com/tid/discovery/v2.0/keys") {
+		t.Errorf("rendered config missing Entra JWKS URL\n---\n%s", out)
+	}
+	if !strings.Contains(out, `permissionsClaimName: "roles"`) {
+		t.Errorf(`rendered config missing permissionsClaimName: "roles"\n---\n%s`, out)
+	}
+}

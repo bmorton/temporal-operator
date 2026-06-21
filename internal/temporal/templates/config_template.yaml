@@ -120,7 +120,7 @@ global:
 {{- end }}
 {{- if .Authorization }}
     authorization:
-{{- if .Authorization.Authorizer }}
+{{- if .Authorization.EmitAuthorizer }}
         authorizer: {{ .Authorization.Authorizer | quote }}
 {{- end }}
 {{- if .Authorization.ClaimMapper }}

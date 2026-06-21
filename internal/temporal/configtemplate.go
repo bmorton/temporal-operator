@@ -136,6 +136,7 @@ type MetricsConfig struct {
 // AuthConfig holds resolved authorization settings.
 type AuthConfig struct {
 	Authorizer           string
+	EmitAuthorizer       bool
 	ClaimMapper          string
 	PermissionsClaimName string
 	KeySourceURIs        []string
@@ -364,10 +365,16 @@ func buildAuth(cluster *temporalv1alpha1.TemporalCluster) (*AuthConfig, error) {
 	}
 
 	cfg := &AuthConfig{
-		Authorizer:           auth.Authorizer,
 		ClaimMapper:          auth.ClaimMapper,
 		PermissionsClaimName: auth.PermissionsClaimName,
 	}
+
+	// Honor an explicitly-set Authorizer (including "").
+	if auth.Authorizer != nil {
+		cfg.Authorizer = *auth.Authorizer
+		cfg.EmitAuthorizer = true
+	}
+
 	if auth.JWTKeyProvider != nil {
 		cfg.KeySourceURIs = append(cfg.KeySourceURIs, auth.JWTKeyProvider.KeySourceURIs...)
 		if auth.JWTKeyProvider.RefreshInterval != nil {
@@ -384,8 +391,10 @@ func buildAuth(cluster *temporalv1alpha1.TemporalCluster) (*AuthConfig, error) {
 
 	jwtConfigured := len(cfg.KeySourceURIs) > 0
 	if jwtConfigured {
-		if cfg.Authorizer == "" {
+		// Only apply the "default" authorizer when the user has not set it explicitly.
+		if auth.Authorizer == nil {
 			cfg.Authorizer = "default"
+			cfg.EmitAuthorizer = true
 		}
 		if cfg.ClaimMapper == "" {
 			cfg.ClaimMapper = "default"
@@ -408,13 +417,14 @@ func buildAuth(cluster *temporalv1alpha1.TemporalCluster) (*AuthConfig, error) {
 		}
 		if _, ok := extra["authorizer"]; ok {
 			cfg.Authorizer = ""
+			cfg.EmitAuthorizer = false
 		}
 		if _, ok := extra["claimMapper"]; ok {
 			cfg.ClaimMapper = ""
 		}
 	}
 
-	if cfg.Authorizer == "" && cfg.ClaimMapper == "" && !jwtConfigured && cfg.ExtraConfig == nil {
+	if !cfg.EmitAuthorizer && cfg.ClaimMapper == "" && !jwtConfigured && cfg.ExtraConfig == nil {
 		return nil, nil
 	}
 	return cfg, nil
