@@ -4,7 +4,8 @@
 # a TemporalCluster with JWT authorization enabled (pointing at the in-cluster
 # JWKS endpoint), then verifies:
 #   - a request bearing a valid RS256 Bearer token is authorized (exit 0)
-#   - a request with no auth metadata is rejected (exit non-zero, wrapped to exit 0)
+#   - a request with no auth metadata is rejected (denial gated on allow success)
+#   - a request with a wrong-signature token is rejected (proves signature verification)
 #
 # Prerequisites (must already be installed in the cluster):
 #   - CNPG operator
@@ -89,24 +90,19 @@ spec:
             tail: 200
         - events: {}
 
-    - name: authz-checks
+    # Phase 1: apply the valid-token ConfigMap and the allow Job, then assert
+    # success.  This proves the JWKS endpoint has been fetched and the validator
+    # authorises a correctly-signed token before any denial checks run.
+    - name: authz-allow
       try:
         - apply:
-            file: 03-authz-checks.yaml
+            file: 03-authz-allow.yaml
         - assert:
             resource:
               apiVersion: batch/v1
               kind: Job
               metadata:
                 name: authz-allow
-              status:
-                succeeded: 1
-        - assert:
-            resource:
-              apiVersion: batch/v1
-              kind: Job
-              metadata:
-                name: authz-deny
               status:
                 succeeded: 1
       catch:
@@ -116,7 +112,39 @@ spec:
         - podLogs:
             selector: job-name=authz-allow
             tail: 100
+        - events: {}
+
+    # Phase 2: only reached after authz-allow has succeeded (validator is live).
+    # Verify that an unauthenticated request and a wrong-signature token are both
+    # rejected.  backoffLimit:0 on each Job prevents retries masking false positives.
+    - name: authz-deny
+      try:
+        - apply:
+            file: 04-authz-deny.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: authz-deny
+              status:
+                succeeded: 1
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: authz-bad-token
+              status:
+                succeeded: 1
+      catch:
+        - describe:
+            apiVersion: batch/v1
+            kind: Job
         - podLogs:
             selector: job-name=authz-deny
+            tail: 100
+        - podLogs:
+            selector: job-name=authz-bad-token
             tail: 100
         - events: {}

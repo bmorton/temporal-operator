@@ -1,12 +1,10 @@
-# Authorization check Jobs:
+# Phase 1 — authorization allow check:
 #   authz-allow — runs temporal namespace list WITH a valid Bearer token; must exit 0.
-#   authz-deny  — runs the same command WITHOUT auth metadata; command must fail
-#                 (wrapped so the Job exits 0 when the CLI exits non-zero).
 #
-# Tokens are mounted read-only from a ConfigMap.
+# Success of this Job proves the JWKS endpoint has been fetched and the validator
+# is live before any denial checks run.
 #
-# Auth metadata flag: --grpc-meta "authorization=Bearer <token>"
-# (Temporal CLI uses --grpc-meta for arbitrary gRPC metadata key=value pairs.)
+# The ConfigMap is also consumed by the denial Jobs in 04-authz-deny.yaml.
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -15,6 +13,8 @@ metadata:
 data:
   token-valid.txt: |
     eyJhbGciOiJSUzI1NiIsImtpZCI6ImUyZSIsInR5cCI6IkpXVCJ9.eyJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImRlZmF1bHQ6cmVhZCIsImRlZmF1bHQ6d3JpdGUiLCJ0ZW1wb3JhbC1zeXN0ZW06YWRtaW4iXSwic3ViIjoiZTJlIn0.VKS1JheLn0Gy_VeuGrI2oZK7WDDEl6h1WDBVdO71KegWNXXvM3jYUNPMd3c0X7HGgc31Ln9rYOf5XBE3lctkaPsGAMJl2L_pOQSPukD8LAewaInIjBqHxH6k2tpPBrMgPPd8v4hbW33_8g0JmoWEqaUrO9f0pbwACtVf6hXP0nelc04YdlnUgSwgHoT21l719BbKcfJJBKbbwgfGaRWeZiAn-pxnz3h8_KTPHfuagOeyDDmjnQ-Qn-oyrzMQSykG1j9-5j77izTku3zbJMQuI85QqOS_-uHSPt1vM9Wdl9nFWkYj4NMy56r5fTenVMb8kxRLIcmGMUSEyYlDDlzPXg
+  token-invalid.txt: |
+    eyJhbGciOiJSUzI1NiIsImtpZCI6ImUyZSIsInR5cCI6IkpXVCJ9.eyJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImRlZmF1bHQ6cmVhZCIsImRlZmF1bHQ6d3JpdGUiLCJ0ZW1wb3JhbC1zeXN0ZW06YWRtaW4iXSwic3ViIjoiZTJlIn0.v8XZDHG5oOjNRfy-Lsm_Vo2s4PwE0u_NCnAj6niiQ9UTyeP8xSbyGn7Wfrp2ACzrAyWjwClLoIfq3Mb_v4oQ4PRDSEbPbNseXApccSmCOyx9RmXdq-qbLHu3SUyxcsWXAaYvg0cok9fTwlTec_iOu03d_DcQaEwSRg9j26hUug77CFyhqhlW32R9f9dLIoUjWwo0eV0YPmMmGG0t9uUTblykcv9YGqDCLXTAfrecNUe3gx36j9arXm6arEi-Wx7CKWyRDKyBTX_nYs_75Wf1Ti4ASbE1dmW0-nMDBHdvMorEEgc7Lm-b0vq-6xVde3pgvdl-XDwxA_izu2dAGwBMEQ
 ---
 # authz-allow: valid JWT → frontend must accept the request (exit 0).
 apiVersion: batch/v1
@@ -44,29 +44,3 @@ spec:
         - name: tokens
           configMap:
             name: e2e-tokens
----
-# authz-deny: no auth metadata → frontend must reject the request.
-# The wrapper inverts the exit code so the Job reports succeeded:1 on rejection.
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: authz-deny
-spec:
-  backoffLimit: 0
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: check
-          image: temporalio/admin-tools:1.31.1
-          command: ["/bin/sh", "-c"]
-          args:
-            - |
-              if temporal operator namespace list \
-                   --address temporal-authz-frontend:7233; then
-                echo "FAIL: unauthenticated request was accepted — expected rejection"
-                exit 1
-              else
-                echo "PASS: unauthenticated request was correctly rejected"
-                exit 0
-              fi
