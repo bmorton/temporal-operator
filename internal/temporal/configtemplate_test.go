@@ -393,4 +393,7 @@ func TestRenderConfig_AuthorizationExplicitAndPassthrough(t *testing.T) {
 			t.Errorf("rendered config missing %q\n---\n%s", want, out)
 		}
 	}
+	if strings.Contains(out, `permissionsClaimName: "permissions"`) {
+		t.Errorf("passthrough should override the modeled permissionsClaimName, got duplicate\n---\n%s", out)
+	}
 }

@@ -401,6 +401,17 @@ func buildAuth(cluster *temporalv1alpha1.TemporalCluster) (*AuthConfig, error) {
 			return nil, fmt.Errorf("authorization.config: %w", err)
 		}
 		cfg.ExtraConfig = extra
+		// Suppress modeled fields that ExtraConfig also defines so the
+		// passthrough wins and no duplicate YAML keys are emitted.
+		if _, ok := extra["permissionsClaimName"]; ok {
+			cfg.PermissionsClaimName = ""
+		}
+		if _, ok := extra["authorizer"]; ok {
+			cfg.Authorizer = ""
+		}
+		if _, ok := extra["claimMapper"]; ok {
+			cfg.ClaimMapper = ""
+		}
 	}
 
 	if cfg.Authorizer == "" && cfg.ClaimMapper == "" && !jwtConfigured && cfg.ExtraConfig == nil {
