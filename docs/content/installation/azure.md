@@ -51,6 +51,9 @@ Substitute your namespace and `<cluster>-ui` Service name for other clusters.
 
 ## Passwordless auth with Microsoft Entra + Workload Identity
 
+For authenticating **clients and the UI** to Temporal with Microsoft Entra
+(JWT + OIDC), see [Authentication & Authorization](../operations/authentication.md).
+
 Each actor in the system obtains an Entra token through a different mechanism:
 
 | Actor | Token mechanism |
