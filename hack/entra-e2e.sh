@@ -54,8 +54,7 @@ cmd_up() {
     exit 1
   fi
 
-  local ENTRA_TENANT_ID
-  ENTRA_TENANT_ID="${ENTRA_TENANT_ID:-$(az account show --query tenantId -o tsv)}"
+  local ENTRA_TENANT_ID="${ENTRA_TENANT_ID:-$(az account show --query tenantId -o tsv)}"
 
   log "Writing app-roles JSON to $ROLES_FILE"
   # Three app roles whose 'value' fields are Temporal <namespace>:<role> strings.

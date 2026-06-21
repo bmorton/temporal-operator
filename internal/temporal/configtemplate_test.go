@@ -398,6 +398,36 @@ func TestRenderConfig_AuthorizationExplicitAndPassthrough(t *testing.T) {
 	}
 }
 
+func TestRenderConfig_AuthorizationEntraJWTProviderPassthrough(t *testing.T) {
+	// TDD: Entra + passthrough jwtKeyProvider — the passthrough must win and
+	// there must be exactly one jwtKeyProvider: key in the rendered YAML.
+	cluster := baseCluster()
+	cluster.Spec.Authorization = &temporalv1alpha1.AuthorizationSpec{
+		Entra: &temporalv1alpha1.EntraAuthSpec{TenantID: "11111111-2222-3333-4444-555555555555"},
+		Config: &runtime.RawExtension{
+			Raw: []byte(`{"jwtKeyProvider":{"keySourceURIs":["https://override/jwks"]}}`),
+		},
+	}
+
+	out, err := RenderClusterConfig(cluster, BuildOptions{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	// The passthrough URI must be present.
+	if !strings.Contains(out, "https://override/jwks") {
+		t.Errorf("rendered config missing override URI\n---\n%s", out)
+	}
+	// The entra-derived JWKS URI must NOT appear.
+	if strings.Contains(out, "discovery/v2.0/keys") {
+		t.Errorf("rendered config must not contain entra-derived JWKS URI when passthrough jwtKeyProvider is set\n---\n%s", out)
+	}
+	// Exactly one jwtKeyProvider: occurrence.
+	if count := strings.Count(out, "jwtKeyProvider:"); count != 1 {
+		t.Errorf("expected exactly 1 'jwtKeyProvider:' line, got %d\n---\n%s", count, out)
+	}
+}
+
 func TestRenderConfig_AuthorizationAuthenticateOnly(t *testing.T) {
 	cluster := baseCluster()
 	cluster.Spec.Authorization = &temporalv1alpha1.AuthorizationSpec{

@@ -49,7 +49,7 @@ go run verify.go   # must print: All checks PASSED
 ```
 
 Then update the `jwks.json` inline in `../01-jwks.yaml` (ConfigMap data) and
-the token values in `../03-authz-checks.yaml` (ConfigMap data).
+the token values in `../03-authz-allow.yaml` (ConfigMap data, also consumed by `../04-authz-deny.yaml`).
 
 ## Verification
 

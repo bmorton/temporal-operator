@@ -4,8 +4,8 @@
 # deployed by 01-jwks.yaml.  Persistence reuses the CNPG Postgres fixtures
 # from ../postgres/ (provisioned in the provision-postgres step).
 #
-# Chainsaw templating substitutes $namespace so the host resolves correctly
-# from the operator's temporal-system namespace.
+# Chainsaw templating substitutes $namespace so the JWKS Service host resolves
+# correctly within the Chainsaw-provisioned ephemeral test namespace.
 apiVersion: temporal.bmor10.com/v1alpha1
 kind: TemporalCluster
 metadata:

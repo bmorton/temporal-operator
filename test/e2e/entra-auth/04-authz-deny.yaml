@@ -23,14 +23,19 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              if temporal operator namespace list \
-                   --address temporal-authz-frontend:7233; then
-                echo "FAIL: unauthenticated request was accepted — expected rejection"
+              if out=$(temporal operator namespace list \
+                   --address temporal-authz-frontend:7233 2>&1); then
+                echo "ERROR: unauthenticated request was accepted — expected rejection"
+                echo "$out"
                 exit 1
-              else
-                echo "PASS: unauthenticated request was correctly rejected"
-                exit 0
               fi
+              echo "$out"
+              echo "$out" | grep -qiE 'permission denied|unauthorized|unauthenticated|request unauthorized' || {
+                echo "ERROR: request failed for a non-auth reason"
+                exit 1
+              }
+              echo "PASS: unauthenticated request was correctly rejected"
+              exit 0
 ---
 # authz-bad-token: valid JWT structure but wrong signature → frontend must reject.
 apiVersion: batch/v1
@@ -49,15 +54,20 @@ spec:
           args:
             - |
               TOKEN=$(cat /tokens/token-invalid.txt | tr -d '\n')
-              if temporal operator namespace list \
+              if out=$(temporal operator namespace list \
                    --address temporal-authz-frontend:7233 \
-                   --grpc-meta "authorization=Bearer ${TOKEN}"; then
-                echo "FAIL: request with invalid-signature token was accepted — expected rejection"
+                   --grpc-meta "authorization=Bearer ${TOKEN}" 2>&1); then
+                echo "ERROR: request with invalid-signature token was accepted — expected rejection"
+                echo "$out"
                 exit 1
-              else
-                echo "PASS: request with invalid-signature token was correctly rejected"
-                exit 0
               fi
+              echo "$out"
+              echo "$out" | grep -qiE 'permission denied|unauthorized|unauthenticated|request unauthorized' || {
+                echo "ERROR: request failed for a non-auth reason"
+                exit 1
+              }
+              echo "PASS: request with invalid-signature token was correctly rejected"
+              exit 0
           volumeMounts:
             - name: tokens
               mountPath: /tokens

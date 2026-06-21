@@ -415,6 +415,10 @@ func applyAuthConfigPassthrough(auth *temporalv1alpha1.AuthorizationSpec, cfg *A
 	if _, ok := extra["claimMapper"]; ok {
 		cfg.ClaimMapper = ""
 	}
+	if _, ok := extra["jwtKeyProvider"]; ok {
+		cfg.KeySourceURIs = nil
+		cfg.RefreshInterval = ""
+	}
 	return nil
 }
 
