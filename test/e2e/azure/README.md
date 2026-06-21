@@ -7,7 +7,7 @@ passwords**. It validates the #47 changes end-to-end across every actor:
 
 | Actor | How it authenticates |
 |---|---|
-| **Temporal server** pods | `passwordCommand` fed by an operator-generated `azure-token-refresher` sidecar |
+| **Temporal server** pods | `passwordCommand` fed by an operator-generated one-shot token initContainer (seeds the token before startup) plus an `azure-token-refresher` sidecar (keeps it fresh) |
 | **Schema Job** | `passwordCommand` fed by an operator-generated one-shot token initContainer |
 
 Unlike the kind (`.github/workflows/e2e.yml`) and nsc (`hack/nsc-e2e.sh`) flows —
@@ -45,6 +45,20 @@ resource group** so teardown is a single `az group delete`:
 
 The Chainsaw suite is pinned to the `azure-e2e` namespace (`--namespace`) so the
 operator-generated ServiceAccount's subject matches the federated credential.
+
+## Connection budget (why `maxConns` is set low)
+
+The Burstable `Standard_B1ms` server has `max_connections=50`, and Azure reserves
+`superuser_reserved_connections` (10) + `reserved_connections` (5), leaving **~35**
+usable for the workload-identity role. Every Temporal server pod opens a pool
+against **both** the default and visibility stores, so peak usage is
+`(#pods) × (2 stores) × maxConns`. The default `maxConns` of 20 would exhaust the
+server with a single pod, so `test/e2e/azure/03-temporalcluster.yaml` pins
+`maxConns: 4` / `maxIdleConns: 2` on both stores: with the default `replicas: 1`
+(4 server pods) that caps usage at `4 × 2 × 4 = 32 ≤ 35`. Symptom when the budget
+is exceeded: pods crash-loop with `pq: remaining connection slots are reserved for
+roles with privileges of the "pg_use_reserved_connections" role`. Scaling replicas
+up requires either lowering `maxConns` further or a larger Postgres tier.
 
 ## Prerequisites
 

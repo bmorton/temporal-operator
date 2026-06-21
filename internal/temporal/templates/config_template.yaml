@@ -7,7 +7,11 @@ sql:
     connectProtocol: "tcp"
     user: {{ .User | quote }}
 {{- if .PasswordCommand }}
-    passwordCommand: {{ .PasswordCommand | quote }}
+    passwordCommand:
+        command: "sh"
+        args:
+            - "-c"
+            - {{ .PasswordCommand | quote }}
 {{- else }}
     password: {{ .Password | quote }}
 {{- end }}
