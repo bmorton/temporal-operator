@@ -313,6 +313,18 @@ azure-e2e-up-deploy: chainsaw ## Provision everything, then leave a standing, us
 azure-e2e-down: ## Delete the Azure e2e resource group (everything).
 	./hack/azure-e2e.sh down
 
+.PHONY: entra-e2e-up
+entra-e2e-up: ## Create the longstanding Entra app registration (app roles + client secret).
+	./hack/entra-e2e.sh up
+
+.PHONY: entra-e2e-token
+entra-e2e-token: ## Print a client-credentials access token for gRPC auth testing.
+	./hack/entra-e2e.sh token
+
+.PHONY: entra-e2e-down
+entra-e2e-down: ## Delete the Entra app registration created by entra-e2e-up.
+	./hack/entra-e2e.sh down
+
 .PHONY: azure-e2e
 azure-e2e: chainsaw ## Provision -> test -> teardown in one shot (always tears down).
 	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh all
