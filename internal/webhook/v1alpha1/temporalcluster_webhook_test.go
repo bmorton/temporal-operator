@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
@@ -297,6 +298,64 @@ var _ = Describe("TemporalCluster Webhook", func() {
 
 		It("admits deletion by default", func() {
 			_, err := validator.ValidateDelete(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Context("Validation of ui.auth", func() {
+		It("rejects ui.auth.enabled without clientID, clientSecretRef, or callbackURL", func() {
+			obj.Spec.UI = &temporalv1alpha1.UISpec{
+				Enabled: true,
+				Auth:    &temporalv1alpha1.UIAuthSpec{Enabled: true},
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("admits a complete ui.auth OIDC configuration", func() {
+			obj.Spec.UI = &temporalv1alpha1.UISpec{
+				Enabled: true,
+				Auth: &temporalv1alpha1.UIAuthSpec{
+					Enabled:         true,
+					Entra:           &temporalv1alpha1.EntraUIAuthSpec{TenantID: "t"},
+					ClientID:        "c",
+					ClientSecretRef: &temporalv1alpha1.SecretKeyReference{Name: "s", Key: "k"},
+					CallbackURL:     "https://x/cb",
+				},
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("rejects ui.auth.extraEnv when a value is not a string", func() {
+			obj.Spec.UI = &temporalv1alpha1.UISpec{
+				Enabled: true,
+				Auth: &temporalv1alpha1.UIAuthSpec{
+					Enabled:         true,
+					Entra:           &temporalv1alpha1.EntraUIAuthSpec{TenantID: "t"},
+					ClientID:        "c",
+					ClientSecretRef: &temporalv1alpha1.SecretKeyReference{Name: "s", Key: "k"},
+					CallbackURL:     "https://x/cb",
+					ExtraEnv:        &runtime.RawExtension{Raw: []byte(`{"FOO":{"nested":true}}`)},
+				},
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("admits ui.auth.extraEnv when it is a valid string map", func() {
+			obj.Spec.UI = &temporalv1alpha1.UISpec{
+				Enabled: true,
+				Auth: &temporalv1alpha1.UIAuthSpec{
+					Enabled:         true,
+					Entra:           &temporalv1alpha1.EntraUIAuthSpec{TenantID: "t"},
+					ClientID:        "c",
+					ClientSecretRef: &temporalv1alpha1.SecretKeyReference{Name: "s", Key: "k"},
+					CallbackURL:     "https://x/cb",
+					ExtraEnv:        &runtime.RawExtension{Raw: []byte(`{"FOO":"bar"}`)},
+				},
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
