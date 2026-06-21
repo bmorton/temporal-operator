@@ -1,14 +1,23 @@
-# Assertion: the operator reports persistence reachable and the schema ready.
-# These conditions only flip true when EVERY passwordless actor authenticated to
-# Flexible Server: the operator probe (native Entra token), the schema Job
-# (passwordCommand via token initContainer), and the server pods (passwordCommand
-# via token-refresher sidecar).
+# Assertion: the operator brings the TemporalCluster fully Ready, which proves
+# EVERY passwordless actor authenticated to Flexible Server:
+#   - PersistenceReachable: the operator probe (native Entra token)
+#   - SchemaReady:          the schema Job (passwordCommand via token initContainer)
+#   - Available/Ready:      the server pods became ReadyReplicas>=1, which only
+#                           happens once they parse config.yaml and authenticate
+#                           via passwordCommand (token-refresher sidecar)
+#
+# Available/Ready are essential here: PersistenceReachable and SchemaReady use
+# auth paths that never touch the server config.yaml, so without asserting the
+# server pods are up a broken server passwordCommand would slip through.
 apiVersion: temporal.bmor10.com/v1alpha1
 kind: TemporalCluster
 metadata:
   name: azure-e2e
 status:
+  phase: Ready
   persistence:
     reachable: true
   (conditions[?type == 'PersistenceReachable'].status | [0]): "True"
   (conditions[?type == 'SchemaReady'].status | [0]): "True"
+  (conditions[?type == 'Available'].status | [0]): "True"
+  (conditions[?type == 'Ready'].status | [0]): "True"
