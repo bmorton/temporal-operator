@@ -38,6 +38,9 @@ spec:
                     {{- end }}
                   command:
                     - /manager
+                  env:
+                    - name: OPERATOR_IMAGE
+                      value: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
                   image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
                   imagePullPolicy: {{ .Values.manager.image.pullPolicy }}
                   livenessProbe:

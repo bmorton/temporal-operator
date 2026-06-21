@@ -156,20 +156,20 @@ type sqlBackend struct {
 	dbName string
 }
 
-func (b *sqlBackend) dsn() string {
-	return BuildPostgresDSN(b.spec, b.cred.Password, b.dbName)
+func (b *sqlBackend) dsn(password string) string {
+	return BuildPostgresDSN(b.spec, password, b.dbName)
 }
 
 func (b *sqlBackend) Probe(ctx context.Context) error {
-	return SQLProber{}.Probe(ctx, b.dsn())
+	return SQLProber{}.Probe(ctx, b.dsn(b.cred.Password))
 }
 
 func (b *sqlBackend) SchemaVersion(ctx context.Context) (string, error) {
-	return SQLProber{}.CurrentSchemaVersion(ctx, b.dsn(), b.dbName)
+	return SQLProber{}.CurrentSchemaVersion(ctx, b.dsn(b.cred.Password), b.dbName)
 }
 
 func (b *sqlBackend) EnsureSchema(_ context.Context, _ string) (bool, error) {
 	return false, nil
 }
 
-func (b *sqlBackend) Kind() string { return "sql" }
+func (b *sqlBackend) Kind() string { return KindSQL }

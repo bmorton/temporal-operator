@@ -48,6 +48,8 @@ const (
 	ReasonPersistenceUnreachable = "PersistenceUnreachable"
 	// ReasonSchemaMigrating indicates a schema migration is running.
 	ReasonSchemaMigrating = "SchemaMigrating"
+	// ReasonInspecting indicates schema inspection is in progress.
+	ReasonInspecting = "Inspecting"
 	// ReasonShardCountImmutable indicates an attempt to change the immutable shard count.
 	ReasonShardCountImmutable = "ShardCountImmutable"
 	// ReasonVersionUnsupported indicates the requested version is not in the support matrix.

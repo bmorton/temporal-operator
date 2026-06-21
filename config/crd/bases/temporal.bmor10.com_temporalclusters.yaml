@@ -244,6 +244,42 @@ spec:
                 description: Persistence configures the default and visibility datastores.
                   Required.
                 properties:
+                  azureWorkloadIdentity:
+                    description: |-
+                      AzureWorkloadIdentity, when set, makes this cluster authenticate to its
+                      SQL datastore(s) passwordlessly using Azure Workload Identity. The operator
+                      generates a ServiceAccount, token sidecar/initContainers, and the
+                      passwordCommand wiring in the cluster's namespace; the operator itself
+                      holds no database credential. SQL stores only.
+                    properties:
+                      clientId:
+                        description: |-
+                          ClientID is the Azure managed-identity / app-registration client ID used
+                          for the ServiceAccount's azure.workload.identity/client-id annotation.
+                        type: string
+                      image:
+                        description: |-
+                          Image overrides the azure-cli image used by the token sidecar /
+                          initContainers (default "mcr.microsoft.com/azure-cli:2.87.0").
+                        type: string
+                      refreshInterval:
+                        description: |-
+                          RefreshInterval is how often the server-pod sidecar refreshes the token
+                          (default 30m).
+                        type: string
+                      scope:
+                        description: |-
+                          Scope is the Entra token scope requested for the database. Defaults to
+                          "https://ossrdbms-aad.database.windows.net/.default".
+                        type: string
+                      serviceAccountName:
+                        description: |-
+                          ServiceAccountName overrides the generated ServiceAccount name
+                          (default "<cluster>-azure").
+                        type: string
+                    required:
+                    - clientId
+                    type: object
                   defaultStore:
                     description: |-
                       DefaultStore holds workflow execution state. Exactly one of sql or
@@ -557,6 +593,34 @@ spec:
                     x-kubernetes-validations:
                     - message: exactly one of sql or cassandra must be set for defaultStore
                       rule: has(self.sql) != has(self.cassandra)
+                  schemaJob:
+                    description: SchemaJob customizes the schema setup/update Jobs
+                      the operator runs.
+                    properties:
+                      podTemplate:
+                        description: |-
+                          PodTemplate overrides metadata and the pod spec of the schema Job pods.
+                          Use it to attach a ServiceAccount, pod labels (e.g. Azure Workload
+                          Identity), and a token initContainer so the Job can authenticate with a
+                          passwordCommand instead of a static password.
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          labels:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          spec:
+                            description: |-
+                              Spec is a partial PodSpec (strategic-merge patch) merged onto the
+                              generated pod template. It is stored as an opaque object to keep the
+                              CRD schema small.
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                    type: object
                   visibilityStore:
                     description: |-
                       VisibilityStore holds visibility records. One of sql, cassandra, or

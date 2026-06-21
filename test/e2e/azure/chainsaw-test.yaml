@@ -1,0 +1,28 @@
+# Real-Azure e2e: proves the operator brings a TemporalCluster to Ready against
+# Azure Database for PostgreSQL Flexible Server using passwordless Workload
+# Identity auth (zero static passwords). Provisioned and torn down by
+# hack/azure-e2e.sh; requires a --values file produced by `make azure-e2e-up`
+# (pgHost, pgUser, clientId). Does NOT run on kind/nsc.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: azure-passwordless
+spec:
+  timeouts:
+    apply: 2m
+    assert: 15m
+  steps:
+    - name: cluster-ready
+      try:
+        - apply:
+            file: 03-temporalcluster.yaml
+        - assert:
+            file: 03-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster
+        - events: {}
+        - podLogs:
+            selector: app.kubernetes.io/instance=azure-e2e
+            tail: 200

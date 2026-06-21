@@ -30,7 +30,7 @@ import (
 )
 
 // ResolvedCredential is the resolved authentication material for a datastore.
-// Exactly one of Password or PasswordCommand is set.
+// Password or PasswordCommand may be set for the server / schema Job.
 type ResolvedCredential struct {
 	// Password is a static password (password-auth).
 	Password string
@@ -38,6 +38,10 @@ type ResolvedCredential struct {
 	// (Temporal 1.31+ IAM auth). When set, Password is empty.
 	PasswordCommand string
 }
+
+// DefaultAzureOSSRDBMSScope is the default Entra token scope for Azure Database
+// for PostgreSQL / MySQL Flexible Server.
+const DefaultAzureOSSRDBMSScope = "https://ossrdbms-aad.database.windows.net/.default"
 
 // SecretResolver resolves datastore password references from Secrets in the
 // cluster's namespace.
@@ -73,24 +77,25 @@ func (r *SecretResolver) getSecretValue(ctx context.Context, ref *temporalv1alph
 	return string(value), nil
 }
 
-// ResolveSQL resolves the credential for a SQL datastore. The passwordCommand
-// reference takes precedence over a static password when both are set.
+// ResolveSQL resolves the credential for a SQL datastore. PasswordCommand takes
+// precedence over a static password when both password refs are set.
 func (r *SecretResolver) ResolveSQL(ctx context.Context, spec *temporalv1alpha1.SQLDatastoreSpec) (ResolvedCredential, error) {
-	if spec.PasswordCommandSecretRef != nil {
+	var cred ResolvedCredential
+	switch {
+	case spec.PasswordCommandSecretRef != nil:
 		cmd, err := r.getSecretValue(ctx, spec.PasswordCommandSecretRef)
 		if err != nil {
 			return ResolvedCredential{}, err
 		}
-		return ResolvedCredential{PasswordCommand: cmd}, nil
-	}
-	if spec.PasswordSecretRef != nil {
+		cred.PasswordCommand = cmd
+	case spec.PasswordSecretRef != nil:
 		pw, err := r.getSecretValue(ctx, spec.PasswordSecretRef)
 		if err != nil {
 			return ResolvedCredential{}, err
 		}
-		return ResolvedCredential{Password: pw}, nil
+		cred.Password = pw
 	}
-	return ResolvedCredential{}, nil
+	return cred, nil
 }
 
 // ResolveCassandra resolves the credential for a Cassandra datastore.

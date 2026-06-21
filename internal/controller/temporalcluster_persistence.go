@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -83,14 +84,35 @@ type schemaTarget struct {
 	store   resources.SchemaStore
 	spec    temporalv1alpha1.DatastoreSpec
 	backend persistence.Backend
+	cred    persistence.ResolvedCredential
 }
 
 // reconcilePersistence probes the datastore(s) and drives schema setup/migration
 // via Jobs (SQL, Cassandra) or inline (Elasticsearch).
+// ensureAzureServiceAccount creates the ServiceAccount for Azure Workload Identity if enabled.
+func (r *TemporalClusterReconciler) ensureAzureServiceAccount(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
+	if !resources.AzureWorkloadIdentityEnabled(cluster) {
+		return nil
+	}
+	sa := resources.BuildAzureServiceAccount(cluster)
+	if err := controllerutil.SetControllerReference(cluster, sa, r.Scheme); err != nil {
+		return err
+	}
+	if err := r.Create(ctx, sa); err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
 func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	factory := r.backendFactory()
 	resolver := persistence.NewSecretResolver(r.Client, cluster.Namespace)
+
+	// Ensure the Azure WI ServiceAccount exists when WI is enabled.
+	if err := r.ensureAzureServiceAccount(ctx, cluster); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	targets, err := r.buildSchemaTargets(ctx, cluster, factory, resolver)
 	if err != nil {
@@ -100,6 +122,11 @@ func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cl
 
 	for _, t := range targets {
 		if err := t.backend.Probe(ctx); err != nil {
+			// ErrInspecting is transient (Job not yet finished); requeue silently.
+			if errors.Is(err, persistence.ErrInspecting) {
+				r.setInspecting(cluster, fmt.Sprintf("%s store: inspection in progress", t.store))
+				return ctrl.Result{RequeueAfter: persistenceRequeueAfter}, nil
+			}
 			log.Info("persistence unreachable", "store", t.store, "error", err.Error())
 			r.setReachable(cluster, false, fmt.Sprintf("%s store: %v", t.store, err))
 			return ctrl.Result{RequeueAfter: persistenceRequeueAfter}, nil
@@ -120,6 +147,11 @@ func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cl
 	for _, t := range targets {
 		res, err := r.reconcileStoreSchema(ctx, cluster, t, minSchemaFor(info, t.backend.Kind()))
 		if err != nil {
+			// ErrInspecting during schema version lookup is transient; requeue.
+			if errors.Is(err, persistence.ErrInspecting) {
+				migrating = true
+				continue
+			}
 			return ctrl.Result{}, err
 		}
 		switch {
@@ -146,11 +178,21 @@ func (r *TemporalClusterReconciler) buildSchemaTargets(ctx context.Context, clus
 		if err != nil {
 			return schemaTarget{}, fmt.Errorf("resolving %s store credential: %w", name, err)
 		}
-		backend, err := factory(store, cred, storeDBName(store))
-		if err != nil {
-			return schemaTarget{}, fmt.Errorf("building %s backend: %w", name, err)
+
+		var backend persistence.Backend
+		// When Azure Workload Identity is enabled for a SQL store, use the
+		// Job-based inspector backend instead of a direct connection.
+		if resources.AzureWorkloadIdentityEnabled(cluster) && store.SQL != nil {
+			backend = persistence.NewJobInspectorBackend(r.Client, storeDBName(store), func(ctx context.Context) (*batchv1.Job, error) {
+				return r.ensureInspectorJob(ctx, cluster, store.SQL, name)
+			})
+		} else {
+			backend, err = factory(store, cred, storeDBName(store))
+			if err != nil {
+				return schemaTarget{}, fmt.Errorf("building %s backend: %w", name, err)
+			}
 		}
-		return schemaTarget{store: name, spec: store, backend: backend}, nil
+		return schemaTarget{store: name, spec: store, backend: backend, cred: cred}, nil
 	}
 
 	defTarget, err := build(cluster.Spec.Persistence.DefaultStore, resources.StoreDefault)
@@ -237,14 +279,42 @@ func (r *TemporalClusterReconciler) ensureSchemaJob(ctx context.Context, cluster
 	var job batchv1.Job
 	err := r.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, &job)
 	if apierrors.IsNotFound(err) {
-		built := resources.BuildSchemaJob(resources.SchemaJobParams{
+		// Determine password command and pod template based on Azure WI setting.
+		passwordCommand := t.cred.PasswordCommand
+		var podTemplate *temporalv1alpha1.PodTemplateOverride
+		if resources.AzureWorkloadIdentityEnabled(cluster) {
+			// Azure WI uses the password command that reads from the token file.
+			passwordCommand = resources.AzurePasswordCommand()
+			// Do NOT use user-provided podTemplate when Azure WI is enabled;
+			// Azure generates the necessary wiring.
+		} else {
+			podTemplate = schemaJobPodTemplate(cluster)
+		}
+
+		built, buildErr := resources.BuildSchemaJob(resources.SchemaJobParams{
 			Cluster:          cluster,
 			SQLSpec:          t.spec.SQL,
 			CassandraSpec:    t.spec.Cassandra,
 			Store:            t.store,
 			Action:           action,
 			SchemaVersionDir: resources.PostgresSchemaDir,
+			PasswordCommand:  passwordCommand,
+			PodTemplate:      podTemplate,
 		})
+		if buildErr != nil {
+			return jobPending, buildErr
+		}
+
+		// Apply Azure Workload Identity wiring to the schema Job when enabled.
+		if resources.AzureWorkloadIdentityEnabled(cluster) {
+			resources.ApplyAzureSchemaWorkloadIdentity(
+				&built.Spec.Template.ObjectMeta,
+				&built.Spec.Template.Spec,
+				cluster,
+				"schema",
+			)
+		}
+
 		if err := controllerutil.SetControllerReference(cluster, built, r.Scheme); err != nil {
 			return jobPending, err
 		}
@@ -257,6 +327,41 @@ func (r *TemporalClusterReconciler) ensureSchemaJob(ctx context.Context, cluster
 		return jobPending, err
 	}
 	return classifyJob(&job), nil
+}
+
+// ensureInspectorJob creates the inspector Job if absent and returns it.
+func (r *TemporalClusterReconciler) ensureInspectorJob(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, sqlSpec *temporalv1alpha1.SQLDatastoreSpec, store resources.SchemaStore) (*batchv1.Job, error) {
+	name := resources.InspectorJobName(cluster.Name, store)
+	var job batchv1.Job
+	err := r.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, &job)
+	if apierrors.IsNotFound(err) {
+		built := resources.BuildInspectorJob(resources.InspectorJobParams{
+			Cluster:       cluster,
+			Store:         store,
+			SQLSpec:       sqlSpec,
+			OperatorImage: r.OperatorImage,
+		})
+		if err := controllerutil.SetControllerReference(cluster, built, r.Scheme); err != nil {
+			return nil, err
+		}
+		if err := r.Create(ctx, built); err != nil && !apierrors.IsAlreadyExists(err) {
+			return nil, err
+		}
+		return built, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &job, nil
+}
+
+// schemaJobPodTemplate returns the configured schema Job podTemplate override,
+// or nil when none is set.
+func schemaJobPodTemplate(cluster *temporalv1alpha1.TemporalCluster) *temporalv1alpha1.PodTemplateOverride {
+	if cluster.Spec.Persistence.SchemaJob == nil {
+		return nil
+	}
+	return cluster.Spec.Persistence.SchemaJob.PodTemplate
 }
 
 func classifyJob(job *batchv1.Job) jobPhase {
@@ -296,6 +401,18 @@ func (r *TemporalClusterReconciler) setSchemaReady(cluster *temporalv1alpha1.Tem
 		Type:               temporalv1alpha1.ConditionSchemaReady,
 		Status:             status,
 		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: cluster.Generation,
+	})
+}
+
+// setInspecting sets the PersistenceReachable condition to False with reason Inspecting.
+func (r *TemporalClusterReconciler) setInspecting(cluster *temporalv1alpha1.TemporalCluster, message string) {
+	cluster.Status.Persistence.Reachable = false
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:               temporalv1alpha1.ConditionPersistenceReachable,
+		Status:             metav1.ConditionFalse,
+		Reason:             temporalv1alpha1.ReasonInspecting,
 		Message:            message,
 		ObservedGeneration: cluster.Generation,
 	})

@@ -60,6 +60,9 @@ func init() {
 
 //nolint:gocyclo
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "inspect" {
+		os.Exit(runInspect(os.Args[2:]))
+	}
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
@@ -196,9 +199,10 @@ func main() {
 	}
 
 	if err := (&controller.TemporalClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorder("temporalcluster-controller"),
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		Recorder:      mgr.GetEventRecorder("temporalcluster-controller"),
+		OperatorImage: os.Getenv("OPERATOR_IMAGE"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalCluster")
 		os.Exit(1)

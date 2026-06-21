@@ -93,7 +93,11 @@ func PlanFromSpec(cluster *temporalv1alpha1.TemporalCluster) ([]PlannedObject, e
 	}
 
 	var out []PlannedObject
-	out = append(out, PlanSchemaJobs(cluster)...)
+	schemaJobs, err := PlanSchemaJobs(cluster)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, schemaJobs...)
 	out = append(out, PlanMTLS(cluster)...)
 	services, err := PlanServices(cluster, servicesInput)
 	if err != nil {

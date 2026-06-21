@@ -64,6 +64,29 @@ _Appears in:_
 | `config` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | Config is a passthrough for authorization provider configuration. |  | Optional: \{\} <br /> |
 
 
+#### AzureWorkloadIdentitySpec
+
+
+
+AzureWorkloadIdentitySpec configures passwordless Microsoft Entra auth for a
+cluster's SQL datastores via Azure Workload Identity. The operator expands it
+into a ServiceAccount, token sidecar/initContainers, and passwordCommand
+wiring in the cluster's namespace.
+
+
+
+_Appears in:_
+- [PersistenceSpec](#persistencespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `clientId` _string_ | ClientID is the Azure managed-identity / app-registration client ID used<br />for the ServiceAccount's azure.workload.identity/client-id annotation. |  |  |
+| `scope` _string_ | Scope is the Entra token scope requested for the database. Defaults to<br />"https://ossrdbms-aad.database.windows.net/.default". |  | Optional: \{\} <br /> |
+| `serviceAccountName` _string_ | ServiceAccountName overrides the generated ServiceAccount name<br />(default "<cluster>-azure"). |  | Optional: \{\} <br /> |
+| `image` _string_ | Image overrides the azure-cli image used by the token sidecar /<br />initContainers (default "mcr.microsoft.com/azure-cli:2.87.0"). |  | Optional: \{\} <br /> |
+| `refreshInterval` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ | RefreshInterval is how often the server-pod sidecar refreshes the token<br />(default 30m). |  | Optional: \{\} <br /> |
+
+
 #### CalendarRange
 
 
@@ -466,6 +489,8 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `defaultStore` _[DatastoreSpec](#datastorespec)_ | DefaultStore holds workflow execution state. Exactly one of sql or<br />cassandra must be set. |  |  |
 | `visibilityStore` _[DatastoreSpec](#datastorespec)_ | VisibilityStore holds visibility records. One of sql, cassandra, or<br />elasticsearch must be set. |  |  |
+| `schemaJob` _[SchemaJobSpec](#schemajobspec)_ | SchemaJob customizes the schema setup/update Jobs the operator runs. |  | Optional: \{\} <br /> |
+| `azureWorkloadIdentity` _[AzureWorkloadIdentitySpec](#azureworkloadidentityspec)_ | AzureWorkloadIdentity, when set, makes this cluster authenticate to its<br />SQL datastore(s) passwordlessly using Azure Workload Identity. The operator<br />generates a ServiceAccount, token sidecar/initContainers, and the<br />passwordCommand wiring in the cluster's namespace; the operator itself<br />holds no database credential. SQL stores only. |  | Optional: \{\} <br /> |
 
 
 #### PersistenceStatus
@@ -495,6 +520,7 @@ PodTemplateOverride carries metadata and a strategic-merge pod spec override.
 
 
 _Appears in:_
+- [SchemaJobSpec](#schemajobspec)
 - [ServiceOverrides](#serviceoverrides)
 - [ServiceSpec](#servicespec)
 
@@ -627,6 +653,23 @@ _Appears in:_
 | `notes` _string_ |  |  | Optional: \{\} <br /> |
 | `limitedActions` _boolean_ |  |  | Optional: \{\} <br /> |
 | `remainingActions` _integer_ |  |  | Optional: \{\} <br /> |
+
+
+#### SchemaJobSpec
+
+
+
+SchemaJobSpec customizes the schema management Jobs (setup-schema /
+update-schema) the operator runs against SQL and Cassandra datastores.
+
+
+
+_Appears in:_
+- [PersistenceSpec](#persistencespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `podTemplate` _[PodTemplateOverride](#podtemplateoverride)_ | PodTemplate overrides metadata and the pod spec of the schema Job pods.<br />Use it to attach a ServiceAccount, pod labels (e.g. Azure Workload<br />Identity), and a token initContainer so the Job can authenticate with a<br />passwordCommand instead of a static password. |  | Optional: \{\} <br /> |
 
 
 #### SchemaUpgradeRecord

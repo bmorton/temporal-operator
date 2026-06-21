@@ -110,7 +110,7 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+	go build -o bin/manager ./cmd
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
@@ -292,6 +292,34 @@ nsc-clean: ## Destroy ALL nsc clusters labeled app=temporal-operator-e2e (leaves
 			nsc destroy "$$id" --force; \
 		done; \
 	fi
+
+.PHONY: azure-e2e-up
+azure-e2e-up: chainsaw ## Provision AKS + Flexible Server and install the operator.
+	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh up
+
+.PHONY: azure-e2e-test
+azure-e2e-test: chainsaw ## Run the Azure passwordless Chainsaw suite against the standing cluster.
+	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh test
+
+.PHONY: azure-e2e-deploy
+azure-e2e-deploy: ## Deploy a standing, usable TemporalCluster against an already-provisioned environment.
+	./hack/azure-e2e.sh deploy
+
+.PHONY: azure-e2e-up-deploy
+azure-e2e-up-deploy: chainsaw ## Provision everything, then leave a standing, usable TemporalCluster.
+	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh up-deploy
+
+.PHONY: azure-e2e-down
+azure-e2e-down: ## Delete the Azure e2e resource group (everything).
+	./hack/azure-e2e.sh down
+
+.PHONY: azure-e2e
+azure-e2e: chainsaw ## Provision -> test -> teardown in one shot (always tears down).
+	CHAINSAW="$(CHAINSAW)" ./hack/azure-e2e.sh all
+
+.PHONY: azure-e2e-clean
+azure-e2e-clean: ## Delete ANY resource group tagged app=temporal-operator-e2e (leak backstop).
+	./hack/azure-e2e.sh clean
 
 .PHONY: crd-ref-docs
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.

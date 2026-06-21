@@ -1,0 +1,14 @@
+# Assertion: the operator reports persistence reachable and the schema ready.
+# These conditions only flip true when EVERY passwordless actor authenticated to
+# Flexible Server: the operator probe (native Entra token), the schema Job
+# (passwordCommand via token initContainer), and the server pods (passwordCommand
+# via token-refresher sidecar).
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: azure-e2e
+status:
+  persistence:
+    reachable: true
+  (conditions[?type == 'PersistenceReachable'].status | [0]): "True"
+  (conditions[?type == 'SchemaReady'].status | [0]): "True"

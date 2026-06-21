@@ -53,7 +53,10 @@ func TestPlanSchemaJobs(t *testing.T) {
 		DefaultStore:    temporalv1alpha1.DatastoreSpec{SQL: &temporalv1alpha1.SQLDatastoreSpec{PluginName: "postgres12"}},
 		VisibilityStore: temporalv1alpha1.DatastoreSpec{SQL: &temporalv1alpha1.SQLDatastoreSpec{PluginName: "postgres12"}},
 	}
-	got := PlanSchemaJobs(c)
+	got, err := PlanSchemaJobs(c)
+	if err != nil {
+		t.Fatalf("PlanSchemaJobs error: %v", err)
+	}
 	if len(got) != 2 {
 		t.Fatalf("expected one setup Job per store, got %d (%v)", len(got), kinds(got))
 	}

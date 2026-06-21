@@ -31,6 +31,7 @@ import (
 const (
 	testLabelYes      = `yes`
 	testContainerName = `temporal`
+	azureTokenVol     = "azure-token"
 )
 
 func builderCluster() *temporalv1alpha1.TemporalCluster {
@@ -149,7 +150,6 @@ func TestBuildDeploymentAppliesSharedAndPerServicePodTemplate(t *testing.T) {
 }
 
 func TestBuildDeploymentPodTemplateMergesSidecarIntoGeneratedSpec(t *testing.T) {
-	const azureTokenVol = "azure-token"
 	c := builderCluster()
 	c.Spec.Services.Frontend = &temporalv1alpha1.ServiceSpec{
 		PodTemplate: &temporalv1alpha1.PodTemplateOverride{
@@ -332,7 +332,7 @@ func TestApplyPodTemplateLabelsAnnotationsAndSpec(t *testing.T) {
 		t.Fatalf("applyPodTemplate returned error: %v", err)
 	}
 
-	if got.Labels["azure.workload.identity/use"] != "true" {
+	if got.Labels["azure.workload.identity/use"] != wiLabelValue {
 		t.Errorf("override label missing: %v", got.Labels)
 	}
 	if got.Labels["app.kubernetes.io/component"] != "frontend" {
@@ -353,7 +353,7 @@ func TestApplyPodTemplateLabelsAnnotationsAndSpec(t *testing.T) {
 			temporal = &got.Spec.Containers[i]
 		}
 	}
-	if temporal == nil || len(temporal.VolumeMounts) != 1 || temporal.VolumeMounts[0].Name != "azure-token" {
+	if temporal == nil || len(temporal.VolumeMounts) != 1 || temporal.VolumeMounts[0].Name != azureTokenVol {
 		t.Errorf("temporal container volumeMount not merged: %+v", temporal)
 	}
 	if len(got.Spec.Volumes) != 2 {
@@ -393,7 +393,7 @@ func TestApplyPodTemplateDoesNotMutateInputMaps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.Labels["azure.workload.identity/use"] != "true" || got.Labels["selector"] != "required" {
+	if got.Labels["azure.workload.identity/use"] != wiLabelValue || got.Labels["selector"] != "required" {
 		t.Fatalf("expected returned template to include merged labels, got %v", got.Labels)
 	}
 	if got.Annotations["added"] != testLabelYes {

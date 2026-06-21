@@ -1,0 +1,26 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: azure-e2e
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  persistence:
+    azureWorkloadIdentity:
+      clientId: ($values.clientId)
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: ($values.pgHost)
+        port: 5432
+        database: temporal
+        user: ($values.pgUser)
+        tls: { enabled: true }
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: ($values.pgHost)
+        port: 5432
+        database: temporal_visibility
+        user: ($values.pgUser)
+        tls: { enabled: true }
