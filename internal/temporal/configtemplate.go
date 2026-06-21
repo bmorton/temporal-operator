@@ -358,6 +358,66 @@ func buildMTLS(cluster *temporalv1alpha1.TemporalCluster) MTLSConfig {
 	}
 }
 
+// buildAuthKeySourceURIs populates KeySourceURIs and PermissionsClaimName from
+// the JWTKeyProvider and Entra blocks and returns whether any URIs were added.
+func buildAuthKeySourceURIs(auth *temporalv1alpha1.AuthorizationSpec, cfg *AuthConfig) bool {
+	if auth.JWTKeyProvider != nil {
+		cfg.KeySourceURIs = append(cfg.KeySourceURIs, auth.JWTKeyProvider.KeySourceURIs...)
+		if auth.JWTKeyProvider.RefreshInterval != nil {
+			cfg.RefreshInterval = auth.JWTKeyProvider.RefreshInterval.Duration.String()
+		}
+	}
+	if auth.Entra != nil {
+		cfg.KeySourceURIs = append(cfg.KeySourceURIs,
+			fmt.Sprintf("https://login.microsoftonline.com/%s/discovery/v2.0/keys", auth.Entra.TenantID))
+		if cfg.PermissionsClaimName == "" {
+			cfg.PermissionsClaimName = "roles"
+		}
+	}
+	return len(cfg.KeySourceURIs) > 0
+}
+
+// applyJWTDefaults fills in default authorizer, claimMapper, and
+// permissionsClaimName when JWT is configured and the user hasn't set them.
+func applyJWTDefaults(auth *temporalv1alpha1.AuthorizationSpec, cfg *AuthConfig) {
+	if auth.Authorizer == nil {
+		cfg.Authorizer = "default"
+		cfg.EmitAuthorizer = true
+	}
+	if cfg.ClaimMapper == "" {
+		cfg.ClaimMapper = "default"
+	}
+	if cfg.PermissionsClaimName == "" {
+		cfg.PermissionsClaimName = "permissions"
+	}
+}
+
+// applyAuthConfigPassthrough unmarshals auth.Config and suppresses any modeled
+// fields that are also present in the passthrough map to prevent duplicate keys.
+func applyAuthConfigPassthrough(auth *temporalv1alpha1.AuthorizationSpec, cfg *AuthConfig) error {
+	if auth.Config == nil || len(auth.Config.Raw) == 0 {
+		return nil
+	}
+	extra := map[string]interface{}{}
+	if err := yaml.Unmarshal(auth.Config.Raw, &extra); err != nil {
+		return fmt.Errorf("authorization.config: %w", err)
+	}
+	cfg.ExtraConfig = extra
+	// Suppress modeled fields that ExtraConfig also defines so the
+	// passthrough wins and no duplicate YAML keys are emitted.
+	if _, ok := extra["permissionsClaimName"]; ok {
+		cfg.PermissionsClaimName = ""
+	}
+	if _, ok := extra["authorizer"]; ok {
+		cfg.Authorizer = ""
+		cfg.EmitAuthorizer = false
+	}
+	if _, ok := extra["claimMapper"]; ok {
+		cfg.ClaimMapper = ""
+	}
+	return nil
+}
+
 func buildAuth(cluster *temporalv1alpha1.TemporalCluster) (*AuthConfig, error) {
 	auth := cluster.Spec.Authorization
 	if auth == nil {
@@ -375,53 +435,13 @@ func buildAuth(cluster *temporalv1alpha1.TemporalCluster) (*AuthConfig, error) {
 		cfg.EmitAuthorizer = true
 	}
 
-	if auth.JWTKeyProvider != nil {
-		cfg.KeySourceURIs = append(cfg.KeySourceURIs, auth.JWTKeyProvider.KeySourceURIs...)
-		if auth.JWTKeyProvider.RefreshInterval != nil {
-			cfg.RefreshInterval = auth.JWTKeyProvider.RefreshInterval.Duration.String()
-		}
-	}
-	if auth.Entra != nil {
-		cfg.KeySourceURIs = append(cfg.KeySourceURIs,
-			fmt.Sprintf("https://login.microsoftonline.com/%s/discovery/v2.0/keys", auth.Entra.TenantID))
-		if cfg.PermissionsClaimName == "" {
-			cfg.PermissionsClaimName = "roles"
-		}
-	}
-
-	jwtConfigured := len(cfg.KeySourceURIs) > 0
+	jwtConfigured := buildAuthKeySourceURIs(auth, cfg)
 	if jwtConfigured {
-		// Only apply the "default" authorizer when the user has not set it explicitly.
-		if auth.Authorizer == nil {
-			cfg.Authorizer = "default"
-			cfg.EmitAuthorizer = true
-		}
-		if cfg.ClaimMapper == "" {
-			cfg.ClaimMapper = "default"
-		}
-		if cfg.PermissionsClaimName == "" {
-			cfg.PermissionsClaimName = "permissions"
-		}
+		applyJWTDefaults(auth, cfg)
 	}
 
-	if auth.Config != nil && len(auth.Config.Raw) > 0 {
-		extra := map[string]interface{}{}
-		if err := yaml.Unmarshal(auth.Config.Raw, &extra); err != nil {
-			return nil, fmt.Errorf("authorization.config: %w", err)
-		}
-		cfg.ExtraConfig = extra
-		// Suppress modeled fields that ExtraConfig also defines so the
-		// passthrough wins and no duplicate YAML keys are emitted.
-		if _, ok := extra["permissionsClaimName"]; ok {
-			cfg.PermissionsClaimName = ""
-		}
-		if _, ok := extra["authorizer"]; ok {
-			cfg.Authorizer = ""
-			cfg.EmitAuthorizer = false
-		}
-		if _, ok := extra["claimMapper"]; ok {
-			cfg.ClaimMapper = ""
-		}
+	if err := applyAuthConfigPassthrough(auth, cfg); err != nil {
+		return nil, err
 	}
 
 	if !cfg.EmitAuthorizer && cfg.ClaimMapper == "" && !jwtConfigured && cfg.ExtraConfig == nil {
