@@ -169,132 +169,90 @@ done`, scope, refreshInterval)
 
 // ApplyAzureServerWorkloadIdentity applies Azure Workload Identity configuration to a server pod.
 // It sets the ServiceAccount, adds the WI label, adds the token volume, mounts the volume on the
-// main container, and appends the token refresher sidecar. This function is idempotent.
+// main container, appends the token refresher sidecar, and adds an init container that fetches the
+// token once before the server starts. This function is idempotent.
 func ApplyAzureServerWorkloadIdentity(podMeta *metav1.ObjectMeta, podSpec *corev1.PodSpec, cluster *temporalv1alpha1.TemporalCluster, mainContainerName string) {
-	// Set ServiceAccount
-	podSpec.ServiceAccountName = AzureServiceAccountName(cluster)
+	applyAzureTokenBase(podMeta, podSpec, cluster, mainContainerName)
 
-	// Add WI label
-	if podMeta.Labels == nil {
-		podMeta.Labels = make(map[string]string)
-	}
-	podMeta.Labels[AzureWILabel] = AzureWILabelValue
+	// Add the refresher sidecar that keeps the token fresh for the lifetime of the pod.
+	ensureNamedContainer(&podSpec.Containers, AzureTokenRefresherSidecar(cluster))
 
-	// Add token volume if not present
-	volumeExists := false
-	for _, vol := range podSpec.Volumes {
-		if vol.Name == AzureTokenVolumeName {
-			volumeExists = true
-			break
-		}
-	}
-	if !volumeExists {
-		podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-			Name: AzureTokenVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		})
-	}
-
-	// Add volume mount to main container if not present
-	for i := range podSpec.Containers {
-		if podSpec.Containers[i].Name == mainContainerName {
-			mountExists := false
-			for _, mount := range podSpec.Containers[i].VolumeMounts {
-				if mount.Name == AzureTokenVolumeName {
-					mountExists = true
-					break
-				}
-			}
-			if !mountExists {
-				podSpec.Containers[i].VolumeMounts = append(
-					podSpec.Containers[i].VolumeMounts,
-					corev1.VolumeMount{
-						Name:      AzureTokenVolumeName,
-						MountPath: AzureTokenMountPath,
-					},
-				)
-			}
-			break
-		}
-	}
-
-	// Add sidecar if not present
-	sidecarExists := false
-	for _, container := range podSpec.Containers {
-		if container.Name == azureTokenRefresherName {
-			sidecarExists = true
-			break
-		}
-	}
-	if !sidecarExists {
-		podSpec.Containers = append(podSpec.Containers, AzureTokenRefresherSidecar(cluster))
-	}
+	// Add the init container. The Temporal server resolves the passwordCommand on its
+	// first connection, but only waits ~30s for the token file before failing with
+	// "no usable database connection found". The refresher sidecar starts concurrently
+	// with the server and may not have written the token in time, so an init container
+	// fetches it once up front to guarantee the token exists before the server starts.
+	ensureNamedContainer(&podSpec.InitContainers, AzureTokenInitContainer(cluster))
 }
 
 // ApplyAzureSchemaWorkloadIdentity applies Azure Workload Identity configuration to a schema Job pod.
 // It sets the ServiceAccount, adds the WI label, adds the token volume, mounts the volume on the
 // main container, and appends the token init container. This function is idempotent.
 func ApplyAzureSchemaWorkloadIdentity(podMeta *metav1.ObjectMeta, podSpec *corev1.PodSpec, cluster *temporalv1alpha1.TemporalCluster, mainContainerName string) {
-	// Set ServiceAccount
+	applyAzureTokenBase(podMeta, podSpec, cluster, mainContainerName)
+
+	// Add the init container that obtains the token once before the schema container runs.
+	ensureNamedContainer(&podSpec.InitContainers, AzureTokenInitContainer(cluster))
+}
+
+// applyAzureTokenBase applies the parts of Azure Workload Identity wiring common to both server and
+// schema pods: the ServiceAccount, the WI pod label, the shared token volume, and the token volume
+// mount on the named main container. It is idempotent.
+func applyAzureTokenBase(podMeta *metav1.ObjectMeta, podSpec *corev1.PodSpec, cluster *temporalv1alpha1.TemporalCluster, mainContainerName string) {
 	podSpec.ServiceAccountName = AzureServiceAccountName(cluster)
 
-	// Add WI label
 	if podMeta.Labels == nil {
 		podMeta.Labels = make(map[string]string)
 	}
 	podMeta.Labels[AzureWILabel] = AzureWILabelValue
 
-	// Add token volume if not present
-	volumeExists := false
+	ensureAzureTokenVolume(podSpec)
+	ensureAzureTokenMount(podSpec, mainContainerName)
+}
+
+// ensureAzureTokenVolume adds the shared emptyDir token volume to the pod if it is not present.
+func ensureAzureTokenVolume(podSpec *corev1.PodSpec) {
 	for _, vol := range podSpec.Volumes {
 		if vol.Name == AzureTokenVolumeName {
-			volumeExists = true
-			break
+			return
 		}
 	}
-	if !volumeExists {
-		podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-			Name: AzureTokenVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		})
-	}
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: AzureTokenVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
+}
 
-	// Add volume mount to main container if not present
+// ensureAzureTokenMount mounts the token volume on the named main container if not already mounted.
+func ensureAzureTokenMount(podSpec *corev1.PodSpec, mainContainerName string) {
 	for i := range podSpec.Containers {
-		if podSpec.Containers[i].Name == mainContainerName {
-			mountExists := false
-			for _, mount := range podSpec.Containers[i].VolumeMounts {
-				if mount.Name == AzureTokenVolumeName {
-					mountExists = true
-					break
-				}
-			}
-			if !mountExists {
-				podSpec.Containers[i].VolumeMounts = append(
-					podSpec.Containers[i].VolumeMounts,
-					corev1.VolumeMount{
-						Name:      AzureTokenVolumeName,
-						MountPath: AzureTokenMountPath,
-					},
-				)
-			}
-			break
+		if podSpec.Containers[i].Name != mainContainerName {
+			continue
 		}
+		for _, mount := range podSpec.Containers[i].VolumeMounts {
+			if mount.Name == AzureTokenVolumeName {
+				return
+			}
+		}
+		podSpec.Containers[i].VolumeMounts = append(
+			podSpec.Containers[i].VolumeMounts,
+			corev1.VolumeMount{
+				Name:      AzureTokenVolumeName,
+				MountPath: AzureTokenMountPath,
+			},
+		)
+		return
 	}
+}
 
-	// Add init container if not present
-	initExists := false
-	for _, container := range podSpec.InitContainers {
-		if container.Name == azureTokenInitName {
-			initExists = true
-			break
+// ensureNamedContainer appends container to containers if no container with the same name exists.
+func ensureNamedContainer(containers *[]corev1.Container, container corev1.Container) {
+	for _, c := range *containers {
+		if c.Name == container.Name {
+			return
 		}
 	}
-	if !initExists {
-		podSpec.InitContainers = append(podSpec.InitContainers, AzureTokenInitContainer(cluster))
-	}
+	*containers = append(*containers, container)
 }

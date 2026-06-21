@@ -324,6 +324,10 @@ func TestApplyAzureServerWorkloadIdentity(t *testing.T) {
 	requireVolume(t, &spec, AzureTokenVolumeName)
 	requireVolumeMount(t, &spec, "temporal", AzureTokenVolumeName, AzureTokenMountPath)
 	requireContainer(t, &spec, azureTokenRefresherName)
+	// The server pod must obtain the token once via an init container before the
+	// Temporal container starts, otherwise the server's passwordCommand can time
+	// out waiting for the token and crash with "no usable database connection found".
+	requireInitContainer(t, &spec, azureTokenInitName)
 }
 
 func TestApplyAzureServerWorkloadIdentityIdempotent(t *testing.T) {
@@ -370,6 +374,17 @@ func TestApplyAzureServerWorkloadIdentityIdempotent(t *testing.T) {
 	}
 	if sidecarCount != 1 {
 		t.Errorf("found %d azure-token-refresher sidecars, want 1", sidecarCount)
+	}
+
+	// Should have exactly one init container
+	initCount := 0
+	for _, container := range spec.InitContainers {
+		if container.Name == azureTokenInitName {
+			initCount++
+		}
+	}
+	if initCount != 1 {
+		t.Errorf("found %d azure-token init containers, want 1", initCount)
 	}
 }
 

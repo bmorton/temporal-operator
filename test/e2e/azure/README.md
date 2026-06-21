@@ -7,7 +7,7 @@ passwords**. It validates the #47 changes end-to-end across every actor:
 
 | Actor | How it authenticates |
 |---|---|
-| **Temporal server** pods | `passwordCommand` fed by an operator-generated `azure-token-refresher` sidecar |
+| **Temporal server** pods | `passwordCommand` fed by an operator-generated one-shot token initContainer (seeds the token before startup) plus an `azure-token-refresher` sidecar (keeps it fresh) |
 | **Schema Job** | `passwordCommand` fed by an operator-generated one-shot token initContainer |
 
 Unlike the kind (`.github/workflows/e2e.yml`) and nsc (`hack/nsc-e2e.sh`) flows —

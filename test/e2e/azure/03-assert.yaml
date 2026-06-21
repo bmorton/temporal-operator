@@ -4,7 +4,8 @@
 #   - SchemaReady:          the schema Job (passwordCommand via token initContainer)
 #   - Available/Ready:      the server pods became ReadyReplicas>=1, which only
 #                           happens once they parse config.yaml and authenticate
-#                           via passwordCommand (token-refresher sidecar)
+#                           via passwordCommand (token initContainer seeds the
+#                           token, token-refresher sidecar keeps it fresh)
 #
 # Available/Ready are essential here: PersistenceReachable and SchemaReady use
 # auth paths that never touch the server config.yaml, so without asserting the
