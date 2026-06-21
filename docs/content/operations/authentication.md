@@ -34,8 +34,8 @@ correct JWKS URL:
 https://login.microsoftonline.com/<tenantID>/discovery/v2.0/keys
 ```
 
-Keys are periodically refreshed at `spec.authorization.jwtKeyProvider.refreshInterval`
-(default: `1m`).
+Keys are refreshed periodically; set `spec.authorization.jwtKeyProvider.refreshInterval`
+(e.g. `"1m"`) to control the interval. If omitted, Temporal's server default applies.
 
 ### Default claim mapper and the `<namespace>:<role>` format
 
@@ -109,13 +109,22 @@ authorization: Bearer <access_token>
 **Go SDK example:**
 
 ```go
-import "go.temporal.io/sdk/client"
+import (
+    "context"
+
+    "go.temporal.io/sdk/client"
+)
+
+// authHeadersProvider attaches a bearer token to every gRPC call.
+type authHeadersProvider struct{ token string }
+
+func (a authHeadersProvider) GetHeaders(context.Context) (map[string]string, error) {
+    return map[string]string{"authorization": "Bearer " + a.token}, nil
+}
 
 c, err := client.Dial(client.Options{
-    HostPort: "temporal.example.com:7233",
-    HeadersProvider: client.NewHeaders(map[string]string{
-        "authorization": "Bearer " + token,
-    }),
+    HostPort:        "temporal.example.com:7233",
+    HeadersProvider: authHeadersProvider{token: token},
 })
 ```
 
