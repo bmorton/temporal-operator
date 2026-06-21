@@ -150,6 +150,64 @@ func TestRenderConfigGolden(t *testing.T) {
 	}
 }
 
+// TestRenderConfigPasswordCommand verifies that passwordCommand renders as
+// Temporal's structured config.PasswordCommandConfig ({command, args}) rather
+// than a YAML scalar string. Temporal fails to load a scalar with:
+// "cannot unmarshal !!str into config.PasswordCommandConfig".
+func TestRenderConfigPasswordCommand(t *testing.T) {
+	const cmd = "until [ -s /azure/pgpass ]; do sleep 1; done; cat /azure/pgpass"
+	out, err := RenderClusterConfig(baseCluster(), BuildOptions{
+		BindOnIP:                       "0.0.0.0",
+		BroadcastAddress:               "10.0.0.1",
+		DefaultStorePasswordCommand:    cmd,
+		VisibilityStorePasswordCommand: cmd,
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	// A scalar passwordCommand is the bug we are guarding against.
+	if strings.Contains(out, `passwordCommand: "`) {
+		t.Errorf("passwordCommand rendered as a scalar string\n%s", out)
+	}
+
+	// The rendered YAML must shape passwordCommand as {command, args:[-c, cmd]}.
+	type sqlStoreCfg struct {
+		PasswordCommand *struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"passwordCommand"`
+		Password string `json:"password"`
+	}
+	var parsed struct {
+		Persistence struct {
+			Datastores map[string]struct {
+				SQL sqlStoreCfg `json:"sql"`
+			} `json:"datastores"`
+		} `json:"persistence"`
+	}
+	if err := yaml.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("rendered config is not valid YAML: %v\n%s", err, out)
+	}
+
+	for name, ds := range parsed.Persistence.Datastores {
+		pc := ds.SQL.PasswordCommand
+		if pc == nil {
+			t.Errorf("datastore %q: passwordCommand missing", name)
+			continue
+		}
+		if ds.SQL.Password != "" {
+			t.Errorf("datastore %q: password and passwordCommand are mutually exclusive, got password %q", name, ds.SQL.Password)
+		}
+		if pc.Command != "sh" {
+			t.Errorf("datastore %q: command = %q, want %q", name, pc.Command, "sh")
+		}
+		if len(pc.Args) != 2 || pc.Args[0] != "-c" || pc.Args[1] != cmd {
+			t.Errorf("datastore %q: args = %v, want [-c %q]", name, pc.Args, cmd)
+		}
+	}
+}
+
 func TestRenderConfigMTLSServerNames(t *testing.T) {
 	c := baseCluster()
 	c.Spec.MTLS = &temporalv1alpha1.MTLSSpec{

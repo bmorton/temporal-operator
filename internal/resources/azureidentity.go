@@ -65,9 +65,12 @@ func AzureServiceAccountName(cluster *temporalv1alpha1.TemporalCluster) string {
 	return cluster.Name + "-azure"
 }
 
-// AzurePasswordCommand returns the passwordCommand that waits for the token file and reads it.
+// AzurePasswordCommand returns the passwordCommand shell snippet that waits for
+// the token file and reads it. It is a snippet (not a full "sh -c '...'" string)
+// because both consumers wrap it: the schema Job embeds it in "$(...)" and the
+// Temporal server config renders it as command "sh" with args ["-c", <snippet>].
 func AzurePasswordCommand() string {
-	return "sh -c 'until [ -s /azure/pgpass ]; do sleep 1; done; cat /azure/pgpass'"
+	return "until [ -s /azure/pgpass ]; do sleep 1; done; cat /azure/pgpass"
 }
 
 // BuildAzureServiceAccount builds the ServiceAccount for Azure Workload Identity.

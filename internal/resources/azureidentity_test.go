@@ -175,7 +175,7 @@ func TestAzureServiceAccountName(t *testing.T) {
 }
 
 func TestAzurePasswordCommand(t *testing.T) {
-	expected := "sh -c 'until [ -s /azure/pgpass ]; do sleep 1; done; cat /azure/pgpass'"
+	expected := "until [ -s /azure/pgpass ]; do sleep 1; done; cat /azure/pgpass"
 	got := AzurePasswordCommand()
 	if got != expected {
 		t.Errorf("AzurePasswordCommand() = %q, want %q", got, expected)
