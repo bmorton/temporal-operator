@@ -145,26 +145,28 @@ type ArchivalConfig struct {
 
 // ConfigData is the fully-resolved input to the config template.
 type ConfigData struct {
-	Version               string
-	LogLevel              string
-	NumHistoryShards      int32
-	DefaultStoreName      string
-	VisibilityStoreName   string
-	DefaultStore          DatastoreConfig
-	VisibilityStore       DatastoreConfig
-	BindOnIP              string
-	BroadcastAddress      string
-	MTLS                  MTLSConfig
-	Metrics               MetricsConfig
-	Authorization         *AuthConfig
-	Services              map[string]ServicePort
-	UseInternalFrontend   bool
-	EnableGlobalNamespace bool
-	CurrentClusterName    string
-	MasterClusterName     string
-	DynamicConfigPath     string
-	Archival              *ArchivalConfig
-	PublicClient          string
+	Version                  string
+	LogLevel                 string
+	NumHistoryShards         int32
+	DefaultStoreName         string
+	VisibilityStoreName      string
+	DefaultStore             DatastoreConfig
+	VisibilityStore          DatastoreConfig
+	BindOnIP                 string
+	BroadcastAddress         string
+	MTLS                     MTLSConfig
+	Metrics                  MetricsConfig
+	Authorization            *AuthConfig
+	Services                 map[string]ServicePort
+	UseInternalFrontend      bool
+	EnableGlobalNamespace    bool
+	CurrentClusterName       string
+	MasterClusterName        string
+	FailoverVersionIncrement int
+	InitialFailoverVersion   int
+	DynamicConfigPath        string
+	Archival                 *ArchivalConfig
+	PublicClient             string
 }
 
 // BuildOptions carries runtime-resolved values that are not derivable from the
@@ -357,6 +359,25 @@ func buildAuth(cluster *temporalv1alpha1.TemporalCluster) *AuthConfig {
 	return &AuthConfig{Authorizer: auth.Authorizer, ClaimMapper: auth.ClaimMapper}
 }
 
+func applyClusterMetadata(data *ConfigData, cm *temporalv1alpha1.ClusterMetadataSpec) {
+	if cm == nil {
+		return
+	}
+	data.EnableGlobalNamespace = cm.EnableGlobalNamespace
+	if cm.FailoverVersionIncrement != nil {
+		data.FailoverVersionIncrement = int(*cm.FailoverVersionIncrement)
+	}
+	if cm.CurrentClusterName != "" {
+		data.CurrentClusterName = cm.CurrentClusterName
+	}
+	if cm.MasterClusterName != "" {
+		data.MasterClusterName = cm.MasterClusterName
+	}
+	if cm.InitialFailoverVersion != nil {
+		data.InitialFailoverVersion = int(*cm.InitialFailoverVersion)
+	}
+}
+
 // BuildConfigData resolves a TemporalCluster CR plus runtime options into a
 // ConfigData ready for rendering.
 func BuildConfigData(cluster *temporalv1alpha1.TemporalCluster, opts BuildOptions) (*ConfigData, error) {
@@ -390,28 +411,32 @@ func BuildConfigData(cluster *temporalv1alpha1.TemporalCluster, opts BuildOption
 	useInternalFrontend := cluster.Spec.Services.InternalFrontend != nil && cluster.Spec.Services.InternalFrontend.Enabled
 
 	data := &ConfigData{
-		Version:             cluster.Spec.Version,
-		LogLevel:            "info",
-		NumHistoryShards:    cluster.Spec.NumHistoryShards,
-		DefaultStoreName:    "default",
-		VisibilityStoreName: visStoreName,
-		DefaultStore:        defaultStore,
-		VisibilityStore:     visStore,
-		BindOnIP:            bindOnIP,
-		BroadcastAddress:    broadcastAddressOrDefault(opts.BroadcastAddress),
-		Services:            defaultServices(),
-		CurrentClusterName:  "active",
-		MasterClusterName:   "active",
-		DynamicConfigPath:   dynamicConfigPath,
-		UseInternalFrontend: useInternalFrontend,
-		Metrics:             buildMetrics(cluster),
-		MTLS:                buildMTLS(cluster),
-		Authorization:       buildAuth(cluster),
+		Version:                  cluster.Spec.Version,
+		LogLevel:                 "info",
+		NumHistoryShards:         cluster.Spec.NumHistoryShards,
+		DefaultStoreName:         "default",
+		VisibilityStoreName:      visStoreName,
+		DefaultStore:             defaultStore,
+		VisibilityStore:          visStore,
+		BindOnIP:                 bindOnIP,
+		BroadcastAddress:         broadcastAddressOrDefault(opts.BroadcastAddress),
+		Services:                 defaultServices(),
+		CurrentClusterName:       "active",
+		MasterClusterName:        "active",
+		FailoverVersionIncrement: 10,
+		InitialFailoverVersion:   1,
+		DynamicConfigPath:        dynamicConfigPath,
+		UseInternalFrontend:      useInternalFrontend,
+		Metrics:                  buildMetrics(cluster),
+		MTLS:                     buildMTLS(cluster),
+		Authorization:            buildAuth(cluster),
 	}
 
 	if cluster.Spec.Archival != nil {
 		data.Archival = &ArchivalConfig{HistoryState: "enabled", VisibilityState: "enabled"}
 	}
+
+	applyClusterMetadata(data, cluster.Spec.ClusterMetadata)
 
 	// publicClient is needed when there is no internal frontend.
 	if !data.UseInternalFrontend {

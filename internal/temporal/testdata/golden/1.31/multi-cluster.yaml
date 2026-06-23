@@ -65,12 +65,12 @@ services:
             bindOnIP: "0.0.0.0"
 
 clusterMetadata:
-    enableGlobalNamespace: false
-    failoverVersionIncrement: 10
-    masterClusterName: "active"
-    currentClusterName: "active"
+    enableGlobalNamespace: true
+    failoverVersionIncrement: 100
+    masterClusterName: "clusterA"
+    currentClusterName: "clusterA"
     clusterInformation:
-        active:
+        clusterA:
             enabled: true
             initialFailoverVersion: 1
             rpcName: "frontend"
