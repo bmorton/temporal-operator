@@ -221,3 +221,79 @@ func (c *grpcNamespaceClient) Remove(ctx context.Context, namespace, name string
 	})
 	return err
 }
+
+// RemoteClusterInfo is the observed state of a remote cluster connection.
+type RemoteClusterInfo struct {
+	Name                   string
+	Address                string
+	InitialFailoverVersion int64
+	ConnectionEnabled      bool
+	HistoryShardCount      int32
+}
+
+// RemoteClusterClient manages remote-cluster connections on a Temporal cluster.
+type RemoteClusterClient interface {
+	ListRemoteClusters(ctx context.Context) ([]RemoteClusterInfo, error)
+	UpsertRemoteCluster(ctx context.Context, frontendAddress string, enableConnection bool) error
+	RemoveRemoteCluster(ctx context.Context, name string) error
+	Close() error
+}
+
+// RemoteClusterClientFactory builds a RemoteClusterClient connected to a frontend.
+type RemoteClusterClientFactory func(ctx context.Context, address string, tlsConfig *tls.Config) (RemoteClusterClient, error)
+
+// NewRemoteClusterClient dials the frontend and returns a RemoteClusterClient.
+func NewRemoteClusterClient(ctx context.Context, address string, tlsConfig *tls.Config) (RemoteClusterClient, error) {
+	c, err := NewNamespaceClient(ctx, address, tlsConfig)
+	if err != nil {
+		return nil, err
+	}
+	return c.(*grpcNamespaceClient), nil
+}
+
+func remoteClusterInfoFromProto(m *operatorservice.ClusterMetadata) RemoteClusterInfo {
+	return RemoteClusterInfo{
+		Name:                   m.GetClusterName(),
+		Address:                m.GetAddress(),
+		InitialFailoverVersion: m.GetInitialFailoverVersion(),
+		ConnectionEnabled:      m.GetIsConnectionEnabled(),
+		HistoryShardCount:      m.GetHistoryShardCount(),
+	}
+}
+
+func (c *grpcNamespaceClient) ListRemoteClusters(ctx context.Context) ([]RemoteClusterInfo, error) {
+	var out []RemoteClusterInfo
+	var pageToken []byte
+	for {
+		resp, err := c.operator.ListClusters(ctx, &operatorservice.ListClustersRequest{
+			PageSize:      100,
+			NextPageToken: pageToken,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range resp.GetClusters() {
+			out = append(out, remoteClusterInfoFromProto(m))
+		}
+		pageToken = resp.GetNextPageToken()
+		if len(pageToken) == 0 {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (c *grpcNamespaceClient) UpsertRemoteCluster(ctx context.Context, frontendAddress string, enableConnection bool) error {
+	_, err := c.operator.AddOrUpdateRemoteCluster(ctx, &operatorservice.AddOrUpdateRemoteClusterRequest{
+		FrontendAddress:               frontendAddress,
+		EnableRemoteClusterConnection: enableConnection,
+	})
+	return err
+}
+
+func (c *grpcNamespaceClient) RemoveRemoteCluster(ctx context.Context, name string) error {
+	_, err := c.operator.RemoveRemoteCluster(ctx, &operatorservice.RemoveRemoteClusterRequest{
+		ClusterName: name,
+	})
+	return err
+}
