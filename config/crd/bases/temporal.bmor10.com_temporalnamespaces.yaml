@@ -90,6 +90,8 @@ spec:
                 - ignore
                 type: string
               isGlobal:
+                description: IsGlobal marks the namespace as global for multi-cluster
+                  replication.
                 type: boolean
               ownerEmail:
                 description: OwnerEmail is the owner contact for the namespace.

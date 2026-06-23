@@ -51,6 +51,8 @@ type TemporalNamespaceSpec struct {
 	// +optional
 	DriftDetection string `json:"driftDetection,omitempty"`
 
+	// IsGlobal marks the namespace as global for multi-cluster replication.
+	// +optional
 	IsGlobal bool `json:"isGlobal,omitempty"`
 }
 
