@@ -114,6 +114,52 @@ var _ = Describe("TemporalCluster Webhook", func() {
 			_, err := validator.ValidateCreate(ctx, obj)
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("admits a cluster with clusterMetadata when enableGlobalNamespace is false", func() {
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				CurrentClusterName: "clusterA",
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("rejects enableGlobalNamespace without currentClusterName", func() {
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				EnableGlobalNamespace: true,
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects enableGlobalNamespace without failoverVersionIncrement", func() {
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				EnableGlobalNamespace: true,
+				CurrentClusterName:    "clusterA",
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects enableGlobalNamespace without initialFailoverVersion", func() {
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				EnableGlobalNamespace:    true,
+				CurrentClusterName:       "clusterA",
+				FailoverVersionIncrement: ptrInt32(100),
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("admits a valid multi-cluster configuration", func() {
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				EnableGlobalNamespace:    true,
+				CurrentClusterName:       "clusterA",
+				FailoverVersionIncrement: ptrInt32(100),
+				InitialFailoverVersion:   ptrInt32(1),
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	Context("Validation webhook on update", func() {
@@ -144,6 +190,62 @@ var _ = Describe("TemporalCluster Webhook", func() {
 			}
 			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
 			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects changing failoverVersionIncrement", func() {
+			oldObj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				FailoverVersionIncrement: ptrInt32(100),
+			}
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				FailoverVersionIncrement: ptrInt32(200),
+			}
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects changing initialFailoverVersion", func() {
+			oldObj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				InitialFailoverVersion: ptrInt32(1),
+			}
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				InitialFailoverVersion: ptrInt32(2),
+			}
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects changing currentClusterName", func() {
+			oldObj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				CurrentClusterName: "clusterA",
+			}
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				CurrentClusterName: "clusterB",
+			}
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("admits changing masterClusterName on update", func() {
+			oldObj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				MasterClusterName: "clusterA",
+			}
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				MasterClusterName: "clusterB",
+			}
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("admits enabling enableGlobalNamespace on update", func() {
+			oldObj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{}
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				EnableGlobalNamespace:    true,
+				CurrentClusterName:       "clusterA",
+				FailoverVersionIncrement: ptrInt32(100),
+				InitialFailoverVersion:   ptrInt32(1),
+			}
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 

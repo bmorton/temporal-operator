@@ -168,6 +168,22 @@ func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.
 		}
 	}
 
+	if cm := cluster.Spec.ClusterMetadata; cm != nil && cm.EnableGlobalNamespace {
+		cmPath := specPath.Child("clusterMetadata")
+		if cm.CurrentClusterName == "" {
+			errs = append(errs, field.Required(cmPath.Child("currentClusterName"),
+				"currentClusterName is required when enableGlobalNamespace is true"))
+		}
+		if cm.FailoverVersionIncrement == nil || *cm.FailoverVersionIncrement < 1 {
+			errs = append(errs, field.Required(cmPath.Child("failoverVersionIncrement"),
+				"failoverVersionIncrement is required and must be >= 1 when enableGlobalNamespace is true"))
+		}
+		if cm.InitialFailoverVersion == nil || *cm.InitialFailoverVersion < 1 {
+			errs = append(errs, field.Required(cmPath.Child("initialFailoverVersion"),
+				"initialFailoverVersion is required and must be >= 1 when enableGlobalNamespace is true"))
+		}
+	}
+
 	return errs
 }
 
@@ -216,6 +232,22 @@ func (v *TemporalClusterCustomValidator) ValidateUpdate(_ context.Context, oldCl
 	if oldDriverSQL != newDriverSQL {
 		errs = append(errs, field.Invalid(specPath.Child("persistence", "defaultStore"), nil,
 			"the default store driver cannot be changed"))
+	}
+
+	if oldCM, newCM := oldCluster.Spec.ClusterMetadata, newCluster.Spec.ClusterMetadata; oldCM != nil && newCM != nil {
+		cmPath := specPath.Child("clusterMetadata")
+		if oldCM.FailoverVersionIncrement != nil && newCM.FailoverVersionIncrement != nil && *oldCM.FailoverVersionIncrement != *newCM.FailoverVersionIncrement {
+			errs = append(errs, field.Invalid(cmPath.Child("failoverVersionIncrement"), newCM.FailoverVersionIncrement,
+				"failoverVersionIncrement is immutable"))
+		}
+		if oldCM.InitialFailoverVersion != nil && newCM.InitialFailoverVersion != nil && *oldCM.InitialFailoverVersion != *newCM.InitialFailoverVersion {
+			errs = append(errs, field.Invalid(cmPath.Child("initialFailoverVersion"), newCM.InitialFailoverVersion,
+				"initialFailoverVersion is immutable"))
+		}
+		if oldCM.CurrentClusterName != "" && newCM.CurrentClusterName != "" && oldCM.CurrentClusterName != newCM.CurrentClusterName {
+			errs = append(errs, field.Invalid(cmPath.Child("currentClusterName"), newCM.CurrentClusterName,
+				"currentClusterName is immutable"))
+		}
 	}
 
 	if len(errs) > 0 {
