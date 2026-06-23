@@ -66,4 +66,12 @@ const (
 	ReasonClusterMetadataImmutable = "ClusterMetadataImmutable"
 	// ReasonIsGlobalImmutable indicates an attempt to change the isGlobal field after creation.
 	ReasonIsGlobalImmutable = "IsGlobalImmutable"
+	// ReasonPeersConnected indicates all replication peers are connected.
+	ReasonPeersConnected = "PeersConnected"
+	// ReasonPeerUnreachable indicates a replication peer could not be reached.
+	ReasonPeerUnreachable = "PeerUnreachable"
+	// ReasonReplicationDrift indicates the observed replication config drifted from desired.
+	ReasonReplicationDrift = "ReplicationConfigDrift"
+	// ReasonActiveClusterInvalid indicates the active cluster selection is invalid.
+	ReasonActiveClusterInvalid = "ActiveClusterInvalid"
 )
