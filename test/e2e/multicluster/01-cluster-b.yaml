@@ -1,0 +1,37 @@
+# Cluster B: the initial STANDBY cluster. Shares failoverVersionIncrement and
+# masterClusterName with cluster A but has a distinct currentClusterName and
+# initialFailoverVersion. After the failover step it becomes the active cluster.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-cluster-b
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  clusterMetadata:
+    enableGlobalNamespace: true
+    failoverVersionIncrement: 100
+    currentClusterName: "clusterB"
+    initialFailoverVersion: 2
+    masterClusterName: "clusterA"
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal_b
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal_b_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password

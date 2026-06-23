@@ -1,0 +1,12 @@
+# The connection is Ready and BOTH peers report reachable + connected, meaning
+# the operator successfully upserted each cluster as a remote on the other.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterConnection
+metadata:
+  name: dr-pair
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"
+  (peers[?name == 'clusterA'].reachable | [0]): true
+  (peers[?name == 'clusterA'].connected | [0]): true
+  (peers[?name == 'clusterB'].reachable | [0]): true
+  (peers[?name == 'clusterB'].connected | [0]): true

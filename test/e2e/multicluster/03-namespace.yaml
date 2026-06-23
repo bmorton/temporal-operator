@@ -1,0 +1,16 @@
+# A GLOBAL namespace created against cluster A as the active cluster. Because the
+# replication group is wired up, registering it on cluster A causes Temporal to
+# propagate the namespace (and later, workflow history) to cluster B.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: orders
+spec:
+  clusterRef:
+    name: temporal-cluster-a
+  retentionPeriod: "24h"
+  description: "Global orders namespace for multi-cluster e2e"
+  ownerEmail: "team@example.com"
+  isGlobal: true
+  clusters: [clusterA, clusterB]
+  activeCluster: clusterA
