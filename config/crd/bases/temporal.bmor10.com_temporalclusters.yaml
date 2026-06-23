@@ -78,11 +78,24 @@ spec:
                     x-kubernetes-preserve-unknown-fields: true
                 type: object
               clusterMetadata:
-                description: ClusterMetadata is a passthrough for multi-cluster setup.
+                description: ClusterMetadata configures multi-cluster replication.
                 properties:
-                  raw:
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
+                  currentClusterName:
+                    minLength: 1
+                    type: string
+                  enableGlobalNamespace:
+                    type: boolean
+                  failoverVersionIncrement:
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  initialFailoverVersion:
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  masterClusterName:
+                    minLength: 1
+                    type: string
                 type: object
               dynamicConfig:
                 description: DynamicConfig is a passthrough for Temporal's dynamic

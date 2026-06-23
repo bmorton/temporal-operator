@@ -202,11 +202,26 @@ type AuthorizationSpec struct {
 	Config *runtime.RawExtension `json:"config,omitempty"`
 }
 
-// ClusterMetadataSpec is a passthrough for multi-cluster metadata.
+// ClusterMetadataSpec configures multi-cluster replication.
 type ClusterMetadataSpec struct {
-	// +kubebuilder:pruning:PreserveUnknownFields
 	// +optional
-	Raw *runtime.RawExtension `json:"raw,omitempty"`
+	EnableGlobalNamespace bool `json:"enableGlobalNamespace,omitempty"`
+
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	FailoverVersionIncrement *int32 `json:"failoverVersionIncrement,omitempty"`
+
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	CurrentClusterName string `json:"currentClusterName,omitempty"`
+
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	InitialFailoverVersion *int32 `json:"initialFailoverVersion,omitempty"`
+
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	MasterClusterName string `json:"masterClusterName,omitempty"`
 }
 
 // Cluster reference kinds for ClusterReference.Kind.

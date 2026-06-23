@@ -29,6 +29,8 @@ import (
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
 
+func ptrInt32(v int32) *int32 { return &v }
+
 var update = flag.Bool("update", false, "update golden files")
 
 func sqlStore(db string) *temporalv1alpha1.SQLDatastoreSpec {
@@ -111,6 +113,17 @@ func TestRenderConfigGolden(t *testing.T) {
 		"internal-frontend": func() *temporalv1alpha1.TemporalCluster {
 			c := baseCluster()
 			c.Spec.Services.InternalFrontend = &temporalv1alpha1.InternalFrontendSpec{Enabled: true}
+			return c
+		},
+		"multi-cluster": func() *temporalv1alpha1.TemporalCluster {
+			c := baseCluster()
+			c.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				EnableGlobalNamespace:    true,
+				FailoverVersionIncrement: ptrInt32(100),
+				CurrentClusterName:       "clusterA",
+				InitialFailoverVersion:   ptrInt32(1),
+				MasterClusterName:        "clusterA",
+			}
 			return c
 		},
 	}
