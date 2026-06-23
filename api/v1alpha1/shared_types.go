@@ -244,3 +244,20 @@ type ClusterReference struct {
 	// +optional
 	Kind string `json:"kind,omitempty"`
 }
+
+// SecretReference points at a Secret in the same namespace holding TLS material
+// for connecting to an external Temporal peer. Keys default to the conventional
+// "ca.crt", "tls.crt", "tls.key" when the overrides are empty.
+type SecretReference struct {
+	// Name is the Secret name.
+	Name string `json:"name"`
+	// CAKey is the Secret key holding the CA bundle. Defaults to "ca.crt".
+	// +optional
+	CAKey string `json:"caKey,omitempty"`
+	// CertKey is the Secret key holding the client certificate. Defaults to "tls.crt".
+	// +optional
+	CertKey string `json:"certKey,omitempty"`
+	// KeyKey is the Secret key holding the client private key. Defaults to "tls.key".
+	// +optional
+	KeyKey string `json:"keyKey,omitempty"`
+}
