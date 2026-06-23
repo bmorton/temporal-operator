@@ -89,6 +89,8 @@ spec:
                 - reconcile
                 - ignore
                 type: string
+              isGlobal:
+                type: boolean
               ownerEmail:
                 description: OwnerEmail is the owner contact for the namespace.
                 type: string

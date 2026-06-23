@@ -50,6 +50,8 @@ type TemporalNamespaceSpec struct {
 	// +kubebuilder:default=reconcile
 	// +optional
 	DriftDetection string `json:"driftDetection,omitempty"`
+
+	IsGlobal bool `json:"isGlobal,omitempty"`
 }
 
 // TemporalNamespaceStatus defines the observed state of TemporalNamespace.

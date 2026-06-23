@@ -46,6 +46,7 @@ type NamespaceParams struct {
 	Description     string
 	OwnerEmail      string
 	RetentionPeriod time.Duration
+	IsGlobal        bool
 }
 
 // NamespaceInfo is the observed state of a Temporal namespace.
@@ -119,6 +120,7 @@ func (c *grpcNamespaceClient) Register(ctx context.Context, params NamespacePara
 		Description:                      params.Description,
 		OwnerEmail:                       params.OwnerEmail,
 		WorkflowExecutionRetentionPeriod: durationpb.New(params.RetentionPeriod),
+		IsGlobalNamespace:                params.IsGlobal,
 	})
 	return err
 }

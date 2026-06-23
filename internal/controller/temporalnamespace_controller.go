@@ -194,6 +194,7 @@ func namespaceParams(ns *temporalv1alpha1.TemporalNamespace) temporal.NamespaceP
 		Description:     ns.Spec.Description,
 		OwnerEmail:      ns.Spec.OwnerEmail,
 		RetentionPeriod: retention,
+		IsGlobal:        ns.Spec.IsGlobal,
 	}
 }
 
