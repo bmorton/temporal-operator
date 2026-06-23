@@ -62,6 +62,11 @@ type resolvedPeer struct {
 	ready bool
 	// enable is the desired connection-enabled state (default true).
 	enable bool
+	// resolveErr records a non-NotFound resolve failure (e.g. a wrapped TLS
+	// material error). Such a peer is treated as not-ready/unreachable and the
+	// error is surfaced in its status Message, rather than aborting the whole
+	// reconcile (and, during deletion, blocking finalizer removal).
+	resolveErr error
 }
 
 // localPeerState holds a dialed local peer's operator client and its current
@@ -83,10 +88,7 @@ func (r *TemporalClusterConnectionReconciler) Reconcile(ctx context.Context, req
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	peers, err := r.resolvePeers(ctx, &conn)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	peers := r.resolvePeers(ctx, &conn)
 
 	// Handle deletion: best-effort de-registration, then unblock GC.
 	if !conn.DeletionTimestamp.IsZero() {
@@ -111,10 +113,14 @@ func (r *TemporalClusterConnectionReconciler) Reconcile(ctx context.Context, req
 }
 
 // resolvePeers resolves each spec peer to a connectable frontend. Local peers
-// (ClusterRef set) are resolved via resolveTarget; a missing local target is
-// reported as not-ready rather than failing the reconcile (eventual
-// consistency). External peers (FrontendAddress set) are taken at face value.
-func (r *TemporalClusterConnectionReconciler) resolvePeers(ctx context.Context, conn *temporalv1alpha1.TemporalClusterConnection) ([]resolvedPeer, error) {
+// (ClusterRef set) are resolved via resolveTarget; any resolve failure (a
+// missing target, a wrapped TLS-material error, etc.) is reported as the peer
+// being not-ready/unreachable rather than failing the reconcile. This preserves
+// per-peer eventual consistency and, crucially, lets deletion remove the
+// finalizer even when a peer can no longer be resolved. External peers
+// (FrontendAddress set) are taken at face value.
+func (r *TemporalClusterConnectionReconciler) resolvePeers(ctx context.Context, conn *temporalv1alpha1.TemporalClusterConnection) []resolvedPeer {
+	log := logf.FromContext(ctx)
 	out := make([]resolvedPeer, 0, len(conn.Spec.Peers))
 	for _, p := range conn.Spec.Peers {
 		rp := resolvedPeer{
@@ -125,12 +131,17 @@ func (r *TemporalClusterConnectionReconciler) resolvePeers(ctx context.Context, 
 			rp.local = true
 			target, err := resolveTarget(ctx, r.Client, conn.Namespace, *p.ClusterRef)
 			if err != nil {
-				if errors.Is(err, ErrTargetNotFound) {
-					// Local peer not yet present: leave address empty / not ready.
-					out = append(out, rp)
-					continue
+				// A not-yet-present local target is an expected transient state;
+				// any other failure (e.g. TLS material cannot be read) is also
+				// treated as not-ready so a single peer's problem never aborts
+				// the whole reconcile. Record non-NotFound errors so they can be
+				// surfaced in the peer's status Message.
+				if !errors.Is(err, ErrTargetNotFound) {
+					log.Error(err, "resolving local peer", "peer", p.Name)
+					rp.resolveErr = err
 				}
-				return nil, err
+				out = append(out, rp)
+				continue
 			}
 			rp.address = target.Address
 			rp.tls = target.TLSConfig
@@ -145,7 +156,7 @@ func (r *TemporalClusterConnectionReconciler) resolvePeers(ctx context.Context, 
 		}
 		out = append(out, rp)
 	}
-	return out, nil
+	return out
 }
 
 // dialLocals dials every local, ready peer that has a resolved address and
@@ -182,13 +193,22 @@ func (r *TemporalClusterConnectionReconciler) dialLocals(ctx context.Context, pe
 // reconcilePeers performs the upsert loop and computes per-peer status plus the
 // top-level readiness verdict.
 //
-// Definition of "Connected": a peer P is Connected when there is at least one
-// other reachable local peer and P appears as an enabled remote cluster on
-// every other reachable local peer. "Reachable" means: for a local peer, the
-// operator could dial its frontend; for an external peer, it appears as a
-// remote on at least one local peer. The top-level Ready condition is true when
-// every peer that is not intentionally disabled (EnableConnection=false) is
-// both reachable and connected.
+// Definition of "Connected":
+//   - A LOCAL peer is Connected based on its OWN successful registration: the
+//     operator dialed it (so it is "Reachable") AND every other desired ENABLED
+//     peer appears as an enabled remote cluster in that local peer's own
+//     ListRemoteClusters view. This deliberately does NOT require confirmation
+//     from another local peer, so the primary cross-Kubernetes DR topology — a
+//     single local peer plus N external peers — converges to Connected once the
+//     operator has registered all remotes.
+//   - An EXTERNAL peer is observed indirectly: it is Connected when it appears
+//     as an enabled remote cluster on every reachable local peer (and there is
+//     at least one such local peer).
+//
+// "Reachable" means: for a local peer, the operator could dial its frontend;
+// for an external peer, it appears as a remote on at least one local peer. The
+// top-level Ready condition is true when every peer that is not intentionally
+// disabled (EnableConnection=false) is both reachable and connected.
 func (r *TemporalClusterConnectionReconciler) reconcilePeers(ctx context.Context, peers []resolvedPeer) ([]temporalv1alpha1.PeerConnectionStatus, bool, string, string) {
 	locals := r.dialLocals(ctx, peers)
 	defer func() {
@@ -255,7 +275,7 @@ func (r *TemporalClusterConnectionReconciler) buildStatuses(peers []resolvedPeer
 	reason := temporalv1alpha1.ReasonPeersConnected
 	message := "all replication peers are connected"
 	for _, p := range peers {
-		connected := peerConnected(p, locals)
+		connected := peerConnected(p, peers, locals)
 		st := temporalv1alpha1.PeerConnectionStatus{
 			Name:      p.name,
 			Reachable: reachable[p.name],
@@ -263,7 +283,11 @@ func (r *TemporalClusterConnectionReconciler) buildStatuses(peers []resolvedPeer
 		}
 		switch {
 		case !reachable[p.name]:
-			st.Message = "peer frontend is unreachable or not ready"
+			if p.resolveErr != nil {
+				st.Message = fmt.Sprintf("peer could not be resolved: %v", p.resolveErr)
+			} else {
+				st.Message = "peer frontend is unreachable or not ready"
+			}
 			if p.enable {
 				allReady = false
 				reason = temporalv1alpha1.ReasonPeerUnreachable
@@ -286,9 +310,33 @@ func (r *TemporalClusterConnectionReconciler) buildStatuses(peers []resolvedPeer
 	return statuses, allReady, reason, message
 }
 
-// peerConnected reports whether p appears as an enabled remote cluster on every
-// other reachable local peer (see reconcilePeers for the full definition).
-func peerConnected(p resolvedPeer, locals map[string]*localPeerState) bool {
+// peerConnected reports whether peer p is connected (see reconcilePeers for the
+// full definition). A LOCAL peer is judged by its OWN registration view; an
+// EXTERNAL peer is judged indirectly by the views of the local peers.
+func peerConnected(p resolvedPeer, peers []resolvedPeer, locals map[string]*localPeerState) bool {
+	if p.local {
+		// A local peer is connected only if the operator dialed it and every
+		// other desired enabled peer is present as an enabled remote in its own
+		// ListRemoteClusters view. No confirmation from another local peer is
+		// required, so a single-local-peer topology can become connected.
+		l, ok := locals[p.name]
+		if !ok {
+			return false
+		}
+		for _, other := range peers {
+			if other.name == p.name || !other.enable || other.address == "" {
+				continue
+			}
+			info, present := l.remotes[other.name]
+			if !present || !info.ConnectionEnabled {
+				return false
+			}
+		}
+		return true
+	}
+
+	// External peer: observed indirectly. Connected when it appears as an
+	// enabled remote on every reachable local peer (and at least one exists).
 	others := 0
 	for _, l := range locals {
 		if l.peer.name == p.name {

@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -196,5 +197,98 @@ var _ = Describe("TemporalClusterConnection reconciler", func() {
 
 		reconcileConn(connName) // second registration -> no new upserts
 		Expect(fakes[addrA].upserts).To(HaveLen(countAfterFirst))
+	})
+
+	It("connects a single local peer paired with an external peer", func() {
+		clusterA := readyConnCluster("cluster-a")
+		cA := &temporalv1alpha1.TemporalCluster{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: clusterA, Namespace: "default"}, cA)).To(Succeed())
+		addrA := frontendAddress(cA)
+
+		// External peer reachable at a fixed frontend address. Teach the fakes
+		// the address -> cluster name mapping so the local peer's
+		// ListRemoteClusters view reports the external remote by name once it
+		// has been upserted (mirroring the real Temporal API).
+		extAddr := "cluster-ext.example.com:7233"
+		addrName[extAddr] = "cluster-ext"
+
+		connName := fmt.Sprintf("conn-ext-%d", counter)
+		conn := &temporalv1alpha1.TemporalClusterConnection{
+			ObjectMeta: metav1.ObjectMeta{Name: connName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalClusterConnectionSpec{
+				Peers: []temporalv1alpha1.ClusterConnectionPeer{
+					{Name: "cluster-a", ClusterRef: &temporalv1alpha1.ClusterReference{Name: clusterA}},
+					{Name: "cluster-ext", FrontendAddress: extAddr},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, conn)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, conn) })
+
+		reconcileConn(connName) // adds finalizer
+		reconcileConn(connName) // registers the external remote on the local peer
+
+		// The local peer's operator client registered the external frontend.
+		Expect(fakes).To(HaveKey(addrA))
+		Expect(fakes[addrA].upserts).To(ContainElement(extAddr))
+
+		got := &temporalv1alpha1.TemporalClusterConnection{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: connName, Namespace: "default"}, got)).To(Succeed())
+		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, temporalv1alpha1.ConditionReady)).To(BeTrue())
+
+		// The local peer must be Connected based on its own registration, even
+		// though no other local peer can confirm it.
+		var localStatus *temporalv1alpha1.PeerConnectionStatus
+		for i := range got.Status.Peers {
+			if got.Status.Peers[i].Name == "cluster-a" {
+				localStatus = &got.Status.Peers[i]
+			}
+		}
+		Expect(localStatus).NotTo(BeNil())
+		Expect(localStatus.Connected).To(BeTrue())
+	})
+
+	It("removes the finalizer on deletion even when a peer cannot be resolved", func() {
+		// A local peer whose TLS material cannot be resolved (mTLS enabled but
+		// the internode cert secret is absent) makes resolveTarget fail with a
+		// non-NotFound error. Deletion must still proceed.
+		counter++
+		clusterName := fmt.Sprintf("conn-cluster-%d", counter)
+		spec := validClusterSpec("1.31.1")
+		spec.MTLS = &temporalv1alpha1.MTLSSpec{
+			Provider:  "cert-manager",
+			IssuerRef: &temporalv1alpha1.IssuerReference{Name: "test-issuer"},
+		}
+		cluster := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: "default"},
+			Spec:       spec,
+		}
+		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, cluster) })
+
+		connName := fmt.Sprintf("conn-del-%d", counter)
+		conn := &temporalv1alpha1.TemporalClusterConnection{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       connName,
+				Namespace:  "default",
+				Finalizers: []string{clusterConnectionFinalizer},
+			},
+			Spec: temporalv1alpha1.TemporalClusterConnectionSpec{
+				Peers: []temporalv1alpha1.ClusterConnectionPeer{
+					{Name: "cluster-a", ClusterRef: &temporalv1alpha1.ClusterReference{Name: clusterName}},
+					{Name: "cluster-ext", FrontendAddress: "cluster-ext.example.com:7233"},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, conn)).To(Succeed())
+
+		// Trigger deletion: the finalizer keeps the object alive.
+		Expect(k8sClient.Delete(ctx, conn)).To(Succeed())
+
+		reconcileConn(connName) // must remove the finalizer without erroring
+
+		got := &temporalv1alpha1.TemporalClusterConnection{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: connName, Namespace: "default"}, got)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 })
