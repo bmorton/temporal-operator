@@ -6,4 +6,6 @@ spec:
   clusterRef:
     name: cluster-a
   isGlobal: true
+  clusters: [clusterA, clusterB]
+  activeCluster: clusterA
   retentionPeriod: 72h
