@@ -62,4 +62,8 @@ const (
 	ReasonAllServicesReady = "AllServicesReady"
 	// ReasonDeletionPrevented indicates deletion was blocked by preventDeletion.
 	ReasonDeletionPrevented = "DeletionPrevented"
+	// ReasonClusterMetadataImmutable indicates an attempt to change an immutable clusterMetadata field.
+	ReasonClusterMetadataImmutable = "ClusterMetadataImmutable"
+	// ReasonIsGlobalImmutable indicates an attempt to change the isGlobal field after creation.
+	ReasonIsGlobalImmutable = "IsGlobalImmutable"
 )

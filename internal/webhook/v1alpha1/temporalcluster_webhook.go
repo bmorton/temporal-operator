@@ -278,24 +278,37 @@ func validateStoreDriverImmutable(oldCluster, newCluster *temporalv1alpha1.Tempo
 }
 
 func validateClusterMetadataImmutable(oldCluster, newCluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
-	if oldCM, newCM := oldCluster.Spec.ClusterMetadata, newCluster.Spec.ClusterMetadata; oldCM != nil && newCM != nil {
-		cmPath := specPath.Child("clusterMetadata")
-		var errs field.ErrorList
-		if oldCM.FailoverVersionIncrement != nil && newCM.FailoverVersionIncrement != nil && *oldCM.FailoverVersionIncrement != *newCM.FailoverVersionIncrement {
-			errs = append(errs, field.Invalid(cmPath.Child("failoverVersionIncrement"), newCM.FailoverVersionIncrement,
-				"failoverVersionIncrement is immutable"))
-		}
-		if oldCM.InitialFailoverVersion != nil && newCM.InitialFailoverVersion != nil && *oldCM.InitialFailoverVersion != *newCM.InitialFailoverVersion {
-			errs = append(errs, field.Invalid(cmPath.Child("initialFailoverVersion"), newCM.InitialFailoverVersion,
-				"initialFailoverVersion is immutable"))
-		}
-		if oldCM.CurrentClusterName != "" && newCM.CurrentClusterName != "" && oldCM.CurrentClusterName != newCM.CurrentClusterName {
-			errs = append(errs, field.Invalid(cmPath.Child("currentClusterName"), newCM.CurrentClusterName,
-				"currentClusterName is immutable"))
-		}
+	oldCM := oldCluster.Spec.ClusterMetadata
+	newCM := newCluster.Spec.ClusterMetadata
+	if oldCM == nil {
+		return nil
+	}
+	cmPath := specPath.Child("clusterMetadata")
+	var errs field.ErrorList
+	if newCM == nil {
+		errs = append(errs, field.Invalid(cmPath, nil,
+			fmt.Sprintf("%s: clusterMetadata cannot be removed once set", temporalv1alpha1.ReasonClusterMetadataImmutable)))
 		return errs
 	}
-	return nil
+	if oldCM.FailoverVersionIncrement != nil {
+		if newCM.FailoverVersionIncrement == nil || *oldCM.FailoverVersionIncrement != *newCM.FailoverVersionIncrement {
+			errs = append(errs, field.Invalid(cmPath.Child("failoverVersionIncrement"), newCM.FailoverVersionIncrement,
+				fmt.Sprintf("%s: failoverVersionIncrement is immutable", temporalv1alpha1.ReasonClusterMetadataImmutable)))
+		}
+	}
+	if oldCM.InitialFailoverVersion != nil {
+		if newCM.InitialFailoverVersion == nil || *oldCM.InitialFailoverVersion != *newCM.InitialFailoverVersion {
+			errs = append(errs, field.Invalid(cmPath.Child("initialFailoverVersion"), newCM.InitialFailoverVersion,
+				fmt.Sprintf("%s: initialFailoverVersion is immutable", temporalv1alpha1.ReasonClusterMetadataImmutable)))
+		}
+	}
+	if oldCM.CurrentClusterName != "" {
+		if newCM.CurrentClusterName == "" || oldCM.CurrentClusterName != newCM.CurrentClusterName {
+			errs = append(errs, field.Invalid(cmPath.Child("currentClusterName"), newCM.CurrentClusterName,
+				fmt.Sprintf("%s: currentClusterName is immutable", temporalv1alpha1.ReasonClusterMetadataImmutable)))
+		}
+	}
+	return errs
 }
 
 // ValidateDelete implements admission.Validator.

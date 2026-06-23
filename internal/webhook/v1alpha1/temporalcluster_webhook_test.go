@@ -247,6 +247,45 @@ var _ = Describe("TemporalCluster Webhook", func() {
 			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		It("rejects removing clusterMetadata when previously set", func() {
+			oldObj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				CurrentClusterName: "clusterA",
+			}
+			obj.Spec.ClusterMetadata = nil
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects clearing a previously-set failoverVersionIncrement", func() {
+			oldObj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				FailoverVersionIncrement: ptrInt32(100),
+			}
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{}
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects clearing a previously-set currentClusterName", func() {
+			oldObj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				CurrentClusterName: "clusterA",
+			}
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{}
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("admits setting clusterMetadata when previously nil", func() {
+			oldObj.Spec.ClusterMetadata = nil
+			obj.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				EnableGlobalNamespace:    true,
+				CurrentClusterName:       "clusterA",
+				FailoverVersionIncrement: ptrInt32(100),
+				InitialFailoverVersion:   ptrInt32(1),
+			}
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	Context("Validation webhook on delete", func() {

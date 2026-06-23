@@ -66,11 +66,15 @@ func (v *TemporalNamespaceCustomValidator) ValidateCreate(_ context.Context, tem
 }
 
 // ValidateUpdate implements admission.Validator so a webhook will be registered for the type TemporalNamespace.
-func (v *TemporalNamespaceCustomValidator) ValidateUpdate(_ context.Context, _, temporalnamespace *temporalv1alpha1.TemporalNamespace) (admission.Warnings, error) {
-	temporalnamespacelog.Info("Validation for TemporalNamespace upon update", "name", temporalnamespace.GetName())
+func (v *TemporalNamespaceCustomValidator) ValidateUpdate(_ context.Context, oldNS, newNS *temporalv1alpha1.TemporalNamespace) (admission.Warnings, error) {
+	temporalnamespacelog.Info("Validation for TemporalNamespace upon update", "name", newNS.GetName())
 
-	if temporalnamespace.Spec.ClusterRef.Name == "" {
+	if newNS.Spec.ClusterRef.Name == "" {
 		return nil, fmt.Errorf("spec.clusterRef.name must not be empty")
+	}
+
+	if oldNS.Spec.IsGlobal != newNS.Spec.IsGlobal {
+		return nil, fmt.Errorf("%s: isGlobal is immutable after creation", temporalv1alpha1.ReasonIsGlobalImmutable)
 	}
 
 	return nil, nil
