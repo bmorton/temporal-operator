@@ -249,9 +249,35 @@ func namespaceDrifted(params temporal.NamespaceParams, info *temporal.NamespaceI
 	if params.ActiveCluster != "" && params.ActiveCluster != info.ActiveCluster {
 		return true
 	}
+	// For a global namespace, a change to the replication clusters list is drift.
+	// Temporal may return clusters in any order, so compare as sets. Only global
+	// namespaces declare clusters, so guard on a non-empty desired list to avoid
+	// spurious updates for local namespaces.
+	if len(params.Clusters) > 0 && !equalStringSets(params.Clusters, info.Clusters) {
+		return true
+	}
 	return params.Description != info.Description ||
 		params.OwnerEmail != info.OwnerEmail ||
 		params.RetentionPeriod != info.RetentionPeriod
+}
+
+// equalStringSets reports whether a and b contain the same strings, ignoring
+// order but respecting multiplicity (multiset equality).
+func equalStringSets(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[string]int, len(a))
+	for _, s := range a {
+		counts[s]++
+	}
+	for _, s := range b {
+		counts[s]--
+		if counts[s] < 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *TemporalNamespaceReconciler) setReady(ns *temporalv1alpha1.TemporalNamespace, status metav1.ConditionStatus, reason, message string) {

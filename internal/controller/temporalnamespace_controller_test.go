@@ -304,4 +304,42 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 		Expect(got.Status.Replication.ActiveCluster).To(Equal("b"))
 		Expect(got.Status.Replication.LastFailoverTime).NotTo(BeNil())
 	})
+
+	It("updates a global namespace when the replication clusters list changes", func() {
+		cluster := readyCluster()
+		nsName := fmt.Sprintf("repl-clusters-%d", counter)
+		ns := &temporalv1alpha1.TemporalNamespace{
+			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalNamespaceSpec{
+				ClusterRef:    temporalv1alpha1.ClusterReference{Name: cluster},
+				IsGlobal:      true,
+				Clusters:      []string{"a", "b"},
+				ActiveCluster: "a",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, ns) })
+
+		reconcileNS(nsName) // adds finalizer
+		reconcileNS(nsName) // registers with clusters [a, b]
+		Expect(fake.registered).To(ContainElement(nsName))
+
+		// Add cluster "c" to the replication group; active cluster unchanged.
+		got := &temporalv1alpha1.TemporalNamespace{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nsName, Namespace: "default"}, got)).To(Succeed())
+		got.Spec.Clusters = []string{"a", "b", "c"}
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		reconcileNS(nsName) // should detect clusters-list drift -> Update
+
+		Expect(fake.updated).To(ContainElement(nsName))
+		var upd *temporal.NamespaceParams
+		for i := range fake.updateParams {
+			if fake.updateParams[i].Name == nsName {
+				upd = &fake.updateParams[i]
+			}
+		}
+		Expect(upd).NotTo(BeNil())
+		Expect(upd.Clusters).To(ConsistOf("a", "b", "c"))
+	})
 })
