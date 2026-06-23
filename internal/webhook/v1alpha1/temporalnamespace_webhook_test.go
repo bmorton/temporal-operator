@@ -59,6 +59,36 @@ var _ = Describe("TemporalNamespace Webhook", func() {
 			_, err := validator.ValidateCreate(ctx, obj)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		It("rejects clusters set while isGlobal is false", func() {
+			obj.Spec.IsGlobal = false
+			obj.Spec.Clusters = []string{"a", "b"}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects activeCluster set while isGlobal is false", func() {
+			obj.Spec.IsGlobal = false
+			obj.Spec.ActiveCluster = "a"
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects an activeCluster that is not a member of clusters", func() {
+			obj.Spec.IsGlobal = true
+			obj.Spec.Clusters = []string{"a", "b"}
+			obj.Spec.ActiveCluster = "c"
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("admits a valid global namespace", func() {
+			obj.Spec.IsGlobal = true
+			obj.Spec.Clusters = []string{"a", "b"}
+			obj.Spec.ActiveCluster = "a"
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	Context("Validation on update", func() {
@@ -81,6 +111,26 @@ var _ = Describe("TemporalNamespace Webhook", func() {
 			obj.Spec.IsGlobal = true
 			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
 			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects an invalid activeCluster on update", func() {
+			oldObj.Spec.IsGlobal = true
+			obj.Spec.IsGlobal = true
+			obj.Spec.Clusters = []string{"a", "b"}
+			obj.Spec.ActiveCluster = "c"
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("admits a valid failover update", func() {
+			oldObj.Spec.IsGlobal = true
+			oldObj.Spec.Clusters = []string{"a", "b"}
+			oldObj.Spec.ActiveCluster = "a"
+			obj.Spec.IsGlobal = true
+			obj.Spec.Clusters = []string{"a", "b"}
+			obj.Spec.ActiveCluster = "b"
+			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })

@@ -32,6 +32,7 @@ import (
 
 	namespacepb "go.temporal.io/api/namespace/v1"
 	operatorservice "go.temporal.io/api/operatorservice/v1"
+	replicationpb "go.temporal.io/api/replication/v1"
 	workflowservice "go.temporal.io/api/workflowservice/v1"
 
 	enumspb "go.temporal.io/api/enums/v1"
@@ -47,6 +48,8 @@ type NamespaceParams struct {
 	OwnerEmail      string
 	RetentionPeriod time.Duration
 	IsGlobal        bool
+	Clusters        []string
+	ActiveCluster   string
 }
 
 // NamespaceInfo is the observed state of a Temporal namespace.
@@ -55,6 +58,9 @@ type NamespaceInfo struct {
 	Description     string
 	OwnerEmail      string
 	RetentionPeriod time.Duration
+	IsGlobal        bool
+	ActiveCluster   string
+	Clusters        []string
 }
 
 // NamespaceClient manages namespaces in a Temporal cluster.
@@ -94,14 +100,18 @@ func NewNamespaceClient(_ context.Context, address string, tlsConfig *tls.Config
 	}, nil
 }
 
-func (c *grpcNamespaceClient) Describe(ctx context.Context, name string) (*NamespaceInfo, error) {
-	resp, err := c.workflow.DescribeNamespace(ctx, &workflowservice.DescribeNamespaceRequest{Namespace: name})
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, ErrNamespaceNotFound
-		}
-		return nil, err
+// clusterReplicationConfigs builds the per-cluster replication config slice for
+// a global namespace's replication settings.
+func clusterReplicationConfigs(clusters []string) []*replicationpb.ClusterReplicationConfig {
+	out := make([]*replicationpb.ClusterReplicationConfig, 0, len(clusters))
+	for _, c := range clusters {
+		out = append(out, &replicationpb.ClusterReplicationConfig{ClusterName: c})
 	}
+	return out
+}
+
+// namespaceInfoFromProto maps a DescribeNamespaceResponse into a NamespaceInfo.
+func namespaceInfoFromProto(resp *workflowservice.DescribeNamespaceResponse) *NamespaceInfo {
 	info := &NamespaceInfo{}
 	if resp.GetNamespaceInfo() != nil {
 		info.ID = resp.GetNamespaceInfo().GetId()
@@ -111,22 +121,34 @@ func (c *grpcNamespaceClient) Describe(ctx context.Context, name string) (*Names
 	if resp.GetConfig().GetWorkflowExecutionRetentionTtl() != nil {
 		info.RetentionPeriod = resp.GetConfig().GetWorkflowExecutionRetentionTtl().AsDuration()
 	}
-	return info, nil
+	info.IsGlobal = resp.GetIsGlobalNamespace()
+	if rc := resp.GetReplicationConfig(); rc != nil {
+		info.ActiveCluster = rc.GetActiveClusterName()
+		for _, cl := range rc.GetClusters() {
+			info.Clusters = append(info.Clusters, cl.GetClusterName())
+		}
+	}
+	return info
 }
 
-func (c *grpcNamespaceClient) Register(ctx context.Context, params NamespaceParams) error {
-	_, err := c.workflow.RegisterNamespace(ctx, &workflowservice.RegisterNamespaceRequest{
+// registerNamespaceRequest builds the RegisterNamespace request for params.
+func registerNamespaceRequest(params NamespaceParams) *workflowservice.RegisterNamespaceRequest {
+	return &workflowservice.RegisterNamespaceRequest{
 		Namespace:                        params.Name,
 		Description:                      params.Description,
 		OwnerEmail:                       params.OwnerEmail,
 		WorkflowExecutionRetentionPeriod: durationpb.New(params.RetentionPeriod),
 		IsGlobalNamespace:                params.IsGlobal,
-	})
-	return err
+		Clusters:                         clusterReplicationConfigs(params.Clusters),
+		ActiveClusterName:                params.ActiveCluster,
+	}
 }
 
-func (c *grpcNamespaceClient) Update(ctx context.Context, params NamespaceParams) error {
-	_, err := c.workflow.UpdateNamespace(ctx, &workflowservice.UpdateNamespaceRequest{
+// updateNamespaceRequest builds the UpdateNamespace request for params. When the
+// namespace carries replication settings (active cluster or cluster list), the
+// ReplicationConfig is set so active-cluster changes (failover) are applied.
+func updateNamespaceRequest(params NamespaceParams) *workflowservice.UpdateNamespaceRequest {
+	req := &workflowservice.UpdateNamespaceRequest{
 		Namespace: params.Name,
 		UpdateInfo: &namespacepb.UpdateNamespaceInfo{
 			Description: params.Description,
@@ -135,7 +157,34 @@ func (c *grpcNamespaceClient) Update(ctx context.Context, params NamespaceParams
 		Config: &namespacepb.NamespaceConfig{
 			WorkflowExecutionRetentionTtl: durationpb.New(params.RetentionPeriod),
 		},
-	})
+	}
+	if params.ActiveCluster != "" || len(params.Clusters) > 0 {
+		req.ReplicationConfig = &replicationpb.NamespaceReplicationConfig{
+			ActiveClusterName: params.ActiveCluster,
+			Clusters:          clusterReplicationConfigs(params.Clusters),
+		}
+	}
+	return req
+}
+
+func (c *grpcNamespaceClient) Describe(ctx context.Context, name string) (*NamespaceInfo, error) {
+	resp, err := c.workflow.DescribeNamespace(ctx, &workflowservice.DescribeNamespaceRequest{Namespace: name})
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, ErrNamespaceNotFound
+		}
+		return nil, err
+	}
+	return namespaceInfoFromProto(resp), nil
+}
+
+func (c *grpcNamespaceClient) Register(ctx context.Context, params NamespaceParams) error {
+	_, err := c.workflow.RegisterNamespace(ctx, registerNamespaceRequest(params))
+	return err
+}
+
+func (c *grpcNamespaceClient) Update(ctx context.Context, params NamespaceParams) error {
+	_, err := c.workflow.UpdateNamespace(ctx, updateNamespaceRequest(params))
 	return err
 }
 
