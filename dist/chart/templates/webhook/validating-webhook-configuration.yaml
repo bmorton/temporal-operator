@@ -34,6 +34,26 @@ webhooks:
         service:
             name: temporal-operator-webhook-service
             namespace: {{ .Release.Namespace }}
+            path: /validate-temporal-bmor10-com-v1alpha1-temporalclusterconnection
+      failurePolicy: Fail
+      name: vtemporalclusterconnection-v1alpha1.kb.io
+      rules:
+        - apiGroups:
+            - temporal.bmor10.com
+          apiVersions:
+            - v1alpha1
+          operations:
+            - CREATE
+            - UPDATE
+          resources:
+            - temporalclusterconnections
+      sideEffects: None
+    - admissionReviewVersions:
+        - v1
+      clientConfig:
+        service:
+            name: temporal-operator-webhook-service
+            namespace: {{ .Release.Namespace }}
             path: /validate-temporal-bmor10-com-v1alpha1-temporalnamespace
       failurePolicy: Fail
       name: vtemporalnamespace-v1alpha1.kb.io

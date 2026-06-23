@@ -119,6 +119,7 @@ rules:
         - temporal.bmor10.com
       resources:
         - temporalclusterclients
+        - temporalclusterconnections
         - temporalclusters
         - temporaldevservers
         - temporalnamespaces
@@ -136,6 +137,7 @@ rules:
         - temporal.bmor10.com
       resources:
         - temporalclusterclients/finalizers
+        - temporalclusterconnections/finalizers
         - temporalclusters/finalizers
         - temporaldevservers/finalizers
         - temporalnamespaces/finalizers
@@ -147,6 +149,7 @@ rules:
         - temporal.bmor10.com
       resources:
         - temporalclusterclients/status
+        - temporalclusterconnections/status
         - temporalclusters/status
         - temporaldevservers/status
         - temporalnamespaces/status
