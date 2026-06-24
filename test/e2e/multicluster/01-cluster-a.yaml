@@ -1,9 +1,12 @@
 # Cluster A: the initial ACTIVE cluster of the replication pair. Global namespaces
-# are enabled and a distinct currentClusterName/initialFailoverVersion is set; the
-# failoverVersionIncrement and masterClusterName MUST match cluster B so failover
-# versions are coordinated. Runs plaintext (no mTLS) so the in-cluster admin-tools
-# proof pods can reach the frontend without client certificates -- replication
-# between the two frontends also flows plaintext inside the kind network.
+# are enabled and a distinct currentClusterName/initialFailoverVersion is set. The
+# failoverVersionIncrement MUST match cluster B so failover versions are
+# coordinated; masterClusterName equals this cluster's own currentClusterName
+# (the operator renders only the local cluster into clusterInformation, and
+# Temporal requires masterClusterName to be present there). Runs plaintext (no
+# mTLS) so the in-cluster admin-tools proof pods can reach the frontend without
+# client certificates -- replication between the two frontends also flows
+# plaintext inside the kind network.
 #
 # Host is namespace-qualified via chainsaw's $namespace binding because the
 # operator dials Postgres from the temporal-system namespace.

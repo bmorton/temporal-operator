@@ -1,6 +1,10 @@
-# Cluster B: the initial STANDBY cluster. Shares failoverVersionIncrement and
-# masterClusterName with cluster A but has a distinct currentClusterName and
-# initialFailoverVersion. After the failover step it becomes the active cluster.
+# Cluster B: the initial STANDBY cluster. Shares failoverVersionIncrement with
+# cluster A but has a distinct currentClusterName and initialFailoverVersion.
+# masterClusterName must equal this cluster's own currentClusterName: the
+# operator renders only the local cluster into clusterInformation (remote peers
+# are added dynamically via the connection controller), and Temporal requires
+# masterClusterName to be present in clusterInformation. After the failover step
+# this cluster becomes the active cluster.
 apiVersion: temporal.bmor10.com/v1alpha1
 kind: TemporalCluster
 metadata:
@@ -13,7 +17,7 @@ spec:
     failoverVersionIncrement: 100
     currentClusterName: "clusterB"
     initialFailoverVersion: 2
-    masterClusterName: "clusterA"
+    masterClusterName: "clusterB"
   persistence:
     defaultStore:
       sql:
