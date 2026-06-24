@@ -68,6 +68,10 @@ type NamespaceClient interface {
 	Describe(ctx context.Context, name string) (*NamespaceInfo, error)
 	Register(ctx context.Context, params NamespaceParams) error
 	Update(ctx context.Context, params NamespaceParams) error
+	// Failover changes only the namespace's active cluster. It must be a
+	// standalone call: Temporal rejects an active-cluster change combined with
+	// any other update parameters.
+	Failover(ctx context.Context, name, activeCluster string) error
 	Delete(ctx context.Context, name string) error
 	Close() error
 }
@@ -144,9 +148,11 @@ func registerNamespaceRequest(params NamespaceParams) *workflowservice.RegisterN
 	}
 }
 
-// updateNamespaceRequest builds the UpdateNamespace request for params. When the
-// namespace carries replication settings (active cluster or cluster list), the
-// ReplicationConfig is set so active-cluster changes (failover) are applied.
+// updateNamespaceRequest builds the UpdateNamespace request for params. It
+// carries namespace info, config, and (for a global namespace) the replicated
+// cluster list. It deliberately does NOT set ReplicationConfig.ActiveClusterName:
+// Temporal rejects an active-cluster change (failover) that is combined with any
+// other update parameters, so failover is issued separately via Failover.
 func updateNamespaceRequest(params NamespaceParams) *workflowservice.UpdateNamespaceRequest {
 	req := &workflowservice.UpdateNamespaceRequest{
 		Namespace: params.Name,
@@ -158,13 +164,24 @@ func updateNamespaceRequest(params NamespaceParams) *workflowservice.UpdateNames
 			WorkflowExecutionRetentionTtl: durationpb.New(params.RetentionPeriod),
 		},
 	}
-	if params.ActiveCluster != "" || len(params.Clusters) > 0 {
+	if len(params.Clusters) > 0 {
 		req.ReplicationConfig = &replicationpb.NamespaceReplicationConfig{
-			ActiveClusterName: params.ActiveCluster,
-			Clusters:          clusterReplicationConfigs(params.Clusters),
+			Clusters: clusterReplicationConfigs(params.Clusters),
 		}
 	}
 	return req
+}
+
+// failoverNamespaceRequest builds a standalone failover UpdateNamespace request.
+// A failover must change only the active cluster: Temporal rejects an
+// active-cluster change combined with any other update parameters.
+func failoverNamespaceRequest(name, activeCluster string) *workflowservice.UpdateNamespaceRequest {
+	return &workflowservice.UpdateNamespaceRequest{
+		Namespace: name,
+		ReplicationConfig: &replicationpb.NamespaceReplicationConfig{
+			ActiveClusterName: activeCluster,
+		},
+	}
 }
 
 func (c *grpcNamespaceClient) Describe(ctx context.Context, name string) (*NamespaceInfo, error) {
@@ -185,6 +202,11 @@ func (c *grpcNamespaceClient) Register(ctx context.Context, params NamespacePara
 
 func (c *grpcNamespaceClient) Update(ctx context.Context, params NamespaceParams) error {
 	_, err := c.workflow.UpdateNamespace(ctx, updateNamespaceRequest(params))
+	return err
+}
+
+func (c *grpcNamespaceClient) Failover(ctx context.Context, name, activeCluster string) error {
+	_, err := c.workflow.UpdateNamespace(ctx, failoverNamespaceRequest(name, activeCluster))
 	return err
 }
 

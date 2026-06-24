@@ -37,6 +37,13 @@ type fakeNamespaceClient struct {
 	store                        map[string]*temporal.NamespaceInfo
 	registered, updated, deleted []string
 	registerParams, updateParams []temporal.NamespaceParams
+	failovers                    []failoverCall
+}
+
+// failoverCall records a single Failover invocation.
+type failoverCall struct {
+	name          string
+	activeCluster string
 }
 
 func (f *fakeNamespaceClient) Describe(_ context.Context, name string) (*temporal.NamespaceInfo, error) {
@@ -73,12 +80,18 @@ func (f *fakeNamespaceClient) Update(_ context.Context, p temporal.NamespacePara
 		info.Description = p.Description
 		info.OwnerEmail = p.OwnerEmail
 		info.RetentionPeriod = p.RetentionPeriod
-		if p.ActiveCluster != "" {
-			info.ActiveCluster = p.ActiveCluster
-		}
+		// Update never changes the active cluster (that is a standalone Failover).
 		if len(p.Clusters) > 0 {
 			info.Clusters = append([]string(nil), p.Clusters...)
 		}
+	}
+	return nil
+}
+
+func (f *fakeNamespaceClient) Failover(_ context.Context, name, activeCluster string) error {
+	f.failovers = append(f.failovers, failoverCall{name: name, activeCluster: activeCluster})
+	if info, ok := f.store[name]; ok {
+		info.ActiveCluster = activeCluster
 	}
 	return nil
 }
@@ -286,17 +299,14 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 		got.Spec.ActiveCluster = "b"
 		Expect(k8sClient.Update(ctx, got)).To(Succeed())
 
-		reconcileNS(nsName) // detects active-cluster drift -> failover Update
+		reconcileNS(nsName) // detects active-cluster drift -> standalone failover
 
-		Expect(fake.updated).To(ContainElement(nsName))
-		var upd *temporal.NamespaceParams
-		for i := range fake.updateParams {
-			if fake.updateParams[i].Name == nsName {
-				upd = &fake.updateParams[i]
-			}
-		}
-		Expect(upd).NotTo(BeNil())
-		Expect(upd.ActiveCluster).To(Equal("b"))
+		// Failover must be a standalone call (not bundled into a general Update),
+		// because Temporal rejects an active-cluster change combined with other
+		// update parameters.
+		Expect(fake.failovers).To(HaveLen(1))
+		Expect(fake.failovers[0].name).To(Equal(nsName))
+		Expect(fake.failovers[0].activeCluster).To(Equal("b"))
 
 		got = &temporalv1alpha1.TemporalNamespace{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nsName, Namespace: "default"}, got)).To(Succeed())

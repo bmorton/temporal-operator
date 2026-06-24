@@ -62,7 +62,10 @@ func TestNamespaceReplicationRegisterRequest(t *testing.T) {
 	}
 }
 
-func TestNamespaceReplicationUpdateRequestFailover(t *testing.T) {
+func TestNamespaceReplicationUpdateRequestOmitsActiveCluster(t *testing.T) {
+	// A general update must NOT carry the active cluster: Temporal rejects an
+	// active-cluster change combined with other update parameters. The clusters
+	// list is still carried for cluster-list drift.
 	params := NamespaceParams{
 		Name:            "global-ns",
 		IsGlobal:        true,
@@ -72,10 +75,33 @@ func TestNamespaceReplicationUpdateRequestFailover(t *testing.T) {
 	}
 	req := updateNamespaceRequest(params)
 	if req.GetReplicationConfig() == nil {
-		t.Fatal("expected ReplicationConfig to be set for failover")
+		t.Fatal("expected ReplicationConfig to be set for the clusters list")
 	}
-	if req.GetReplicationConfig().GetActiveClusterName() != "b" {
-		t.Errorf("expected failover ActiveClusterName=b, got %q", req.GetReplicationConfig().GetActiveClusterName())
+	if req.GetReplicationConfig().GetActiveClusterName() != "" {
+		t.Errorf("expected no ActiveClusterName in a general update, got %q", req.GetReplicationConfig().GetActiveClusterName())
+	}
+	if got := req.GetReplicationConfig().GetClusters(); len(got) != 2 {
+		t.Errorf("expected 2 clusters in the update, got %d", len(got))
+	}
+	if req.GetUpdateInfo() == nil || req.GetConfig() == nil {
+		t.Error("expected UpdateInfo and Config to be set for a general update")
+	}
+}
+
+func TestFailoverNamespaceRequestIsStandalone(t *testing.T) {
+	// A failover must change only the active cluster, with no other parameters.
+	req := failoverNamespaceRequest("global-ns", "b")
+	if req.GetReplicationConfig() == nil || req.GetReplicationConfig().GetActiveClusterName() != "b" {
+		t.Fatalf("expected ReplicationConfig.ActiveClusterName=b")
+	}
+	if req.GetUpdateInfo() != nil {
+		t.Error("expected no UpdateInfo in a failover request")
+	}
+	if req.GetConfig() != nil {
+		t.Error("expected no Config in a failover request")
+	}
+	if len(req.GetReplicationConfig().GetClusters()) != 0 {
+		t.Error("expected no Clusters in a failover request")
 	}
 }
 

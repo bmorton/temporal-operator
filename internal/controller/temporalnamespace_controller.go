@@ -161,18 +161,26 @@ func (r *TemporalNamespaceReconciler) ensureRegistered(ctx context.Context, ns *
 	}
 
 	failover := false
+	// A declarative failover (active-cluster change) must be issued on its own:
+	// Temporal rejects an active-cluster change combined with any other update
+	// parameters. Do it before general drift reconciliation.
+	if ns.Spec.IsGlobal && params.ActiveCluster != "" && params.ActiveCluster != info.ActiveCluster {
+		if err := tc.Failover(ctx, params.Name, params.ActiveCluster); err != nil {
+			return nil, false, fmt.Errorf("failing over namespace: %w", err)
+		}
+		failover = true
+		log.Info("issued namespace failover", "namespace", params.Name, "activeCluster", params.ActiveCluster)
+		// Re-describe so subsequent drift checks and status reflect the failover.
+		if refreshed, derr := tc.Describe(ctx, params.Name); derr == nil {
+			info = refreshed
+		}
+	}
+
 	if ns.Spec.DriftDetection != "ignore" && namespaceDrifted(params, info) {
-		// Detect a declarative failover before issuing the update so the status
-		// timestamp reflects this reconcile.
-		failover = params.ActiveCluster != "" && params.ActiveCluster != info.ActiveCluster
 		if err := tc.Update(ctx, params); err != nil {
 			return nil, false, fmt.Errorf("updating namespace: %w", err)
 		}
-		if failover {
-			log.Info("issued namespace failover", "namespace", params.Name, "activeCluster", params.ActiveCluster)
-		} else {
-			log.Info("updated namespace to resolve drift", "namespace", params.Name)
-		}
+		log.Info("updated namespace to resolve drift", "namespace", params.Name)
 		// Re-describe so the reported status reflects the post-update state.
 		if refreshed, derr := tc.Describe(ctx, params.Name); derr == nil {
 			info = refreshed
@@ -245,10 +253,8 @@ func namespaceDrifted(params temporal.NamespaceParams, info *temporal.NamespaceI
 	if info == nil {
 		return true
 	}
-	// A change to the desired active cluster (declarative failover) is drift.
-	if params.ActiveCluster != "" && params.ActiveCluster != info.ActiveCluster {
-		return true
-	}
+	// Active-cluster changes are handled separately as a standalone failover
+	// (see ensureRegistered), not as general drift.
 	// For a global namespace, a change to the replication clusters list is drift.
 	// Temporal may return clusters in any order, so compare as sets. Only global
 	// namespaces declare clusters, so guard on a non-empty desired list to avoid
