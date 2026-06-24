@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/bmorton/temporal-operator/compare/v0.8.0...v0.9.0) (2026-06-24)
+
+
+### Features
+
+* automate multi-cluster replication (connection CRD + failover) ([#93](https://github.com/bmorton/temporal-operator/issues/93)) ([3ff6c9b](https://github.com/bmorton/temporal-operator/commit/3ff6c9b2bad08cd1964b076e80dd8349c751e445))
+* passwordless Azure Postgres auth via cluster-scoped Workload Identity ([#47](https://github.com/bmorton/temporal-operator/issues/47)) ([#85](https://github.com/bmorton/temporal-operator/issues/85)) ([eec8171](https://github.com/bmorton/temporal-operator/commit/eec8171a9c86057203f691b3175ee64f4061ef64))
+
+
+### Bug Fixes
+
+* **config:** render passwordCommand as Temporal's structured config ([#88](https://github.com/bmorton/temporal-operator/issues/88)) ([19c5303](https://github.com/bmorton/temporal-operator/commit/19c53030e84d06a36c91c8745b81a842ee372de6))
+
 ## [0.8.0](https://github.com/bmorton/temporal-operator/compare/v0.7.0...v0.8.0) (2026-06-19)
 
 
