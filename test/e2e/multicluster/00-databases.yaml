@@ -15,15 +15,15 @@ spec:
         - name: createdbs
           image: postgres:16
           command: ["/bin/sh", "-c"]
+          # NOTE: use a literal block (|-) and keep each psql invocation on a
+          # single line. A folded scalar (>-) with more-indented continuation
+          # lines preserves their newlines, which splits "psql -tc" from its
+          # query string and breaks the command.
           args:
-            - >-
-              until pg_isready -h temporal-pg-rw -U temporal; do sleep 2; done;
+            - |-
+              until pg_isready -h temporal-pg-rw -U temporal; do sleep 2; done
               for db in temporal_a temporal_a_visibility temporal_b temporal_b_visibility; do
-                psql -h temporal-pg-rw -U temporal -d temporal -tc
-                "SELECT 1 FROM pg_database WHERE datname = '$db'"
-                | grep -q 1 ||
-                psql -h temporal-pg-rw -U temporal -d temporal -c
-                "CREATE DATABASE $db OWNER temporal;";
+                psql -h temporal-pg-rw -U temporal -d temporal -tc "SELECT 1 FROM pg_database WHERE datname = '$db'" | grep -q 1 || psql -h temporal-pg-rw -U temporal -d temporal -c "CREATE DATABASE $db OWNER temporal;"
               done
           env:
             - name: PGPASSWORD
