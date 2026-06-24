@@ -5,6 +5,10 @@ metadata:
 spec:
   version: "1.31.1"
   numHistoryShards: 512
+  # The UI connects to the frontend over gRPC (not Postgres), so it adds no
+  # database connections and does not affect the B1ms connection budget below.
+  ui:
+    enabled: true
   persistence:
     azureWorkloadIdentity:
       clientId: ($values.clientId)

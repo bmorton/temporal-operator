@@ -246,7 +246,7 @@ cmd_deploy() {
 Standing TemporalCluster is up in namespace $AZURE_TEST_NS.
   Frontend (in-cluster):  azure-e2e-frontend.$AZURE_TEST_NS.svc:7233
   Port-forward locally:   kubectl -n $AZURE_TEST_NS port-forward svc/azure-e2e-frontend 7233:7233
-  Enable the web UI:      add 'ui: { enabled: true }' under spec and re-apply, then port-forward azure-e2e-ui
+  Web UI (enabled):       kubectl -n $AZURE_TEST_NS port-forward svc/azure-e2e-ui 8080:8080  # http://localhost:8080
   Remove just this cluster: kubectl delete namespace $AZURE_TEST_NS
   Tear down everything:   make azure-e2e-down
 EOF
