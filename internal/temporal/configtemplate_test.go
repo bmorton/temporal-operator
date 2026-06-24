@@ -29,6 +29,8 @@ import (
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
 
+func ptrInt32(v int32) *int32 { return &v }
+
 var update = flag.Bool("update", false, "update golden files")
 
 func sqlStore(db string) *temporalv1alpha1.SQLDatastoreSpec {
@@ -111,6 +113,17 @@ func TestRenderConfigGolden(t *testing.T) {
 		"internal-frontend": func() *temporalv1alpha1.TemporalCluster {
 			c := baseCluster()
 			c.Spec.Services.InternalFrontend = &temporalv1alpha1.InternalFrontendSpec{Enabled: true}
+			return c
+		},
+		"multi-cluster": func() *temporalv1alpha1.TemporalCluster {
+			c := baseCluster()
+			c.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+				EnableGlobalNamespace:    true,
+				FailoverVersionIncrement: ptrInt32(100),
+				CurrentClusterName:       "clusterA",
+				InitialFailoverVersion:   ptrInt32(1),
+				MasterClusterName:        "clusterA",
+			}
 			return c
 		},
 	}
@@ -205,6 +218,64 @@ func TestRenderConfigPasswordCommand(t *testing.T) {
 		if len(pc.Args) != 2 || pc.Args[0] != "-c" || pc.Args[1] != cmd {
 			t.Errorf("datastore %q: args = %v, want [-c %q]", name, pc.Args, cmd)
 		}
+	}
+}
+
+func TestBuildConfigDataClusterMetadata(t *testing.T) {
+	c := baseCluster()
+	c.Spec.ClusterMetadata = &temporalv1alpha1.ClusterMetadataSpec{
+		EnableGlobalNamespace:    true,
+		FailoverVersionIncrement: ptrInt32(100),
+		CurrentClusterName:       "clusterA",
+		InitialFailoverVersion:   ptrInt32(1),
+		MasterClusterName:        "clusterA",
+	}
+	data, err := BuildConfigData(c, BuildOptions{
+		DefaultStorePassword:    "p",
+		VisibilityStorePassword: "p",
+	})
+	if err != nil {
+		t.Fatalf("BuildConfigData: %v", err)
+	}
+	if !data.EnableGlobalNamespace {
+		t.Error("EnableGlobalNamespace should be true")
+	}
+	if data.FailoverVersionIncrement != 100 {
+		t.Errorf("FailoverVersionIncrement = %d, want 100", data.FailoverVersionIncrement)
+	}
+	if data.CurrentClusterName != "clusterA" {
+		t.Errorf("CurrentClusterName = %q, want %q", data.CurrentClusterName, "clusterA")
+	}
+	if data.InitialFailoverVersion != 1 {
+		t.Errorf("InitialFailoverVersion = %d, want 1", data.InitialFailoverVersion)
+	}
+	if data.MasterClusterName != "clusterA" {
+		t.Errorf("MasterClusterName = %q, want %q", data.MasterClusterName, "clusterA")
+	}
+}
+
+func TestBuildConfigDataClusterMetadataDefaults(t *testing.T) {
+	data, err := BuildConfigData(baseCluster(), BuildOptions{
+		DefaultStorePassword:    "p",
+		VisibilityStorePassword: "p",
+	})
+	if err != nil {
+		t.Fatalf("BuildConfigData: %v", err)
+	}
+	if data.EnableGlobalNamespace != false {
+		t.Error("default EnableGlobalNamespace should be false")
+	}
+	if data.FailoverVersionIncrement != 10 {
+		t.Errorf("default FailoverVersionIncrement = %d, want 10", data.FailoverVersionIncrement)
+	}
+	if data.CurrentClusterName != "active" {
+		t.Errorf("default CurrentClusterName = %q, want %q", data.CurrentClusterName, "active")
+	}
+	if data.InitialFailoverVersion != 1 {
+		t.Errorf("default InitialFailoverVersion = %d, want 1", data.InitialFailoverVersion)
+	}
+	if data.MasterClusterName != "active" {
+		t.Errorf("default MasterClusterName = %q, want %q", data.MasterClusterName, "active")
 	}
 }
 

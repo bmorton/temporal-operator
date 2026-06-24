@@ -8,6 +8,7 @@ resources:
 - bases/temporal.bmor10.com_temporalclusterclients.yaml
 - bases/temporal.bmor10.com_temporalschedules.yaml
 - bases/temporal.bmor10.com_temporaldevservers.yaml
+- bases/temporal.bmor10.com_temporalclusterconnections.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

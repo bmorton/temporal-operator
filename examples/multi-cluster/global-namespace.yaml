@@ -1,0 +1,11 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: my-global-ns
+spec:
+  clusterRef:
+    name: cluster-a
+  isGlobal: true
+  clusters: [clusterA, clusterB]
+  activeCluster: clusterA
+  retentionPeriod: 72h

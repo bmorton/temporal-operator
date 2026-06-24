@@ -202,11 +202,26 @@ type AuthorizationSpec struct {
 	Config *runtime.RawExtension `json:"config,omitempty"`
 }
 
-// ClusterMetadataSpec is a passthrough for multi-cluster metadata.
+// ClusterMetadataSpec configures multi-cluster replication.
 type ClusterMetadataSpec struct {
-	// +kubebuilder:pruning:PreserveUnknownFields
 	// +optional
-	Raw *runtime.RawExtension `json:"raw,omitempty"`
+	EnableGlobalNamespace bool `json:"enableGlobalNamespace,omitempty"`
+
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	FailoverVersionIncrement *int32 `json:"failoverVersionIncrement,omitempty"`
+
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	CurrentClusterName string `json:"currentClusterName,omitempty"`
+
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	InitialFailoverVersion *int32 `json:"initialFailoverVersion,omitempty"`
+
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	MasterClusterName string `json:"masterClusterName,omitempty"`
 }
 
 // Cluster reference kinds for ClusterReference.Kind.
@@ -228,4 +243,21 @@ type ClusterReference struct {
 	// +kubebuilder:default=TemporalCluster
 	// +optional
 	Kind string `json:"kind,omitempty"`
+}
+
+// SecretReference points at a Secret in the same namespace holding TLS material
+// for connecting to an external Temporal peer. Keys default to the conventional
+// "ca.crt", "tls.crt", "tls.key" when the overrides are empty.
+type SecretReference struct {
+	// Name is the Secret name.
+	Name string `json:"name"`
+	// CAKey is the Secret key holding the CA bundle. Defaults to "ca.crt".
+	// +optional
+	CAKey string `json:"caKey,omitempty"`
+	// CertKey is the Secret key holding the client certificate. Defaults to "tls.crt".
+	// +optional
+	CertKey string `json:"certKey,omitempty"`
+	// KeyKey is the Secret key holding the client private key. Defaults to "tls.key".
+	// +optional
+	KeyKey string `json:"keyKey,omitempty"`
 }

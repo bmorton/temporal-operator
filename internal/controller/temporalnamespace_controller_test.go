@@ -36,6 +36,14 @@ import (
 type fakeNamespaceClient struct {
 	store                        map[string]*temporal.NamespaceInfo
 	registered, updated, deleted []string
+	registerParams, updateParams []temporal.NamespaceParams
+	failovers                    []failoverCall
+}
+
+// failoverCall records a single Failover invocation.
+type failoverCall struct {
+	name          string
+	activeCluster string
 }
 
 func (f *fakeNamespaceClient) Describe(_ context.Context, name string) (*temporal.NamespaceInfo, error) {
@@ -43,26 +51,47 @@ func (f *fakeNamespaceClient) Describe(_ context.Context, name string) (*tempora
 	if !ok {
 		return nil, temporal.ErrNamespaceNotFound
 	}
-	return info, nil
+	// Return a copy so callers never alias the stored object (mirrors the gRPC
+	// client returning a freshly decoded response per call).
+	cp := *info
+	cp.Clusters = append([]string(nil), info.Clusters...)
+	return &cp, nil
 }
 
 func (f *fakeNamespaceClient) Register(_ context.Context, p temporal.NamespaceParams) error {
 	f.registered = append(f.registered, p.Name)
+	f.registerParams = append(f.registerParams, p)
 	f.store[p.Name] = &temporal.NamespaceInfo{
 		ID:              "id-" + p.Name,
 		Description:     p.Description,
 		OwnerEmail:      p.OwnerEmail,
 		RetentionPeriod: p.RetentionPeriod,
+		IsGlobal:        p.IsGlobal,
+		ActiveCluster:   p.ActiveCluster,
+		Clusters:        append([]string(nil), p.Clusters...),
 	}
 	return nil
 }
 
 func (f *fakeNamespaceClient) Update(_ context.Context, p temporal.NamespaceParams) error {
 	f.updated = append(f.updated, p.Name)
+	f.updateParams = append(f.updateParams, p)
 	if info, ok := f.store[p.Name]; ok {
 		info.Description = p.Description
 		info.OwnerEmail = p.OwnerEmail
 		info.RetentionPeriod = p.RetentionPeriod
+		// Update never changes the active cluster (that is a standalone Failover).
+		if len(p.Clusters) > 0 {
+			info.Clusters = append([]string(nil), p.Clusters...)
+		}
+	}
+	return nil
+}
+
+func (f *fakeNamespaceClient) Failover(_ context.Context, name, activeCluster string) error {
+	f.failovers = append(f.failovers, failoverCall{name: name, activeCluster: activeCluster})
+	if info, ok := f.store[name]; ok {
+		info.ActiveCluster = activeCluster
 	}
 	return nil
 }
@@ -227,5 +256,100 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 
 		err := k8sClient.Get(ctx, types.NamespacedName{Name: nsName, Namespace: "default"}, &temporalv1alpha1.TemporalNamespace{})
 		Expect(err).To(HaveOccurred(), "namespace should be gone after finalizer is removed")
+	})
+
+	It("registers a global namespace and performs a declarative failover", func() {
+		cluster := readyCluster()
+		nsName := fmt.Sprintf("global-%d", counter)
+		ns := &temporalv1alpha1.TemporalNamespace{
+			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalNamespaceSpec{
+				ClusterRef:    temporalv1alpha1.ClusterReference{Name: cluster},
+				IsGlobal:      true,
+				Clusters:      []string{"a", "b"},
+				ActiveCluster: "a",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, ns) })
+
+		reconcileNS(nsName) // adds finalizer
+		reconcileNS(nsName) // registers
+
+		Expect(fake.registered).To(ContainElement(nsName))
+		// Register params carried the global replication settings.
+		var reg *temporal.NamespaceParams
+		for i := range fake.registerParams {
+			if fake.registerParams[i].Name == nsName {
+				reg = &fake.registerParams[i]
+			}
+		}
+		Expect(reg).NotTo(BeNil())
+		Expect(reg.IsGlobal).To(BeTrue())
+		Expect(reg.ActiveCluster).To(Equal("a"))
+		Expect(reg.Clusters).To(Equal([]string{"a", "b"}))
+
+		got := &temporalv1alpha1.TemporalNamespace{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nsName, Namespace: "default"}, got)).To(Succeed())
+		Expect(got.Status.Replication).NotTo(BeNil())
+		Expect(got.Status.Replication.IsGlobal).To(BeTrue())
+		Expect(got.Status.Replication.ActiveCluster).To(Equal("a"))
+
+		// Trigger a declarative failover: switch the active cluster to b.
+		got.Spec.ActiveCluster = "b"
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		reconcileNS(nsName) // detects active-cluster drift -> standalone failover
+
+		// Failover must be a standalone call (not bundled into a general Update),
+		// because Temporal rejects an active-cluster change combined with other
+		// update parameters.
+		Expect(fake.failovers).To(HaveLen(1))
+		Expect(fake.failovers[0].name).To(Equal(nsName))
+		Expect(fake.failovers[0].activeCluster).To(Equal("b"))
+
+		got = &temporalv1alpha1.TemporalNamespace{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nsName, Namespace: "default"}, got)).To(Succeed())
+		Expect(got.Status.Replication).NotTo(BeNil())
+		Expect(got.Status.Replication.ActiveCluster).To(Equal("b"))
+		Expect(got.Status.Replication.LastFailoverTime).NotTo(BeNil())
+	})
+
+	It("updates a global namespace when the replication clusters list changes", func() {
+		cluster := readyCluster()
+		nsName := fmt.Sprintf("repl-clusters-%d", counter)
+		ns := &temporalv1alpha1.TemporalNamespace{
+			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalNamespaceSpec{
+				ClusterRef:    temporalv1alpha1.ClusterReference{Name: cluster},
+				IsGlobal:      true,
+				Clusters:      []string{"a", "b"},
+				ActiveCluster: "a",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, ns) })
+
+		reconcileNS(nsName) // adds finalizer
+		reconcileNS(nsName) // registers with clusters [a, b]
+		Expect(fake.registered).To(ContainElement(nsName))
+
+		// Add cluster "c" to the replication group; active cluster unchanged.
+		got := &temporalv1alpha1.TemporalNamespace{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nsName, Namespace: "default"}, got)).To(Succeed())
+		got.Spec.Clusters = []string{"a", "b", "c"}
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		reconcileNS(nsName) // should detect clusters-list drift -> Update
+
+		Expect(fake.updated).To(ContainElement(nsName))
+		var upd *temporal.NamespaceParams
+		for i := range fake.updateParams {
+			if fake.updateParams[i].Name == nsName {
+				upd = &fake.updateParams[i]
+			}
+		}
+		Expect(upd).NotTo(BeNil())
+		Expect(upd.Clusters).To(ConsistOf("a", "b", "c"))
 	})
 })

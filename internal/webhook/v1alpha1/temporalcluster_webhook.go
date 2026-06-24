@@ -124,14 +124,30 @@ func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.
 	var errs field.ErrorList
 	specPath := field.NewPath("spec")
 
+	errs = append(errs, validateVersion(cluster, specPath)...)
+	errs = append(errs, validatePersistence(cluster, specPath)...)
+	errs = append(errs, validateMTLS(cluster, specPath)...)
+	errs = append(errs, validateDynamicConfig(cluster, specPath)...)
+	errs = append(errs, validateClusterMetadata(cluster, specPath)...)
+
+	return errs
+}
+
+func validateVersion(cluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
 	if !temporal.IsSupported(cluster.Spec.Version) {
-		errs = append(errs, field.Invalid(specPath.Child("version"), cluster.Spec.Version,
-			fmt.Sprintf("%s: version is not in the supported matrix %v", temporalv1alpha1.ReasonVersionUnsupported, temporal.SupportedVersions())))
+		return field.ErrorList{field.Invalid(specPath.Child("version"), cluster.Spec.Version,
+			fmt.Sprintf("%s: version is not in the supported matrix %v", temporalv1alpha1.ReasonVersionUnsupported, temporal.SupportedVersions()))}
 	}
+	return nil
+}
+
+func validatePersistence(cluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
+	var errs field.ErrorList
+	pPath := specPath.Child("persistence")
 
 	def := cluster.Spec.Persistence.DefaultStore
 	if (def.SQL == nil) == (def.Cassandra == nil) {
-		errs = append(errs, field.Invalid(specPath.Child("persistence", "defaultStore"), nil,
+		errs = append(errs, field.Invalid(pPath.Child("defaultStore"), nil,
 			"exactly one of sql or cassandra must be set"))
 	}
 
@@ -147,28 +163,55 @@ func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.
 		visBackends++
 	}
 	if visBackends != 1 {
-		errs = append(errs, field.Invalid(specPath.Child("persistence", "visibilityStore"), nil,
+		errs = append(errs, field.Invalid(pPath.Child("visibilityStore"), nil,
 			"exactly one of sql, cassandra, or elasticsearch must be set"))
 	}
 	if vis.Cassandra != nil {
 		if info, ok := temporal.Get(cluster.Spec.Version); ok && !info.CassandraVisibilitySupported {
-			errs = append(errs, field.Invalid(specPath.Child("persistence", "visibilityStore", "cassandra"), nil,
+			errs = append(errs, field.Invalid(pPath.Child("visibilityStore", "cassandra"), nil,
 				fmt.Sprintf("Cassandra visibility is not supported on Temporal %s", cluster.Spec.Version)))
 		}
 	}
 
-	if cluster.Spec.MTLS != nil && cluster.Spec.MTLS.Provider == "cert-manager" && cluster.Spec.MTLS.IssuerRef == nil {
-		errs = append(errs, field.Required(specPath.Child("mtls", "issuerRef"),
-			"issuerRef is required when mtls.provider is cert-manager"))
-	}
+	return errs
+}
 
+func validateMTLS(cluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
+	if cluster.Spec.MTLS != nil && cluster.Spec.MTLS.Provider == "cert-manager" && cluster.Spec.MTLS.IssuerRef == nil {
+		return field.ErrorList{field.Required(specPath.Child("mtls", "issuerRef"),
+			"issuerRef is required when mtls.provider is cert-manager")}
+	}
+	return nil
+}
+
+func validateDynamicConfig(cluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
 	if cluster.Spec.DynamicConfig != nil {
 		if _, _, err := temporal.RenderDynamicConfig(cluster.Spec.DynamicConfig, cluster.Spec.Version); err != nil {
-			errs = append(errs, field.Invalid(specPath.Child("dynamicConfig"), nil, err.Error()))
+			return field.ErrorList{field.Invalid(specPath.Child("dynamicConfig"), nil, err.Error())}
 		}
 	}
+	return nil
+}
 
-	return errs
+func validateClusterMetadata(cluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
+	if cm := cluster.Spec.ClusterMetadata; cm != nil && cm.EnableGlobalNamespace {
+		cmPath := specPath.Child("clusterMetadata")
+		var errs field.ErrorList
+		if cm.CurrentClusterName == "" {
+			errs = append(errs, field.Required(cmPath.Child("currentClusterName"),
+				"currentClusterName is required when enableGlobalNamespace is true"))
+		}
+		if cm.FailoverVersionIncrement == nil || *cm.FailoverVersionIncrement < 1 {
+			errs = append(errs, field.Required(cmPath.Child("failoverVersionIncrement"),
+				"failoverVersionIncrement is required and must be >= 1 when enableGlobalNamespace is true"))
+		}
+		if cm.InitialFailoverVersion == nil || *cm.InitialFailoverVersion < 1 {
+			errs = append(errs, field.Required(cmPath.Child("initialFailoverVersion"),
+				"initialFailoverVersion is required and must be >= 1 when enableGlobalNamespace is true"))
+		}
+		return errs
+	}
+	return nil
 }
 
 // ValidateCreate implements admission.Validator.
@@ -188,8 +231,18 @@ func (v *TemporalClusterCustomValidator) ValidateUpdate(_ context.Context, oldCl
 	errs := v.validateSpec(newCluster)
 	specPath := field.NewPath("spec")
 
-	// numHistoryShards is immutable. Prefer the stamped annotation as the source
-	// of truth, falling back to the old object's spec value.
+	errs = append(errs, validateShardCountImmutable(oldCluster, newCluster, specPath)...)
+	errs = append(errs, validateUpgradePath(oldCluster, newCluster, specPath)...)
+	errs = append(errs, validateStoreDriverImmutable(oldCluster, newCluster, specPath)...)
+	errs = append(errs, validateClusterMetadataImmutable(oldCluster, newCluster, specPath)...)
+
+	if len(errs) > 0 {
+		return nil, errs.ToAggregate()
+	}
+	return nil, nil
+}
+
+func validateShardCountImmutable(oldCluster, newCluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
 	initial := oldCluster.Spec.NumHistoryShards
 	if v, ok := oldCluster.Annotations[InitialShardsAnnotation]; ok {
 		if parsed, err := strconv.Atoi(v); err == nil {
@@ -197,31 +250,65 @@ func (v *TemporalClusterCustomValidator) ValidateUpdate(_ context.Context, oldCl
 		}
 	}
 	if newCluster.Spec.NumHistoryShards != initial {
-		errs = append(errs, field.Invalid(specPath.Child("numHistoryShards"), newCluster.Spec.NumHistoryShards,
-			fmt.Sprintf("%s: numHistoryShards is immutable (was %d)", temporalv1alpha1.ReasonShardCountImmutable, initial)))
+		return field.ErrorList{field.Invalid(specPath.Child("numHistoryShards"), newCluster.Spec.NumHistoryShards,
+			fmt.Sprintf("%s: numHistoryShards is immutable (was %d)", temporalv1alpha1.ReasonShardCountImmutable, initial))}
 	}
+	return nil
+}
 
-	// version may only advance along an allowed upgrade path.
+func validateUpgradePath(oldCluster, newCluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
 	if newCluster.Spec.Version != oldCluster.Spec.Version {
 		allowed, err := temporal.CanUpgrade(oldCluster.Spec.Version, newCluster.Spec.Version)
 		if err != nil || !allowed {
-			errs = append(errs, field.Invalid(specPath.Child("version"), newCluster.Spec.Version,
-				fmt.Sprintf("%s: cannot upgrade from %s to %s", temporalv1alpha1.ReasonUpgradePathInvalid, oldCluster.Spec.Version, newCluster.Spec.Version)))
+			return field.ErrorList{field.Invalid(specPath.Child("version"), newCluster.Spec.Version,
+				fmt.Sprintf("%s: cannot upgrade from %s to %s", temporalv1alpha1.ReasonUpgradePathInvalid, oldCluster.Spec.Version, newCluster.Spec.Version))}
 		}
 	}
+	return nil
+}
 
-	// The default store driver cannot change (no Postgres<->Cassandra migration).
+func validateStoreDriverImmutable(oldCluster, newCluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
 	oldDriverSQL := oldCluster.Spec.Persistence.DefaultStore.SQL != nil
 	newDriverSQL := newCluster.Spec.Persistence.DefaultStore.SQL != nil
 	if oldDriverSQL != newDriverSQL {
-		errs = append(errs, field.Invalid(specPath.Child("persistence", "defaultStore"), nil,
-			"the default store driver cannot be changed"))
+		return field.ErrorList{field.Invalid(specPath.Child("persistence", "defaultStore"), nil,
+			"the default store driver cannot be changed")}
 	}
+	return nil
+}
 
-	if len(errs) > 0 {
-		return nil, errs.ToAggregate()
+func validateClusterMetadataImmutable(oldCluster, newCluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
+	oldCM := oldCluster.Spec.ClusterMetadata
+	newCM := newCluster.Spec.ClusterMetadata
+	if oldCM == nil {
+		return nil
 	}
-	return nil, nil
+	cmPath := specPath.Child("clusterMetadata")
+	var errs field.ErrorList
+	if newCM == nil {
+		errs = append(errs, field.Invalid(cmPath, nil,
+			fmt.Sprintf("%s: clusterMetadata cannot be removed once set", temporalv1alpha1.ReasonClusterMetadataImmutable)))
+		return errs
+	}
+	if oldCM.FailoverVersionIncrement != nil {
+		if newCM.FailoverVersionIncrement == nil || *oldCM.FailoverVersionIncrement != *newCM.FailoverVersionIncrement {
+			errs = append(errs, field.Invalid(cmPath.Child("failoverVersionIncrement"), newCM.FailoverVersionIncrement,
+				fmt.Sprintf("%s: failoverVersionIncrement is immutable", temporalv1alpha1.ReasonClusterMetadataImmutable)))
+		}
+	}
+	if oldCM.InitialFailoverVersion != nil {
+		if newCM.InitialFailoverVersion == nil || *oldCM.InitialFailoverVersion != *newCM.InitialFailoverVersion {
+			errs = append(errs, field.Invalid(cmPath.Child("initialFailoverVersion"), newCM.InitialFailoverVersion,
+				fmt.Sprintf("%s: initialFailoverVersion is immutable", temporalv1alpha1.ReasonClusterMetadataImmutable)))
+		}
+	}
+	if oldCM.CurrentClusterName != "" {
+		if newCM.CurrentClusterName == "" || oldCM.CurrentClusterName != newCM.CurrentClusterName {
+			errs = append(errs, field.Invalid(cmPath.Child("currentClusterName"), newCM.CurrentClusterName,
+				fmt.Sprintf("%s: currentClusterName is immutable", temporalv1alpha1.ReasonClusterMetadataImmutable)))
+		}
+	}
+	return errs
 }
 
 // ValidateDelete implements admission.Validator.

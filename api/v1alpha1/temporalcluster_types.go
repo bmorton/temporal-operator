@@ -75,7 +75,7 @@ type TemporalClusterSpec struct {
 	// +optional
 	Authorization *AuthorizationSpec `json:"authorization,omitempty"`
 
-	// ClusterMetadata is a passthrough for multi-cluster setup.
+	// ClusterMetadata configures multi-cluster replication.
 	// +optional
 	ClusterMetadata *ClusterMetadataSpec `json:"clusterMetadata,omitempty"`
 

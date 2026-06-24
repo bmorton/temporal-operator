@@ -99,7 +99,7 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, r.statusUpdate(ctx, &ns)
 	}
 
-	info, err := r.ensureRegistered(ctx, &ns, tc)
+	info, failover, err := r.ensureRegistered(ctx, &ns, tc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -110,12 +110,40 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if info != nil {
 		ns.Status.NamespaceID = info.ID
 	}
+	r.applyReplicationStatus(&ns, info, failover)
 	r.setReady(&ns, metav1.ConditionTrue, "Registered", "namespace is registered")
 	return ctrl.Result{RequeueAfter: namespaceDriftRequeue}, r.statusUpdate(ctx, &ns)
 }
 
-// ensureRegistered registers the namespace if missing, or reconciles drift.
-func (r *TemporalNamespaceReconciler) ensureRegistered(ctx context.Context, ns *temporalv1alpha1.TemporalNamespace, tc temporal.NamespaceClient) (*temporal.NamespaceInfo, error) {
+// applyReplicationStatus records the observed replication state of a global
+// namespace, marking a failover as in progress while the observed active cluster
+// has not yet caught up with the desired one.
+func (r *TemporalNamespaceReconciler) applyReplicationStatus(ns *temporalv1alpha1.TemporalNamespace, info *temporal.NamespaceInfo, failoverIssued bool) {
+	if !ns.Spec.IsGlobal || info == nil {
+		return
+	}
+	repl := &temporalv1alpha1.NamespaceReplicationStatus{
+		IsGlobal:           info.IsGlobal,
+		ActiveCluster:      info.ActiveCluster,
+		Clusters:           info.Clusters,
+		FailoverInProgress: ns.Spec.ActiveCluster != "" && info.ActiveCluster != ns.Spec.ActiveCluster,
+	}
+	// Preserve a prior failover timestamp, then bump it when this reconcile
+	// issued a failover.
+	if ns.Status.Replication != nil {
+		repl.LastFailoverTime = ns.Status.Replication.LastFailoverTime
+	}
+	if failoverIssued {
+		now := metav1.Now()
+		repl.LastFailoverTime = &now
+	}
+	ns.Status.Replication = repl
+}
+
+// ensureRegistered registers the namespace if missing, or reconciles drift. It
+// returns the latest observed namespace info and whether a declarative failover
+// (active-cluster change) was issued during this reconcile.
+func (r *TemporalNamespaceReconciler) ensureRegistered(ctx context.Context, ns *temporalv1alpha1.TemporalNamespace, tc temporal.NamespaceClient) (*temporal.NamespaceInfo, bool, error) {
 	log := logf.FromContext(ctx)
 	params := namespaceParams(ns)
 
@@ -123,21 +151,42 @@ func (r *TemporalNamespaceReconciler) ensureRegistered(ctx context.Context, ns *
 	switch {
 	case errors.Is(err, temporal.ErrNamespaceNotFound):
 		if err := tc.Register(ctx, params); err != nil {
-			return nil, fmt.Errorf("registering namespace: %w", err)
+			return nil, false, fmt.Errorf("registering namespace: %w", err)
 		}
 		log.Info("registered namespace", "namespace", params.Name)
-		return tc.Describe(ctx, params.Name)
+		info, err := tc.Describe(ctx, params.Name)
+		return info, false, err
 	case err != nil:
-		return nil, fmt.Errorf("describing namespace: %w", err)
+		return nil, false, fmt.Errorf("describing namespace: %w", err)
+	}
+
+	failover := false
+	// A declarative failover (active-cluster change) must be issued on its own:
+	// Temporal rejects an active-cluster change combined with any other update
+	// parameters. Do it before general drift reconciliation.
+	if ns.Spec.IsGlobal && params.ActiveCluster != "" && params.ActiveCluster != info.ActiveCluster {
+		if err := tc.Failover(ctx, params.Name, params.ActiveCluster); err != nil {
+			return nil, false, fmt.Errorf("failing over namespace: %w", err)
+		}
+		failover = true
+		log.Info("issued namespace failover", "namespace", params.Name, "activeCluster", params.ActiveCluster)
+		// Re-describe so subsequent drift checks and status reflect the failover.
+		if refreshed, derr := tc.Describe(ctx, params.Name); derr == nil {
+			info = refreshed
+		}
 	}
 
 	if ns.Spec.DriftDetection != "ignore" && namespaceDrifted(params, info) {
 		if err := tc.Update(ctx, params); err != nil {
-			return nil, fmt.Errorf("updating namespace: %w", err)
+			return nil, false, fmt.Errorf("updating namespace: %w", err)
 		}
 		log.Info("updated namespace to resolve drift", "namespace", params.Name)
+		// Re-describe so the reported status reflects the post-update state.
+		if refreshed, derr := tc.Describe(ctx, params.Name); derr == nil {
+			info = refreshed
+		}
 	}
-	return info, nil
+	return info, failover, nil
 }
 
 func (r *TemporalNamespaceReconciler) reconcileDelete(ctx context.Context, ns *temporalv1alpha1.TemporalNamespace, tc temporal.NamespaceClient) error {
@@ -194,6 +243,9 @@ func namespaceParams(ns *temporalv1alpha1.TemporalNamespace) temporal.NamespaceP
 		Description:     ns.Spec.Description,
 		OwnerEmail:      ns.Spec.OwnerEmail,
 		RetentionPeriod: retention,
+		IsGlobal:        ns.Spec.IsGlobal,
+		Clusters:        ns.Spec.Clusters,
+		ActiveCluster:   ns.Spec.ActiveCluster,
 	}
 }
 
@@ -201,9 +253,37 @@ func namespaceDrifted(params temporal.NamespaceParams, info *temporal.NamespaceI
 	if info == nil {
 		return true
 	}
+	// Active-cluster changes are handled separately as a standalone failover
+	// (see ensureRegistered), not as general drift.
+	// For a global namespace, a change to the replication clusters list is drift.
+	// Temporal may return clusters in any order, so compare as sets. Only global
+	// namespaces declare clusters, so guard on a non-empty desired list to avoid
+	// spurious updates for local namespaces.
+	if len(params.Clusters) > 0 && !equalStringSets(params.Clusters, info.Clusters) {
+		return true
+	}
 	return params.Description != info.Description ||
 		params.OwnerEmail != info.OwnerEmail ||
 		params.RetentionPeriod != info.RetentionPeriod
+}
+
+// equalStringSets reports whether a and b contain the same strings, ignoring
+// order but respecting multiplicity (multiset equality).
+func equalStringSets(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[string]int, len(a))
+	for _, s := range a {
+		counts[s]++
+	}
+	for _, s := range b {
+		counts[s]--
+		if counts[s] < 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *TemporalNamespaceReconciler) setReady(ns *temporalv1alpha1.TemporalNamespace, status metav1.ConditionStatus, reason, message string) {

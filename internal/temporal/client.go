@@ -32,6 +32,7 @@ import (
 
 	namespacepb "go.temporal.io/api/namespace/v1"
 	operatorservice "go.temporal.io/api/operatorservice/v1"
+	replicationpb "go.temporal.io/api/replication/v1"
 	workflowservice "go.temporal.io/api/workflowservice/v1"
 
 	enumspb "go.temporal.io/api/enums/v1"
@@ -46,6 +47,9 @@ type NamespaceParams struct {
 	Description     string
 	OwnerEmail      string
 	RetentionPeriod time.Duration
+	IsGlobal        bool
+	Clusters        []string
+	ActiveCluster   string
 }
 
 // NamespaceInfo is the observed state of a Temporal namespace.
@@ -54,6 +58,9 @@ type NamespaceInfo struct {
 	Description     string
 	OwnerEmail      string
 	RetentionPeriod time.Duration
+	IsGlobal        bool
+	ActiveCluster   string
+	Clusters        []string
 }
 
 // NamespaceClient manages namespaces in a Temporal cluster.
@@ -61,6 +68,10 @@ type NamespaceClient interface {
 	Describe(ctx context.Context, name string) (*NamespaceInfo, error)
 	Register(ctx context.Context, params NamespaceParams) error
 	Update(ctx context.Context, params NamespaceParams) error
+	// Failover changes only the namespace's active cluster. It must be a
+	// standalone call: Temporal rejects an active-cluster change combined with
+	// any other update parameters.
+	Failover(ctx context.Context, name, activeCluster string) error
 	Delete(ctx context.Context, name string) error
 	Close() error
 }
@@ -93,14 +104,18 @@ func NewNamespaceClient(_ context.Context, address string, tlsConfig *tls.Config
 	}, nil
 }
 
-func (c *grpcNamespaceClient) Describe(ctx context.Context, name string) (*NamespaceInfo, error) {
-	resp, err := c.workflow.DescribeNamespace(ctx, &workflowservice.DescribeNamespaceRequest{Namespace: name})
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, ErrNamespaceNotFound
-		}
-		return nil, err
+// clusterReplicationConfigs builds the per-cluster replication config slice for
+// a global namespace's replication settings.
+func clusterReplicationConfigs(clusters []string) []*replicationpb.ClusterReplicationConfig {
+	out := make([]*replicationpb.ClusterReplicationConfig, 0, len(clusters))
+	for _, c := range clusters {
+		out = append(out, &replicationpb.ClusterReplicationConfig{ClusterName: c})
 	}
+	return out
+}
+
+// namespaceInfoFromProto maps a DescribeNamespaceResponse into a NamespaceInfo.
+func namespaceInfoFromProto(resp *workflowservice.DescribeNamespaceResponse) *NamespaceInfo {
 	info := &NamespaceInfo{}
 	if resp.GetNamespaceInfo() != nil {
 		info.ID = resp.GetNamespaceInfo().GetId()
@@ -110,21 +125,36 @@ func (c *grpcNamespaceClient) Describe(ctx context.Context, name string) (*Names
 	if resp.GetConfig().GetWorkflowExecutionRetentionTtl() != nil {
 		info.RetentionPeriod = resp.GetConfig().GetWorkflowExecutionRetentionTtl().AsDuration()
 	}
-	return info, nil
+	info.IsGlobal = resp.GetIsGlobalNamespace()
+	if rc := resp.GetReplicationConfig(); rc != nil {
+		info.ActiveCluster = rc.GetActiveClusterName()
+		for _, cl := range rc.GetClusters() {
+			info.Clusters = append(info.Clusters, cl.GetClusterName())
+		}
+	}
+	return info
 }
 
-func (c *grpcNamespaceClient) Register(ctx context.Context, params NamespaceParams) error {
-	_, err := c.workflow.RegisterNamespace(ctx, &workflowservice.RegisterNamespaceRequest{
+// registerNamespaceRequest builds the RegisterNamespace request for params.
+func registerNamespaceRequest(params NamespaceParams) *workflowservice.RegisterNamespaceRequest {
+	return &workflowservice.RegisterNamespaceRequest{
 		Namespace:                        params.Name,
 		Description:                      params.Description,
 		OwnerEmail:                       params.OwnerEmail,
 		WorkflowExecutionRetentionPeriod: durationpb.New(params.RetentionPeriod),
-	})
-	return err
+		IsGlobalNamespace:                params.IsGlobal,
+		Clusters:                         clusterReplicationConfigs(params.Clusters),
+		ActiveClusterName:                params.ActiveCluster,
+	}
 }
 
-func (c *grpcNamespaceClient) Update(ctx context.Context, params NamespaceParams) error {
-	_, err := c.workflow.UpdateNamespace(ctx, &workflowservice.UpdateNamespaceRequest{
+// updateNamespaceRequest builds the UpdateNamespace request for params. It
+// carries namespace info, config, and (for a global namespace) the replicated
+// cluster list. It deliberately does NOT set ReplicationConfig.ActiveClusterName:
+// Temporal rejects an active-cluster change (failover) that is combined with any
+// other update parameters, so failover is issued separately via Failover.
+func updateNamespaceRequest(params NamespaceParams) *workflowservice.UpdateNamespaceRequest {
+	req := &workflowservice.UpdateNamespaceRequest{
 		Namespace: params.Name,
 		UpdateInfo: &namespacepb.UpdateNamespaceInfo{
 			Description: params.Description,
@@ -133,7 +163,50 @@ func (c *grpcNamespaceClient) Update(ctx context.Context, params NamespaceParams
 		Config: &namespacepb.NamespaceConfig{
 			WorkflowExecutionRetentionTtl: durationpb.New(params.RetentionPeriod),
 		},
-	})
+	}
+	if len(params.Clusters) > 0 {
+		req.ReplicationConfig = &replicationpb.NamespaceReplicationConfig{
+			Clusters: clusterReplicationConfigs(params.Clusters),
+		}
+	}
+	return req
+}
+
+// failoverNamespaceRequest builds a standalone failover UpdateNamespace request.
+// A failover must change only the active cluster: Temporal rejects an
+// active-cluster change combined with any other update parameters.
+func failoverNamespaceRequest(name, activeCluster string) *workflowservice.UpdateNamespaceRequest {
+	return &workflowservice.UpdateNamespaceRequest{
+		Namespace: name,
+		ReplicationConfig: &replicationpb.NamespaceReplicationConfig{
+			ActiveClusterName: activeCluster,
+		},
+	}
+}
+
+func (c *grpcNamespaceClient) Describe(ctx context.Context, name string) (*NamespaceInfo, error) {
+	resp, err := c.workflow.DescribeNamespace(ctx, &workflowservice.DescribeNamespaceRequest{Namespace: name})
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, ErrNamespaceNotFound
+		}
+		return nil, err
+	}
+	return namespaceInfoFromProto(resp), nil
+}
+
+func (c *grpcNamespaceClient) Register(ctx context.Context, params NamespaceParams) error {
+	_, err := c.workflow.RegisterNamespace(ctx, registerNamespaceRequest(params))
+	return err
+}
+
+func (c *grpcNamespaceClient) Update(ctx context.Context, params NamespaceParams) error {
+	_, err := c.workflow.UpdateNamespace(ctx, updateNamespaceRequest(params))
+	return err
+}
+
+func (c *grpcNamespaceClient) Failover(ctx context.Context, name, activeCluster string) error {
+	_, err := c.workflow.UpdateNamespace(ctx, failoverNamespaceRequest(name, activeCluster))
 	return err
 }
 
@@ -216,6 +289,82 @@ func (c *grpcNamespaceClient) Remove(ctx context.Context, namespace, name string
 	_, err := c.operator.RemoveSearchAttributes(ctx, &operatorservice.RemoveSearchAttributesRequest{
 		Namespace:        namespace,
 		SearchAttributes: []string{name},
+	})
+	return err
+}
+
+// RemoteClusterInfo is the observed state of a remote cluster connection.
+type RemoteClusterInfo struct {
+	Name                   string
+	Address                string
+	InitialFailoverVersion int64
+	ConnectionEnabled      bool
+	HistoryShardCount      int32
+}
+
+// RemoteClusterClient manages remote-cluster connections on a Temporal cluster.
+type RemoteClusterClient interface {
+	ListRemoteClusters(ctx context.Context) ([]RemoteClusterInfo, error)
+	UpsertRemoteCluster(ctx context.Context, frontendAddress string, enableConnection bool) error
+	RemoveRemoteCluster(ctx context.Context, name string) error
+	Close() error
+}
+
+// RemoteClusterClientFactory builds a RemoteClusterClient connected to a frontend.
+type RemoteClusterClientFactory func(ctx context.Context, address string, tlsConfig *tls.Config) (RemoteClusterClient, error)
+
+// NewRemoteClusterClient dials the frontend and returns a RemoteClusterClient.
+func NewRemoteClusterClient(ctx context.Context, address string, tlsConfig *tls.Config) (RemoteClusterClient, error) {
+	c, err := NewNamespaceClient(ctx, address, tlsConfig)
+	if err != nil {
+		return nil, err
+	}
+	return c.(*grpcNamespaceClient), nil
+}
+
+func remoteClusterInfoFromProto(m *operatorservice.ClusterMetadata) RemoteClusterInfo {
+	return RemoteClusterInfo{
+		Name:                   m.GetClusterName(),
+		Address:                m.GetAddress(),
+		InitialFailoverVersion: m.GetInitialFailoverVersion(),
+		ConnectionEnabled:      m.GetIsConnectionEnabled(),
+		HistoryShardCount:      m.GetHistoryShardCount(),
+	}
+}
+
+func (c *grpcNamespaceClient) ListRemoteClusters(ctx context.Context) ([]RemoteClusterInfo, error) {
+	var out []RemoteClusterInfo
+	var pageToken []byte
+	for {
+		resp, err := c.operator.ListClusters(ctx, &operatorservice.ListClustersRequest{
+			PageSize:      100,
+			NextPageToken: pageToken,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range resp.GetClusters() {
+			out = append(out, remoteClusterInfoFromProto(m))
+		}
+		pageToken = resp.GetNextPageToken()
+		if len(pageToken) == 0 {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (c *grpcNamespaceClient) UpsertRemoteCluster(ctx context.Context, frontendAddress string, enableConnection bool) error {
+	_, err := c.operator.AddOrUpdateRemoteCluster(ctx, &operatorservice.AddOrUpdateRemoteClusterRequest{
+		FrontendAddress:               frontendAddress,
+		EnableRemoteClusterConnection: enableConnection,
+	})
+	return err
+}
+
+func (c *grpcNamespaceClient) RemoveRemoteCluster(ctx context.Context, name string) error {
+	_, err := c.operator.RemoveRemoteCluster(ctx, &operatorservice.RemoveRemoteClusterRequest{
+		ClusterName: name,
 	})
 	return err
 }

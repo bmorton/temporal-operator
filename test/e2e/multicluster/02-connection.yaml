@@ -1,0 +1,17 @@
+# Wires the two clusters into one replication group. Both peers are LOCAL
+# (clusterRef), so the operator resolves each frontend address and performs the
+# remote-cluster upsert on BOTH clusters automatically -- this is the step a human
+# operator would otherwise run by hand with `temporal operator cluster upsert`.
+# Peer names MUST equal each cluster's clusterMetadata.currentClusterName.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterConnection
+metadata:
+  name: dr-pair
+spec:
+  peers:
+    - name: clusterA
+      clusterRef:
+        name: temporal-cluster-a
+    - name: clusterB
+      clusterRef:
+        name: temporal-cluster-b

@@ -27,6 +27,7 @@ Package v1alpha1 contains API Schema definitions for the temporal v1alpha1 API g
 ### Resource Types
 - [TemporalCluster](#temporalcluster)
 - [TemporalClusterClient](#temporalclusterclient)
+- [TemporalClusterConnection](#temporalclusterconnection)
 - [TemporalDevServer](#temporaldevserver)
 - [TemporalNamespace](#temporalnamespace)
 - [TemporalSchedule](#temporalschedule)
@@ -150,11 +151,32 @@ _Appears in:_
 | `duration` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ |  |  | Optional: \{\} <br /> |
 
 
+#### ClusterConnectionPeer
+
+
+
+ClusterConnectionPeer identifies one cluster in a replication group. Exactly
+one of ClusterRef or FrontendAddress must be set.
+
+
+
+_Appears in:_
+- [TemporalClusterConnectionSpec](#temporalclusterconnectionspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the replication-group cluster name (== clusterMetadata.currentClusterName). |  |  |
+| `clusterRef` _[ClusterReference](#clusterreference)_ | ClusterRef points at a local TemporalCluster CR. The operator resolves its<br />frontend address and reuses its CA automatically. |  | Optional: \{\} <br /> |
+| `frontendAddress` _string_ | FrontendAddress is an external peer's gRPC frontend address (host:port). |  | Optional: \{\} <br /> |
+| `tlsSecretRef` _[SecretReference](#secretreference)_ | TLSSecretRef supplies mTLS material for an external peer. Ignored for<br />ClusterRef peers (the cluster CA is reused). |  | Optional: \{\} <br /> |
+| `enableConnection` _boolean_ | EnableConnection toggles replication traffic without removing the peer. | true | Optional: \{\} <br /> |
+
+
 #### ClusterMetadataSpec
 
 
 
-ClusterMetadataSpec is a passthrough for multi-cluster metadata.
+ClusterMetadataSpec configures multi-cluster replication.
 
 
 
@@ -163,7 +185,11 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `raw` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ |  |  | Optional: \{\} <br /> |
+| `enableGlobalNamespace` _boolean_ |  |  | Optional: \{\} <br /> |
+| `failoverVersionIncrement` _integer_ |  |  | Minimum: 1 <br />Optional: \{\} <br /> |
+| `currentClusterName` _string_ |  |  | MinLength: 1 <br />Optional: \{\} <br /> |
+| `initialFailoverVersion` _integer_ |  |  | Minimum: 1 <br />Optional: \{\} <br /> |
+| `masterClusterName` _string_ |  |  | MinLength: 1 <br />Optional: \{\} <br /> |
 
 
 #### ClusterReference
@@ -176,6 +202,7 @@ namespace: either a TemporalCluster (default) or a TemporalDevServer.
 
 
 _Appears in:_
+- [ClusterConnectionPeer](#clusterconnectionpeer)
 - [TemporalClusterClientSpec](#temporalclusterclientspec)
 - [TemporalNamespaceSpec](#temporalnamespacespec)
 - [TemporalScheduleSpec](#temporalschedulespec)
@@ -479,6 +506,45 @@ _Appears in:_
 | `serviceMonitor` _[ServiceMonitorSpec](#servicemonitorspec)_ |  |  | Optional: \{\} <br /> |
 
 
+#### NamespaceReplicationStatus
+
+
+
+NamespaceReplicationStatus reports the observed replication state.
+
+
+
+_Appears in:_
+- [TemporalNamespaceStatus](#temporalnamespacestatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `isGlobal` _boolean_ |  |  | Optional: \{\} <br /> |
+| `activeCluster` _string_ |  |  | Optional: \{\} <br /> |
+| `clusters` _string array_ |  |  | Optional: \{\} <br /> |
+| `failoverInProgress` _boolean_ |  |  | Optional: \{\} <br /> |
+| `lastFailoverTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#time-v1-meta)_ |  |  | Optional: \{\} <br /> |
+
+
+#### PeerConnectionStatus
+
+
+
+PeerConnectionStatus reports the observed state of one peer.
+
+
+
+_Appears in:_
+- [TemporalClusterConnectionStatus](#temporalclusterconnectionstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ |  |  |  |
+| `reachable` _boolean_ | Reachable is true when the operator could connect to this peer's frontend. |  | Optional: \{\} <br /> |
+| `connected` _boolean_ | Connected is true when this peer appears as an enabled remote cluster on<br />the other reachable peers. |  | Optional: \{\} <br /> |
+| `message` _string_ |  |  | Optional: \{\} <br /> |
+
+
 #### PersistenceSpec
 
 
@@ -716,6 +782,27 @@ _Appears in:_
 | `key` _string_ |  | password | Optional: \{\} <br /> |
 
 
+#### SecretReference
+
+
+
+SecretReference points at a Secret in the same namespace holding TLS material
+for connecting to an external Temporal peer. Keys default to the conventional
+"ca.crt", "tls.crt", "tls.key" when the overrides are empty.
+
+
+
+_Appears in:_
+- [ClusterConnectionPeer](#clusterconnectionpeer)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the Secret name. |  |  |
+| `caKey` _string_ | CAKey is the Secret key holding the CA bundle. Defaults to "ca.crt". |  | Optional: \{\} <br /> |
+| `certKey` _string_ | CertKey is the Secret key holding the client certificate. Defaults to "tls.crt". |  | Optional: \{\} <br /> |
+| `keyKey` _string_ | KeyKey is the Secret key holding the client private key. Defaults to "tls.key". |  | Optional: \{\} <br /> |
+
+
 #### ServiceExposureSpec
 
 
@@ -934,6 +1021,43 @@ _Appears in:_
 
 
 
+#### TemporalClusterConnection
+
+
+
+TemporalClusterConnection is the Schema for the temporalclusterconnections API.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `temporal.bmor10.com/v1alpha1` | | |
+| `kind` _string_ | `TemporalClusterConnection` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  | Optional: \{\} <br /> |
+| `spec` _[TemporalClusterConnectionSpec](#temporalclusterconnectionspec)_ |  |  | Required: \{\} <br /> |
+
+
+#### TemporalClusterConnectionSpec
+
+
+
+TemporalClusterConnectionSpec defines a multi-cluster replication group and
+drives automatic remote-cluster connection registration between its peers.
+
+
+
+_Appears in:_
+- [TemporalClusterConnection](#temporalclusterconnection)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `peers` _[ClusterConnectionPeer](#clusterconnectionpeer) array_ | Peers participating in replication. At least two are required. Each peer's<br />Name must equal that cluster's clusterMetadata.currentClusterName. |  | MinItems: 2 <br /> |
+
+
+
+
 #### TemporalClusterSpec
 
 
@@ -959,7 +1083,7 @@ _Appears in:_
 | `metrics` _[MetricsSpec](#metricsspec)_ | Metrics configures Prometheus integration. |  | Optional: \{\} <br /> |
 | `archival` _[ArchivalSpec](#archivalspec)_ | Archival configures cluster-wide archival enablement. |  | Optional: \{\} <br /> |
 | `authorization` _[AuthorizationSpec](#authorizationspec)_ | Authorization configures the authorizer and claim mapper. |  | Optional: \{\} <br /> |
-| `clusterMetadata` _[ClusterMetadataSpec](#clustermetadataspec)_ | ClusterMetadata is a passthrough for multi-cluster setup. |  | Optional: \{\} <br /> |
+| `clusterMetadata` _[ClusterMetadataSpec](#clustermetadataspec)_ | ClusterMetadata configures multi-cluster replication. |  | Optional: \{\} <br /> |
 | `preventDeletion` _boolean_ | PreventDeletion, when true, blocks deletion of the cluster via the<br />validating webhook as a safety measure. |  | Optional: \{\} <br /> |
 
 
@@ -1051,6 +1175,9 @@ _Appears in:_
 | `ownerEmail` _string_ | OwnerEmail is the owner contact for the namespace. |  | Optional: \{\} <br /> |
 | `allowDeletion` _boolean_ | AllowDeletion permits the operator to delete the Temporal namespace when<br />the CR is deleted. When false, the namespace is left in place. |  | Optional: \{\} <br /> |
 | `driftDetection` _string_ | DriftDetection controls whether the operator reconciles drift between the<br />spec and the live namespace. | reconcile | Enum: [reconcile ignore] <br />Optional: \{\} <br /> |
+| `isGlobal` _boolean_ | IsGlobal marks the namespace as global for multi-cluster replication. |  | Optional: \{\} <br /> |
+| `clusters` _string array_ | Clusters lists the cluster names this namespace is replicated to. Only<br />meaningful when IsGlobal is true. |  | Optional: \{\} <br /> |
+| `activeCluster` _string_ | ActiveCluster is the authoritative cluster for this namespace. Changing it<br />triggers an operator-executed failover. Only meaningful when IsGlobal. |  | Optional: \{\} <br /> |
 
 
 

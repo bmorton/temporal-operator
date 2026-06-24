@@ -1,0 +1,330 @@
+# Chainsaw test: PROVE multi-cluster replication and failover, not just
+# reconciliation. Brings up two postgres-backed TemporalClusters (clusterA active,
+# clusterB standby) wired into a replication group, then drives Temporal's admin
+# CLI (temporalio/admin-tools) against each cluster's frontend to assert four
+# concrete proofs:
+#
+#   1. Connection auto-established  -- each frontend lists the OTHER cluster as a
+#      remote (the operator performed the upsert; no human ran `cluster upsert`).
+#   2. Namespace replicated         -- a global namespace created on clusterA
+#      becomes describable ON clusterB as global with active clusterA.
+#   3. Data replicated              -- a workflow started on clusterA becomes
+#      observable on clusterB.
+#   4. Failover effective           -- flipping spec.activeCluster to clusterB is
+#      reported active on BOTH frontends, and a workflow started on clusterB (the
+#      new active) becomes observable back on clusterA.
+#
+# Async replication is never assumed instant: every cross-cluster check runs in a
+# bounded retry loop. The clusters run plaintext (no mTLS) so the in-cluster
+# admin-tools proof pods reach the frontends without client certs; replication
+# between the two frontends also flows plaintext inside the kind network.
+#
+# Prerequisites (installed by the e2e workflow): the temporal-operator + CRDs and
+# the CNPG operator.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: multicluster
+spec:
+  timeouts:
+    apply: 2m
+    assert: 10m
+    exec: 15m
+  steps:
+    # ----------------------------------------------------------------------
+    # Provision a single Postgres instance with one database pair per cluster.
+    # ----------------------------------------------------------------------
+    - name: provision-postgres
+      try:
+        - apply:
+            file: 00-postgres.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+        - apply:
+            file: 00-databases.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: create-databases
+              status:
+                succeeded: 1
+
+    # ----------------------------------------------------------------------
+    # Bring up both clusters and wait for Ready.
+    # ----------------------------------------------------------------------
+    - name: clusters
+      try:
+        - apply:
+            file: 01-cluster-a.yaml
+        - apply:
+            file: 01-cluster-b.yaml
+        - assert:
+            file: 01-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster
+        - events: {}
+
+    # ----------------------------------------------------------------------
+    # Wire up replication. The operator upserts each cluster as a remote on the
+    # other; status.peers[*].connected proves it from the operator's view.
+    # ----------------------------------------------------------------------
+    - name: connection
+      try:
+        - apply:
+            file: 02-connection.yaml
+        - assert:
+            file: 02-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalClusterConnection
+        - events: {}
+
+    # ======================================================================
+    # PROOF 1: connection auto-established. Independently of CR status, ask each
+    # frontend for its remote-cluster list and assert the OTHER cluster is there.
+    # ======================================================================
+    - name: proof-connection-auto-established
+      try:
+        - script:
+            env:
+              - name: NS
+                value: ($namespace)
+            content: |
+              set -eu
+              check_remote() {
+                local addr="$1" want="$2" tag="$3"
+                for i in $(seq 1 30); do
+                  out=$(kubectl run -n "$NS" "clusterlist-${tag}-${i}" --rm -i --restart=Never \
+                    --image=temporalio/admin-tools:1.31.1 -- \
+                    temporal operator cluster list --address "$addr" 2>/dev/null || true)
+                  echo "--- ${tag} attempt ${i} ---"
+                  echo "$out"
+                  if echo "$out" | grep -q "$want"; then
+                    echo "PROOF1 OK: ${addr} lists remote cluster ${want}"
+                    return 0
+                  fi
+                  sleep 10
+                done
+                echo "PROOF1 FAIL: ${addr} never listed remote cluster ${want}"
+                return 1
+              }
+              # clusterA's frontend must list clusterB as a remote, and vice versa.
+              check_remote temporal-cluster-a-frontend:7233 clusterB a
+              check_remote temporal-cluster-b-frontend:7233 clusterA b
+
+    # ----------------------------------------------------------------------
+    # Create a GLOBAL namespace, active on clusterA.
+    # ----------------------------------------------------------------------
+    - name: namespace
+      try:
+        - apply:
+            file: 03-namespace.yaml
+        - assert:
+            file: 03-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalNamespace
+
+    # ======================================================================
+    # PROOF 2: namespace metadata replicated. Confirm it is global+active=clusterA
+    # on clusterA, then assert the SAME namespace is describable on clusterB as
+    # global with active clusterA (bounded retry for async propagation).
+    # ======================================================================
+    - name: proof-namespace-replicated
+      try:
+        - script:
+            env:
+              - name: NS
+                value: ($namespace)
+            content: |
+              set -eu
+              # Sanity: clusterA reports the namespace global with active clusterA.
+              outa=$(kubectl run -n "$NS" nsdesc-a --rm -i --restart=Never \
+                --image=temporalio/admin-tools:1.31.1 -- \
+                temporal operator namespace describe --namespace orders \
+                --address temporal-cluster-a-frontend:7233 -o json 2>/dev/null || true)
+              echo "$outa"
+              packed=$(echo "$outa" | tr -d '[:space:]')
+              echo "$packed" | grep -q '"isGlobalNamespace":true' \
+                || { echo "PROOF2 FAIL: orders not global on clusterA"; exit 1; }
+              echo "$packed" | grep -q '"activeClusterName":"clusterA"' \
+                || { echo "PROOF2 FAIL: orders not active=clusterA on clusterA"; exit 1; }
+              echo "PROOF2a OK: orders is global active=clusterA on clusterA"
+
+              # Replicated: clusterB must learn the namespace as global active=clusterA.
+              for i in $(seq 1 30); do
+                outb=$(kubectl run -n "$NS" "nsdesc-b-${i}" --rm -i --restart=Never \
+                  --image=temporalio/admin-tools:1.31.1 -- \
+                  temporal operator namespace describe --namespace orders \
+                  --address temporal-cluster-b-frontend:7233 -o json 2>/dev/null || true)
+                echo "--- clusterB describe attempt ${i} ---"
+                echo "$outb"
+                packedb=$(echo "$outb" | tr -d '[:space:]')
+                if echo "$packedb" | grep -q '"isGlobalNamespace":true' \
+                   && echo "$packedb" | grep -q '"activeClusterName":"clusterA"'; then
+                  echo "PROOF2b OK: orders replicated to clusterB (global, active=clusterA)"
+                  exit 0
+                fi
+                sleep 10
+              done
+              echo "PROOF2 FAIL: orders never replicated to clusterB"
+              exit 1
+
+    # ======================================================================
+    # PROOF 3: workflow history replicated. Start a workflow on clusterA (the
+    # active cluster), then assert the SAME execution becomes observable on
+    # clusterB (the standby) within a bounded poll.
+    # ======================================================================
+    - name: proof-workflow-replicated
+      try:
+        - script:
+            env:
+              - name: NS
+                value: ($namespace)
+            content: |
+              set -eu
+              # Start workflow repl-1 against clusterA. No worker is needed: the
+              # WorkflowExecutionStarted event is written (and replicated) at start.
+              starta=$(kubectl run -n "$NS" wf-start-a --rm -i --restart=Never \
+                --image=temporalio/admin-tools:1.31.1 -- \
+                temporal workflow start --namespace orders --task-queue e2e \
+                --type E2E --workflow-id repl-1 \
+                --address temporal-cluster-a-frontend:7233 2>&1 || true)
+              echo "$starta"
+
+              # Observe repl-1 on clusterB via replication.
+              for i in $(seq 1 30); do
+                outb=$(kubectl run -n "$NS" "wf-desc-b-${i}" --rm -i --restart=Never \
+                  --image=temporalio/admin-tools:1.31.1 -- \
+                  temporal workflow describe --namespace orders --workflow-id repl-1 \
+                  --address temporal-cluster-b-frontend:7233 -o json 2>/dev/null || true)
+                echo "--- clusterB workflow describe attempt ${i} ---"
+                echo "$outb"
+                packedb=$(echo "$outb" | tr -d '[:space:]')
+                if echo "$packedb" | grep -q '"workflowId":"repl-1"'; then
+                  echo "PROOF3 OK: workflow repl-1 replicated from clusterA to clusterB"
+                  exit 0
+                fi
+                sleep 10
+              done
+              echo "PROOF3 FAIL: workflow repl-1 never observed on clusterB"
+              exit 1
+
+    # ----------------------------------------------------------------------
+    # Trigger failover: flip the namespace's active cluster to clusterB.
+    # ----------------------------------------------------------------------
+    - name: failover
+      try:
+        - apply:
+            file: 04-failover.yaml
+        - assert:
+            file: 04-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalNamespace
+
+    # ======================================================================
+    # PROOF 4: failover effective. BOTH frontends must report active=clusterB,
+    # and a workflow started on clusterB (the new active) must be observable back
+    # on clusterA -- proving replication now flows in the reverse direction.
+    # ======================================================================
+    - name: proof-failover-effective
+      try:
+        - script:
+            env:
+              - name: NS
+                value: ($namespace)
+            content: |
+              set -eu
+              assert_active_b() {
+                local addr="$1" tag="$2"
+                for i in $(seq 1 30); do
+                  out=$(kubectl run -n "$NS" "fo-desc-${tag}-${i}" --rm -i --restart=Never \
+                    --image=temporalio/admin-tools:1.31.1 -- \
+                    temporal operator namespace describe --namespace orders \
+                    --address "$addr" -o json 2>/dev/null || true)
+                  echo "--- ${tag} failover describe attempt ${i} ---"
+                  echo "$out"
+                  if echo "$out" | tr -d '[:space:]' | grep -q '"activeClusterName":"clusterB"'; then
+                    echo "PROOF4 OK: ${addr} reports active=clusterB"
+                    return 0
+                  fi
+                  sleep 10
+                done
+                echo "PROOF4 FAIL: ${addr} never reported active=clusterB"
+                return 1
+              }
+              # Both clusters must agree clusterB is now active.
+              assert_active_b temporal-cluster-a-frontend:7233 a
+              assert_active_b temporal-cluster-b-frontend:7233 b
+
+              # Start workflow repl-2 against clusterB (now active)...
+              startb=$(kubectl run -n "$NS" wf-start-b --rm -i --restart=Never \
+                --image=temporalio/admin-tools:1.31.1 -- \
+                temporal workflow start --namespace orders --task-queue e2e \
+                --type E2E --workflow-id repl-2 \
+                --address temporal-cluster-b-frontend:7233 2>&1 || true)
+              echo "$startb"
+
+              # ...and observe it back on clusterA (reverse-direction replication).
+              for i in $(seq 1 30); do
+                outa=$(kubectl run -n "$NS" "wf-desc-a-${i}" --rm -i --restart=Never \
+                  --image=temporalio/admin-tools:1.31.1 -- \
+                  temporal workflow describe --namespace orders --workflow-id repl-2 \
+                  --address temporal-cluster-a-frontend:7233 -o json 2>/dev/null || true)
+                echo "--- clusterA reverse describe attempt ${i} ---"
+                echo "$outa"
+                if echo "$outa" | tr -d '[:space:]' | grep -q '"workflowId":"repl-2"'; then
+                  echo "PROOF4 OK: workflow repl-2 replicated from clusterB back to clusterA"
+                  exit 0
+                fi
+                sleep 10
+              done
+              echo "PROOF4 FAIL: workflow repl-2 never observed on clusterA"
+              exit 1
+
+  # Runs on ANY step failure, before Chainsaw tears down the ephemeral namespace,
+  # so operator-managed CRs/pods/events are still inspectable.
+  catch:
+    - describe:
+        apiVersion: temporal.bmor10.com/v1alpha1
+        kind: TemporalCluster
+    - describe:
+        apiVersion: temporal.bmor10.com/v1alpha1
+        kind: TemporalClusterConnection
+    - describe:
+        apiVersion: temporal.bmor10.com/v1alpha1
+        kind: TemporalNamespace
+    - script:
+        env:
+          - name: NS
+            value: ($namespace)
+        content: |
+          set +e
+          echo "===== PODS ====="
+          kubectl -n "$NS" get pods -o wide
+          echo "===== DEPLOYMENTS ====="
+          kubectl -n "$NS" get deploy
+          echo "===== EVENTS ====="
+          kubectl -n "$NS" get events --sort-by=.lastTimestamp | tail -80
+          echo "===== FRONTEND/HISTORY LOGS ====="
+          for inst in temporal-cluster-a temporal-cluster-b; do
+            for p in $(kubectl -n "$NS" get pods -l app.kubernetes.io/instance=$inst -o name); do
+              echo "----- $p -----"
+              kubectl -n "$NS" logs "$p" --all-containers --tail=80
+            done
+          done
+    - events: {}

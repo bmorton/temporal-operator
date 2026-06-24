@@ -50,6 +50,20 @@ type TemporalNamespaceSpec struct {
 	// +kubebuilder:default=reconcile
 	// +optional
 	DriftDetection string `json:"driftDetection,omitempty"`
+
+	// IsGlobal marks the namespace as global for multi-cluster replication.
+	// +optional
+	IsGlobal bool `json:"isGlobal,omitempty"`
+
+	// Clusters lists the cluster names this namespace is replicated to. Only
+	// meaningful when IsGlobal is true.
+	// +optional
+	Clusters []string `json:"clusters,omitempty"`
+
+	// ActiveCluster is the authoritative cluster for this namespace. Changing it
+	// triggers an operator-executed failover. Only meaningful when IsGlobal.
+	// +optional
+	ActiveCluster string `json:"activeCluster,omitempty"`
 }
 
 // TemporalNamespaceStatus defines the observed state of TemporalNamespace.
@@ -73,6 +87,24 @@ type TemporalNamespaceStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Replication reports the observed replication state of a global namespace.
+	// +optional
+	Replication *NamespaceReplicationStatus `json:"replication,omitempty"`
+}
+
+// NamespaceReplicationStatus reports the observed replication state.
+type NamespaceReplicationStatus struct {
+	// +optional
+	IsGlobal bool `json:"isGlobal,omitempty"`
+	// +optional
+	ActiveCluster string `json:"activeCluster,omitempty"`
+	// +optional
+	Clusters []string `json:"clusters,omitempty"`
+	// +optional
+	FailoverInProgress bool `json:"failoverInProgress,omitempty"`
+	// +optional
+	LastFailoverTime *metav1.Time `json:"lastFailoverTime,omitempty"`
 }
 
 // +kubebuilder:object:root=true

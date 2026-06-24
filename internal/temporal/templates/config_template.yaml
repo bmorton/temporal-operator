@@ -157,13 +157,13 @@ services:
 
 clusterMetadata:
     enableGlobalNamespace: {{ .EnableGlobalNamespace }}
-    failoverVersionIncrement: 10
+    failoverVersionIncrement: {{ .FailoverVersionIncrement }}
     masterClusterName: {{ .MasterClusterName | quote }}
     currentClusterName: {{ .CurrentClusterName | quote }}
     clusterInformation:
         {{ .CurrentClusterName }}:
             enabled: true
-            initialFailoverVersion: 1
+            initialFailoverVersion: {{ .InitialFailoverVersion }}
             rpcName: "frontend"
             rpcAddress: {{ printf "127.0.0.1:%d" (int .Services.frontend.GRPCPort) | quote }}
             httpAddress: {{ printf "127.0.0.1:%d" (int .Services.frontend.HTTPPort) | quote }}

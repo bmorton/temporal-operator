@@ -1,0 +1,13 @@
+# After the failover the namespace's observed replication status reports clusterB
+# as the active cluster. The CLI-level proof on BOTH frontends is in
+# chainsaw-test.yaml.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: orders
+status:
+  registered: true
+  (conditions[?type == 'Ready'].status | [0]): "True"
+  replication:
+    isGlobal: true
+    activeCluster: clusterB

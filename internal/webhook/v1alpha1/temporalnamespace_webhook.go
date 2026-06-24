@@ -62,18 +62,55 @@ func (v *TemporalNamespaceCustomValidator) ValidateCreate(_ context.Context, tem
 		return nil, fmt.Errorf("spec.clusterRef.name must not be empty")
 	}
 
+	if err := validateReplication(temporalnamespace); err != nil {
+		return nil, err
+	}
+
 	return nil, nil
 }
 
 // ValidateUpdate implements admission.Validator so a webhook will be registered for the type TemporalNamespace.
-func (v *TemporalNamespaceCustomValidator) ValidateUpdate(_ context.Context, _, temporalnamespace *temporalv1alpha1.TemporalNamespace) (admission.Warnings, error) {
-	temporalnamespacelog.Info("Validation for TemporalNamespace upon update", "name", temporalnamespace.GetName())
+func (v *TemporalNamespaceCustomValidator) ValidateUpdate(_ context.Context, oldNS, newNS *temporalv1alpha1.TemporalNamespace) (admission.Warnings, error) {
+	temporalnamespacelog.Info("Validation for TemporalNamespace upon update", "name", newNS.GetName())
 
-	if temporalnamespace.Spec.ClusterRef.Name == "" {
+	if newNS.Spec.ClusterRef.Name == "" {
 		return nil, fmt.Errorf("spec.clusterRef.name must not be empty")
 	}
 
+	if oldNS.Spec.IsGlobal != newNS.Spec.IsGlobal {
+		return nil, fmt.Errorf("%s: isGlobal is immutable after creation", temporalv1alpha1.ReasonIsGlobalImmutable)
+	}
+
+	if err := validateReplication(newNS); err != nil {
+		return nil, err
+	}
+
 	return nil, nil
+}
+
+// validateReplication enforces the replication invariants: clusters and
+// activeCluster are only valid on a global namespace, and a configured
+// activeCluster must be one of the listed clusters.
+func validateReplication(ns *temporalv1alpha1.TemporalNamespace) error {
+	if !ns.Spec.IsGlobal {
+		if len(ns.Spec.Clusters) > 0 || ns.Spec.ActiveCluster != "" {
+			return fmt.Errorf("spec.clusters and spec.activeCluster require spec.isGlobal=true")
+		}
+		return nil
+	}
+	if ns.Spec.ActiveCluster != "" && len(ns.Spec.Clusters) > 0 {
+		found := false
+		for _, c := range ns.Spec.Clusters {
+			if c == ns.Spec.ActiveCluster {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("%s: spec.activeCluster %q must be one of spec.clusters", temporalv1alpha1.ReasonActiveClusterInvalid, ns.Spec.ActiveCluster)
+		}
+	}
+	return nil
 }
 
 // ValidateDelete implements admission.Validator so a webhook will be registered for the type TemporalNamespace.

@@ -54,6 +54,11 @@ spec:
           spec:
             description: spec defines the desired state of TemporalNamespace
             properties:
+              activeCluster:
+                description: |-
+                  ActiveCluster is the authoritative cluster for this namespace. Changing it
+                  triggers an operator-executed failover. Only meaningful when IsGlobal.
+                type: string
               allowDeletion:
                 description: |-
                   AllowDeletion permits the operator to delete the Temporal namespace when
@@ -77,6 +82,13 @@ spec:
                 required:
                 - name
                 type: object
+              clusters:
+                description: |-
+                  Clusters lists the cluster names this namespace is replicated to. Only
+                  meaningful when IsGlobal is true.
+                items:
+                  type: string
+                type: array
               description:
                 description: Description is a human-friendly description of the namespace.
                 type: string
@@ -89,6 +101,10 @@ spec:
                 - reconcile
                 - ignore
                 type: string
+              isGlobal:
+                description: IsGlobal marks the namespace as global for multi-cluster
+                  replication.
+                type: boolean
               ownerEmail:
                 description: OwnerEmail is the owner contact for the namespace.
                 type: string
@@ -176,6 +192,24 @@ spec:
                 description: Registered indicates whether the namespace exists in
                   the Temporal cluster.
                 type: boolean
+              replication:
+                description: Replication reports the observed replication state of
+                  a global namespace.
+                properties:
+                  activeCluster:
+                    type: string
+                  clusters:
+                    items:
+                      type: string
+                    type: array
+                  failoverInProgress:
+                    type: boolean
+                  isGlobal:
+                    type: boolean
+                  lastFailoverTime:
+                    format: date-time
+                    type: string
+                type: object
             type: object
         required:
         - spec

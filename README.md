@@ -52,6 +52,7 @@ for configurable values.
 | `TemporalSearchAttribute` | `tsa` | A custom search attribute registration. |
 | `TemporalSchedule` | `tsch` | A declarative Temporal schedule (cron or interval). |
 | `TemporalClusterClient` | `tcc` | Generated mTLS client credentials for a cluster. |
+| `TemporalClusterConnection` | `tcconn` | A multi-cluster replication group; auto-registers remote-cluster connections. |
 
 ## Documentation
 
