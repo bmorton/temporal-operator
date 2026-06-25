@@ -58,7 +58,7 @@ func Generate(opts Options) error {
 }
 
 func snapshot(root string, rels []string) ([]snapshotEntry, error) {
-	var entries []snapshotEntry
+	entries := make([]snapshotEntry, 0, len(rels))
 	for _, rel := range rels {
 		src := filepath.Join(root, rel)
 		data, err := os.ReadFile(src)
@@ -73,7 +73,7 @@ func snapshot(root string, rels []string) ([]snapshotEntry, error) {
 			return entries, err
 		}
 		if _, err := tmp.Write(data); err != nil {
-			tmp.Close()
+			_ = tmp.Close()
 			return entries, err
 		}
 		if err := tmp.Close(); err != nil {
