@@ -1,0 +1,26 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalWorkflowRun
+metadata:
+  name: greet-once
+spec:
+  clusterRef:
+    name: temporal-sample
+  namespace: default
+  ttlSecondsAfterFinished: 300
+  cancellationPolicy: Abandon
+  workflow:
+    workflowType: GreetingWorkflow
+    taskQueue: greeting-tq
+    args:
+      - '"world"'
+---
+# The referenced TemporalCluster must opt in to operator-initiated runs:
+# apiVersion: temporal.bmor10.com/v1alpha1
+# kind: TemporalCluster
+# metadata:
+#   name: temporal-sample
+# spec:
+#   workflowRunPolicy:
+#     enabled: true
+#     allowedNamespaces: ["default"]
+#     allowedTaskQueues: ["greeting-tq"]
