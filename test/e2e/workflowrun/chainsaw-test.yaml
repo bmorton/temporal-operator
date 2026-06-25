@@ -38,7 +38,7 @@ spec:
               kubectl run -n $NAMESPACE wf-terminate --rm -i --restart=Never \
                 --image=temporalio/admin-tools:1.31.1 -- \
                 temporal workflow terminate \
-                --address dev-wfr:7233 --namespace orders \
+                --address wfr-devserver:7233 --namespace orders \
                 --workflow-id greet-once --reason e2e
         - assert:
             file: 04-assert-terminated.yaml

@@ -200,7 +200,8 @@ func (c *grpcWorkflowRunClient) Cancel(ctx context.Context, namespace, workflowI
 		Identity:          workflowRunIdentity,
 		Reason:            reason,
 	})
-	if err != nil && status.Code(err) == codes.NotFound {
+	code := status.Code(err)
+	if err != nil && (code == codes.NotFound || code == codes.FailedPrecondition) {
 		return ErrWorkflowNotFound
 	}
 	return err
@@ -213,7 +214,8 @@ func (c *grpcWorkflowRunClient) Terminate(ctx context.Context, namespace, workfl
 		Identity:          workflowRunIdentity,
 		Reason:            reason,
 	})
-	if err != nil && status.Code(err) == codes.NotFound {
+	code := status.Code(err)
+	if err != nil && (code == codes.NotFound || code == codes.FailedPrecondition) {
 		return ErrWorkflowNotFound
 	}
 	return err

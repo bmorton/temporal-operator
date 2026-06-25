@@ -40,6 +40,9 @@ const workflowRunFinalizer = "temporal.bmor10.com/workflowrun"
 // workflowRunPollInterval is how often a running workflow's status is refreshed.
 const workflowRunPollInterval = 10 * time.Second
 
+// workflowRunPolicyRetry is how often to re-check policy when a run is denied.
+const workflowRunPolicyRetry = 30 * time.Second
+
 // TemporalWorkflowRunReconciler reconciles TemporalWorkflowRun objects.
 type TemporalWorkflowRunReconciler struct {
 	client.Client
@@ -109,7 +112,7 @@ func (r *TemporalWorkflowRunReconciler) reconcileRun(ctx context.Context, run *t
 	if run.Status.RunID == "" {
 		if err := checkWorkflowRunPolicy(policy, run.Spec.Namespace, taskQueue); err != nil {
 			r.setReady(run, metav1.ConditionFalse, temporalv1alpha1.ReasonWorkflowRunNotPermitted, err.Error())
-			return ctrl.Result{}, r.statusUpdate(ctx, run)
+			return ctrl.Result{RequeueAfter: workflowRunPolicyRetry}, r.statusUpdate(ctx, run)
 		}
 		params, err := workflowRunParams(run)
 		if err != nil {

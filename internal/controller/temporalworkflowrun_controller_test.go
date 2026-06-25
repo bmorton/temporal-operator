@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	enumspb "go.temporal.io/api/enums/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -182,5 +183,107 @@ var _ = Describe("TemporalWorkflowRun reconciler", func() {
 		_, err = reconciler().Reconcile(ctx, req) // handles deletion
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fake.terminated).NotTo(BeEmpty())
+	})
+
+	It("deletes terminal run after TTL", func() {
+		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{Enabled: true})
+		fake.status = enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED
+		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
+		ttl := int32(0)
+		run.Spec.TTLSecondsAfterFinished = &ttl
+		Expect(k8sClient.Create(ctx, run)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
+		_, err := reconciler().Reconcile(ctx, req) // start + finalize
+		Expect(err).NotTo(HaveOccurred())
+		_, err = reconciler().Reconcile(ctx, req) // TTL cleanup
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			var got temporalv1alpha1.TemporalWorkflowRun
+			err := k8sClient.Get(ctx, req.NamespacedName, &got)
+			return err != nil && apierrors.IsNotFound(err)
+		}).Should(BeTrue())
+	})
+
+	It("denies run when namespace not in policy allowlist", func() {
+		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{
+			Enabled:           true,
+			AllowedNamespaces: []string{"other"},
+		})
+		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
+		run.Spec.Namespace = "orders"
+		Expect(k8sClient.Create(ctx, run)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, run) })
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
+		_, err := reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.started).To(BeEmpty())
+		var got temporalv1alpha1.TemporalWorkflowRun
+		Expect(k8sClient.Get(ctx, req.NamespacedName, &got)).To(Succeed())
+		Expect(got.Status.RunID).To(BeEmpty())
+		cond := meta.FindStatusCondition(got.Status.Conditions, temporalv1alpha1.ConditionReady)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(temporalv1alpha1.ReasonWorkflowRunNotPermitted))
+	})
+
+	It("denies run when task queue not in policy allowlist", func() {
+		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{
+			Enabled:           true,
+			AllowedTaskQueues: []string{"allowed-tq"},
+		})
+		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
+		run.Spec.Workflow.TaskQueue = "tq"
+		Expect(k8sClient.Create(ctx, run)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, run) })
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
+		_, err := reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fake.started).To(BeEmpty())
+		var got temporalv1alpha1.TemporalWorkflowRun
+		Expect(k8sClient.Get(ctx, req.NamespacedName, &got)).To(Succeed())
+		Expect(got.Status.RunID).To(BeEmpty())
+		cond := meta.FindStatusCondition(got.Status.Conditions, temporalv1alpha1.ConditionReady)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(temporalv1alpha1.ReasonWorkflowRunNotPermitted))
+	})
+
+	It("cancels a running workflow on delete with cancellationPolicy=Cancel", func() {
+		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{Enabled: true})
+		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
+		run.Spec.CancellationPolicy = "Cancel"
+		Expect(k8sClient.Create(ctx, run)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
+		_, err := reconciler().Reconcile(ctx, req) // adds finalizer + starts
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(k8sClient.Delete(ctx, run)).To(Succeed())
+		_, err = reconciler().Reconcile(ctx, req) // handles deletion
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.canceled).NotTo(BeEmpty())
+	})
+
+	It("does not cancel or terminate with cancellationPolicy=Abandon", func() {
+		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{Enabled: true})
+		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
+		run.Spec.CancellationPolicy = "Abandon"
+		Expect(k8sClient.Create(ctx, run)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
+		_, err := reconciler().Reconcile(ctx, req) // adds finalizer + starts
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(k8sClient.Delete(ctx, run)).To(Succeed())
+		_, err = reconciler().Reconcile(ctx, req) // handles deletion
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.canceled).To(BeEmpty())
+		Expect(fake.terminated).To(BeEmpty())
 	})
 })
