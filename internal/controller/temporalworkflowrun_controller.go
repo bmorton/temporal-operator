@@ -254,7 +254,7 @@ func checkWorkflowRunPolicy(p temporalv1alpha1.WorkflowRunPolicy, namespace, tas
 		return fmt.Errorf("workflow runs are not enabled on the referenced Temporal target")
 	}
 	if len(p.AllowedNamespaces) > 0 && !contains(p.AllowedNamespaces, namespace) {
-		return fmt.Errorf("Temporal namespace %q is not in the target's allowedNamespaces", namespace)
+		return fmt.Errorf("namespace %q is not in the target's allowedNamespaces", namespace)
 	}
 	if len(p.AllowedTaskQueues) > 0 && !contains(p.AllowedTaskQueues, taskQueue) {
 		return fmt.Errorf("task queue %q is not in the target's allowedTaskQueues", taskQueue)
