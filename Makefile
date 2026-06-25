@@ -155,8 +155,8 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	"$(KUSTOMIZE)" build config/default > dist/install.yaml
 
 .PHONY: helm-chart
-helm-chart: kubebuilder ## (Re)generate the Helm chart under dist/chart from kustomize output.
-	$(KUBEBUILDER) edit --plugins=helm/v2-alpha
+helm-chart: kubebuilder ## (Re)generate the Helm chart under dist/chart deterministically.
+	go run ./hack/helmgen --kubebuilder=$(KUBEBUILDER)
 
 .PHONY: helm-lint
 helm-lint: ## Lint the Helm chart (requires helm).

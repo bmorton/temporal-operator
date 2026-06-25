@@ -41,3 +41,10 @@ docs/static/preview/wasm_exec.js
 docs/static/preview/examples/
 docs/data/preview.json
 artifacts/
+
+# kubebuilder's helm plugin resurrects this workflow; helmgen deletes it and
+# it must never be committed. See issue #82.
+.github/workflows/test-chart.yml
+
+# Local `go build ./hack/helmgen/` drops this binary at the repo root.
+/helmgen

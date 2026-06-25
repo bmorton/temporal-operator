@@ -28,17 +28,17 @@ rules:
     - apiGroups:
         - ""
       resources:
-        - serviceaccounts
+        - pods
       verbs:
-        - create
         - get
         - list
         - watch
     - apiGroups:
         - ""
       resources:
-        - pods
+        - serviceaccounts
       verbs:
+        - create
         - get
         - list
         - watch
