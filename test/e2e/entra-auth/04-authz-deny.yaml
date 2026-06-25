@@ -1,0 +1,78 @@
+# Phase 2 — denial check Jobs (run only after authz-allow has succeeded):
+#   authz-deny      — no auth metadata; frontend must reject the request.
+#   authz-bad-token — valid JWT structure but wrong signature; frontend must reject.
+#
+# Both Jobs invert the CLI exit code: they report succeeded:1 only when the server
+# rejects the request.  backoffLimit:0 ensures a retry cannot mask a false positive.
+#
+# Tokens are mounted from the e2e-tokens ConfigMap created in 03-authz-allow.yaml.
+---
+# authz-deny: no auth metadata → frontend must reject the request.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authz-deny
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: check
+          image: temporalio/admin-tools:1.31.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              if out=$(temporal operator namespace list \
+                   --address temporal-authz-frontend:7233 2>&1); then
+                echo "ERROR: unauthenticated request was accepted — expected rejection"
+                echo "$out"
+                exit 1
+              fi
+              echo "$out"
+              echo "$out" | grep -qiE 'permission denied|unauthorized|unauthenticated|request unauthorized' || {
+                echo "ERROR: request failed for a non-auth reason"
+                exit 1
+              }
+              echo "PASS: unauthenticated request was correctly rejected"
+              exit 0
+---
+# authz-bad-token: valid JWT structure but wrong signature → frontend must reject.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authz-bad-token
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: check
+          image: temporalio/admin-tools:1.31.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              TOKEN=$(cat /tokens/token-invalid.txt | tr -d '\n')
+              if out=$(temporal operator namespace list \
+                   --address temporal-authz-frontend:7233 \
+                   --grpc-meta "authorization=Bearer ${TOKEN}" 2>&1); then
+                echo "ERROR: request with invalid-signature token was accepted — expected rejection"
+                echo "$out"
+                exit 1
+              fi
+              echo "$out"
+              echo "$out" | grep -qiE 'permission denied|unauthorized|unauthenticated|request unauthorized' || {
+                echo "ERROR: request failed for a non-auth reason"
+                exit 1
+              }
+              echo "PASS: request with invalid-signature token was correctly rejected"
+              exit 0
+          volumeMounts:
+            - name: tokens
+              mountPath: /tokens
+              readOnly: true
+      volumes:
+        - name: tokens
+          configMap:
+            name: e2e-tokens

@@ -1,0 +1,65 @@
+# JWKS server: a ConfigMap holding the test JWK Set, an nginx Deployment
+# serving it at /jwks.json, and a Service on port 80.
+#
+# The TemporalCluster's jwtKeyProvider.keySourceURIs points at:
+#   http://jwks.<namespace>.svc/jwks.json
+# using the Chainsaw $namespace binding so each test run is isolated.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jwks
+data:
+  jwks.json: |
+    {
+      "keys": [
+        {
+          "kty": "RSA",
+          "use": "sig",
+          "alg": "RS256",
+          "kid": "e2e",
+          "n": "xlCMM_9s9L07CDUZMkEDfkrUDZu2XPLeYRQ30fDR_6Aognb0bRjRTAiMnW83L35S5SafnogQKEWaBzWyQ2Uuo1i7sud8epNRI99EiRRRPcrXeN_9i4SIdwBDFuhu3LPVVj1-qQo6cFIWwwG6mKixGOwqIKFAYioCKkgIuKZ2OANF93Ag7O0nAWlfn9AeYqOVO-GVamom5_FUXkolbY-NR-u_FvzHi7Wwi6R4YWmNoa6tqpPW3AMPkHsWNMGWQlDJqRD0bLVwAYo-kf-fmFcQf4IS9aybe2FJAsnGBh_jpajvn9MzhJqJbd057WIHIoKp3QLqiyeXHSHIqwJItbSGuQ",
+          "e": "AQAB"
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jwks
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jwks
+  template:
+    metadata:
+      labels:
+        app: jwks
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: jwks
+              mountPath: /usr/share/nginx/html/jwks.json
+              subPath: jwks.json
+              readOnly: true
+      volumes:
+        - name: jwks
+          configMap:
+            name: jwks
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jwks
+spec:
+  selector:
+    app: jwks
+  ports:
+    - port: 80
+      targetPort: 80

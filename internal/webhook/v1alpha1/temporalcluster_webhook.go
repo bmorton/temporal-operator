@@ -27,6 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	sigsyaml "sigs.k8s.io/yaml"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/temporal"
@@ -120,6 +121,49 @@ type TemporalClusterCustomValidator struct{}
 
 var _ admission.Validator[*temporalv1alpha1.TemporalCluster] = &TemporalClusterCustomValidator{}
 
+// validateUIAuthProvider checks that exactly one of entra.tenantID or providerURL is set.
+func validateUIAuthProvider(a *temporalv1alpha1.UIAuthSpec, base *field.Path) field.ErrorList {
+	var errs field.ErrorList
+	entraSet := a.Entra != nil && a.Entra.TenantID != ""
+	switch {
+	case !entraSet && a.ProviderURL == "":
+		errs = append(errs, field.Required(base.Child("providerURL"),
+			"set exactly one of ui.auth.entra.tenantID or ui.auth.providerURL"))
+	case entraSet && a.ProviderURL != "":
+		errs = append(errs, field.Invalid(base.Child("providerURL"), a.ProviderURL,
+			"set exactly one of ui.auth.entra.tenantID or ui.auth.providerURL, not both"))
+	}
+	return errs
+}
+
+// validateUIAuth validates the spec.ui.auth block when auth is enabled.
+func validateUIAuth(cluster *temporalv1alpha1.TemporalCluster) field.ErrorList {
+	var errs field.ErrorList
+	if cluster.Spec.UI == nil || cluster.Spec.UI.Auth == nil || !cluster.Spec.UI.Auth.Enabled {
+		return nil
+	}
+	a := cluster.Spec.UI.Auth
+	base := field.NewPath("spec", "ui", "auth")
+	if a.ClientID == "" {
+		errs = append(errs, field.Required(base.Child("clientID"), "clientID is required when ui.auth.enabled"))
+	}
+	if a.ClientSecretRef == nil || a.ClientSecretRef.Name == "" {
+		errs = append(errs, field.Required(base.Child("clientSecretRef"), "clientSecretRef is required when ui.auth.enabled"))
+	}
+	if a.CallbackURL == "" {
+		errs = append(errs, field.Required(base.Child("callbackURL"), "callbackURL is required when ui.auth.enabled"))
+	}
+	errs = append(errs, validateUIAuthProvider(a, base)...)
+	if a.ExtraEnv != nil && len(a.ExtraEnv.Raw) > 0 {
+		var m map[string]string
+		if err := sigsyaml.Unmarshal(a.ExtraEnv.Raw, &m); err != nil {
+			errs = append(errs, field.Invalid(base.Child("extraEnv"), a.ExtraEnv,
+				"extraEnv must be a map of string to string"))
+		}
+	}
+	return errs
+}
+
 func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.TemporalCluster) field.ErrorList {
 	var errs field.ErrorList
 	specPath := field.NewPath("spec")
@@ -129,6 +173,7 @@ func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.
 	errs = append(errs, validateMTLS(cluster, specPath)...)
 	errs = append(errs, validateDynamicConfig(cluster, specPath)...)
 	errs = append(errs, validateClusterMetadata(cluster, specPath)...)
+	errs = append(errs, validateUIAuth(cluster)...)
 
 	return errs
 }

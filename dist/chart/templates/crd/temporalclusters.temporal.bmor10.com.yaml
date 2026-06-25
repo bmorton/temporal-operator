@@ -68,13 +68,57 @@ spec:
                                 description: Authorization configures the authorizer and claim mapper.
                                 properties:
                                     authorizer:
+                                        description: |-
+                                            Authorizer selects the Temporal authorizer plugin. If unset, it defaults
+                                            to "default" (per-namespace RBAC) when JWT validation is configured.
+                                            Set it to "" to select the no-op (allow-all) authorizer for
+                                            authenticate-only mode.
                                         type: string
                                     claimMapper:
+                                        description: |-
+                                            ClaimMapper is the Temporal claim mapper. Defaults to "default" when JWT
+                                            validation is configured.
                                         type: string
                                     config:
-                                        description: Config is a passthrough for authorization provider configuration.
+                                        description: |-
+                                            Config is a passthrough merged into the authorization block for any knob
+                                            not modeled above.
                                         type: object
                                         x-kubernetes-preserve-unknown-fields: true
+                                    entra:
+                                        description: |-
+                                            Entra derives the Entra JWKS keySourceURI from a tenant ID and applies
+                                            sensible JWT defaults.
+                                        properties:
+                                            tenantID:
+                                                description: |-
+                                                    TenantID is the Entra (Azure AD) tenant. Derives the JWKS keySourceURI
+                                                    https://login.microsoftonline.com/{tenantID}/discovery/v2.0/keys.
+                                                minLength: 1
+                                                type: string
+                                        required:
+                                            - tenantID
+                                        type: object
+                                    jwtKeyProvider:
+                                        description: JWTKeyProvider configures JWKS-based token signature
+                                            validation.
+                                        properties:
+                                            keySourceURIs:
+                                                description: KeySourceURIs are JWKS endpoints used to validate
+                                                    token signatures.
+                                                items:
+                                                    type: string
+                                                type: array
+                                            refreshInterval:
+                                                description: RefreshInterval controls how often keys are refreshed,
+                                                    e.g. "1m".
+                                                type: string
+                                        type: object
+                                    permissionsClaimName:
+                                        description: |-
+                                            PermissionsClaimName maps to global.authorization.permissionsClaimName.
+                                            Defaults to "roles" when Entra is set, otherwise "permissions".
+                                        type: string
                                 type: object
                             clusterMetadata:
                                 description: ClusterMetadata configures multi-cluster replication.
@@ -5764,9 +5808,56 @@ spec:
                                 description: UI configures temporal-ui as part of this cluster.
                                 properties:
                                     auth:
-                                        description: Auth is a passthrough for temporal-ui authentication config.
+                                        description: Auth configures temporal-ui authentication (OIDC,
+                                            e.g. Microsoft Entra).
+                                        properties:
+                                            callbackURL:
+                                                type: string
+                                            clientID:
+                                                type: string
+                                            clientSecretRef:
+                                                description: ClientSecretRef references a Secret key holding
+                                                    the OIDC client secret.
+                                                properties:
+                                                    key:
+                                                        default: password
+                                                        type: string
+                                                    name:
+                                                        type: string
+                                                required:
+                                                    - name
+                                                type: object
+                                            enabled:
+                                                default: false
+                                                type: boolean
+                                            entra:
+                                                description: Entra derives ProviderURL from a Microsoft Entra
+                                                    tenant ID.
+                                                properties:
+                                                    tenantID:
+                                                        minLength: 1
+                                                        type: string
+                                                required:
+                                                    - tenantID
+                                                type: object
+                                            extraEnv:
+                                                description: |-
+                                                    ExtraEnv is a passthrough of additional temporal-ui auth env vars
+                                                    (map of string to string).
+                                                type: object
+                                                x-kubernetes-preserve-unknown-fields: true
+                                            providerURL:
+                                                description: ProviderURL is the OIDC issuer URL (set directly
+                                                    or via Entra).
+                                                type: string
+                                            scopes:
+                                                description: Scopes default to ["openid", "profile", "email"].
+                                                items:
+                                                    type: string
+                                                type: array
+                                        required:
+                                            - enabled
                                         type: object
-                                        x-kubernetes-preserve-unknown-fields: true
                                     codecServer:
                                         description: UICodecServerSpec configures the temporal-ui codec server.
                                         properties:

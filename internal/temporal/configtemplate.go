@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
+	"sigs.k8s.io/yaml"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
@@ -133,8 +135,13 @@ type MetricsConfig struct {
 
 // AuthConfig holds resolved authorization settings.
 type AuthConfig struct {
-	Authorizer  string
-	ClaimMapper string
+	Authorizer           string
+	EmitAuthorizer       bool
+	ClaimMapper          string
+	PermissionsClaimName string
+	KeySourceURIs        []string
+	RefreshInterval      string
+	ExtraConfig          map[string]interface{}
 }
 
 // ArchivalConfig holds resolved archival settings.
@@ -351,12 +358,100 @@ func buildMTLS(cluster *temporalv1alpha1.TemporalCluster) MTLSConfig {
 	}
 }
 
-func buildAuth(cluster *temporalv1alpha1.TemporalCluster) *AuthConfig {
-	auth := cluster.Spec.Authorization
-	if auth == nil || (auth.Authorizer == "" && auth.ClaimMapper == "") {
+// buildAuthKeySourceURIs populates KeySourceURIs and PermissionsClaimName from
+// the JWTKeyProvider and Entra blocks and returns whether any URIs were added.
+func buildAuthKeySourceURIs(auth *temporalv1alpha1.AuthorizationSpec, cfg *AuthConfig) bool {
+	if auth.JWTKeyProvider != nil {
+		cfg.KeySourceURIs = append(cfg.KeySourceURIs, auth.JWTKeyProvider.KeySourceURIs...)
+		if auth.JWTKeyProvider.RefreshInterval != nil {
+			cfg.RefreshInterval = auth.JWTKeyProvider.RefreshInterval.Duration.String()
+		}
+	}
+	if auth.Entra != nil {
+		cfg.KeySourceURIs = append(cfg.KeySourceURIs,
+			fmt.Sprintf("https://login.microsoftonline.com/%s/discovery/v2.0/keys", auth.Entra.TenantID))
+		if cfg.PermissionsClaimName == "" {
+			cfg.PermissionsClaimName = "roles"
+		}
+	}
+	return len(cfg.KeySourceURIs) > 0
+}
+
+// applyJWTDefaults fills in default authorizer, claimMapper, and
+// permissionsClaimName when JWT is configured and the user hasn't set them.
+func applyJWTDefaults(auth *temporalv1alpha1.AuthorizationSpec, cfg *AuthConfig) {
+	if auth.Authorizer == nil {
+		cfg.Authorizer = "default"
+		cfg.EmitAuthorizer = true
+	}
+	if cfg.ClaimMapper == "" {
+		cfg.ClaimMapper = "default"
+	}
+	if cfg.PermissionsClaimName == "" {
+		cfg.PermissionsClaimName = "permissions"
+	}
+}
+
+// applyAuthConfigPassthrough unmarshals auth.Config and suppresses any modeled
+// fields that are also present in the passthrough map to prevent duplicate keys.
+func applyAuthConfigPassthrough(auth *temporalv1alpha1.AuthorizationSpec, cfg *AuthConfig) error {
+	if auth.Config == nil || len(auth.Config.Raw) == 0 {
 		return nil
 	}
-	return &AuthConfig{Authorizer: auth.Authorizer, ClaimMapper: auth.ClaimMapper}
+	extra := map[string]interface{}{}
+	if err := yaml.Unmarshal(auth.Config.Raw, &extra); err != nil {
+		return fmt.Errorf("authorization.config: %w", err)
+	}
+	cfg.ExtraConfig = extra
+	// Suppress modeled fields that ExtraConfig also defines so the
+	// passthrough wins and no duplicate YAML keys are emitted.
+	if _, ok := extra["permissionsClaimName"]; ok {
+		cfg.PermissionsClaimName = ""
+	}
+	if _, ok := extra["authorizer"]; ok {
+		cfg.Authorizer = ""
+		cfg.EmitAuthorizer = false
+	}
+	if _, ok := extra["claimMapper"]; ok {
+		cfg.ClaimMapper = ""
+	}
+	if _, ok := extra["jwtKeyProvider"]; ok {
+		cfg.KeySourceURIs = nil
+		cfg.RefreshInterval = ""
+	}
+	return nil
+}
+
+func buildAuth(cluster *temporalv1alpha1.TemporalCluster) (*AuthConfig, error) {
+	auth := cluster.Spec.Authorization
+	if auth == nil {
+		return nil, nil
+	}
+
+	cfg := &AuthConfig{
+		ClaimMapper:          auth.ClaimMapper,
+		PermissionsClaimName: auth.PermissionsClaimName,
+	}
+
+	// Honor an explicitly-set Authorizer (including "").
+	if auth.Authorizer != nil {
+		cfg.Authorizer = *auth.Authorizer
+		cfg.EmitAuthorizer = true
+	}
+
+	jwtConfigured := buildAuthKeySourceURIs(auth, cfg)
+	if jwtConfigured {
+		applyJWTDefaults(auth, cfg)
+	}
+
+	if err := applyAuthConfigPassthrough(auth, cfg); err != nil {
+		return nil, err
+	}
+
+	if !cfg.EmitAuthorizer && cfg.ClaimMapper == "" && !jwtConfigured && cfg.ExtraConfig == nil {
+		return nil, nil
+	}
+	return cfg, nil
 }
 
 func applyClusterMetadata(data *ConfigData, cm *temporalv1alpha1.ClusterMetadataSpec) {
@@ -429,8 +524,13 @@ func BuildConfigData(cluster *temporalv1alpha1.TemporalCluster, opts BuildOption
 		UseInternalFrontend:      useInternalFrontend,
 		Metrics:                  buildMetrics(cluster),
 		MTLS:                     buildMTLS(cluster),
-		Authorization:            buildAuth(cluster),
 	}
+
+	auth, err := buildAuth(cluster)
+	if err != nil {
+		return nil, fmt.Errorf("authorization: %w", err)
+	}
+	data.Authorization = auth
 
 	if cluster.Spec.Archival != nil {
 		data.Archival = &ArchivalConfig{HistoryState: "enabled", VisibilityState: "enabled"}
@@ -467,6 +567,13 @@ func RenderConfig(data *ConfigData) (string, error) {
 	funcs := sprig.TxtFuncMap()
 	t := template.New("config_template.yaml").Funcs(funcs)
 	funcs["include"] = includeFunc(t)
+	funcs["toYaml"] = func(v interface{}) (string, error) {
+		out, err := yaml.Marshal(v)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSuffix(string(out), "\n"), nil
+	}
 	t = t.Funcs(funcs)
 
 	parsed, err := t.ParseFS(configTemplateFS, "templates/config_template.yaml")

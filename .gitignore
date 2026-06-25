@@ -24,6 +24,7 @@ kubeconfig
 
 # Azure e2e harness (generated locally; never commit)
 hack/.azure-e2e.env
+hack/.entra-e2e.env
 
 # Hugo docs site
 docs/node_modules/

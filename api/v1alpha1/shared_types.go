@@ -123,10 +123,9 @@ type UISpec struct {
 	// +optional
 	Ingress *UIIngressSpec `json:"ingress,omitempty"`
 
-	// Auth is a passthrough for temporal-ui authentication config.
-	// +kubebuilder:pruning:PreserveUnknownFields
+	// Auth configures temporal-ui authentication (OIDC, e.g. Microsoft Entra).
 	// +optional
-	Auth *runtime.RawExtension `json:"auth,omitempty"`
+	Auth *UIAuthSpec `json:"auth,omitempty"`
 
 	// +optional
 	CodecServer *UICodecServerSpec `json:"codecServer,omitempty"`
@@ -153,6 +152,39 @@ type UICodecServerSpec struct {
 	PassAccessToken bool `json:"passAccessToken,omitempty"`
 	// +optional
 	IncludeCredentials bool `json:"includeCredentials,omitempty"`
+}
+
+// UIAuthSpec configures temporal-ui OIDC authentication.
+type UIAuthSpec struct {
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+	// Entra derives ProviderURL from a Microsoft Entra tenant ID.
+	// +optional
+	Entra *EntraUIAuthSpec `json:"entra,omitempty"`
+	// ProviderURL is the OIDC issuer URL (set directly or via Entra).
+	// +optional
+	ProviderURL string `json:"providerURL,omitempty"`
+	// +optional
+	ClientID string `json:"clientID,omitempty"`
+	// ClientSecretRef references a Secret key holding the OIDC client secret.
+	// +optional
+	ClientSecretRef *SecretKeyReference `json:"clientSecretRef,omitempty"`
+	// Scopes default to ["openid", "profile", "email"].
+	// +optional
+	Scopes []string `json:"scopes,omitempty"`
+	// +optional
+	CallbackURL string `json:"callbackURL,omitempty"`
+	// ExtraEnv is a passthrough of additional temporal-ui auth env vars
+	// (map of string to string).
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +optional
+	ExtraEnv *runtime.RawExtension `json:"extraEnv,omitempty"`
+}
+
+// EntraUIAuthSpec is a Microsoft Entra convenience for UI OIDC login.
+type EntraUIAuthSpec struct {
+	// +kubebuilder:validation:MinLength=1
+	TenantID string `json:"tenantID"`
 }
 
 // MetricsSpec configures Prometheus integration.
@@ -190,16 +222,53 @@ type ArchivalSpec struct {
 	Visibility *runtime.RawExtension `json:"visibility,omitempty"`
 }
 
-// AuthorizationSpec configures the authorizer and claim mapper.
+// AuthorizationSpec configures the frontend authorizer, claim mapper, and JWT
+// key provider used to validate inbound bearer tokens.
 type AuthorizationSpec struct {
+	// Authorizer selects the Temporal authorizer plugin. If unset, it defaults
+	// to "default" (per-namespace RBAC) when JWT validation is configured.
+	// Set it to "" to select the no-op (allow-all) authorizer for
+	// authenticate-only mode.
 	// +optional
-	Authorizer string `json:"authorizer,omitempty"`
+	Authorizer *string `json:"authorizer,omitempty"`
+	// ClaimMapper is the Temporal claim mapper. Defaults to "default" when JWT
+	// validation is configured.
 	// +optional
 	ClaimMapper string `json:"claimMapper,omitempty"`
-	// Config is a passthrough for authorization provider configuration.
+	// PermissionsClaimName maps to global.authorization.permissionsClaimName.
+	// Defaults to "roles" when Entra is set, otherwise "permissions".
+	// +optional
+	PermissionsClaimName string `json:"permissionsClaimName,omitempty"`
+	// JWTKeyProvider configures JWKS-based token signature validation.
+	// +optional
+	JWTKeyProvider *JWTKeyProviderSpec `json:"jwtKeyProvider,omitempty"`
+	// Entra derives the Entra JWKS keySourceURI from a tenant ID and applies
+	// sensible JWT defaults.
+	// +optional
+	Entra *EntraAuthSpec `json:"entra,omitempty"`
+	// Config is a passthrough merged into the authorization block for any knob
+	// not modeled above.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +optional
 	Config *runtime.RawExtension `json:"config,omitempty"`
+}
+
+// JWTKeyProviderSpec configures JWKS-based JWT validation.
+type JWTKeyProviderSpec struct {
+	// KeySourceURIs are JWKS endpoints used to validate token signatures.
+	// +optional
+	KeySourceURIs []string `json:"keySourceURIs,omitempty"`
+	// RefreshInterval controls how often keys are refreshed, e.g. "1m".
+	// +optional
+	RefreshInterval *metav1.Duration `json:"refreshInterval,omitempty"`
+}
+
+// EntraAuthSpec is a Microsoft Entra convenience for server JWT validation.
+type EntraAuthSpec struct {
+	// TenantID is the Entra (Azure AD) tenant. Derives the JWKS keySourceURI
+	// https://login.microsoftonline.com/{tenantID}/discovery/v2.0/keys.
+	// +kubebuilder:validation:MinLength=1
+	TenantID string `json:"tenantID"`
 }
 
 // ClusterMetadataSpec configures multi-cluster replication.

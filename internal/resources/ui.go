@@ -18,12 +18,14 @@ package resources
 
 import (
 	"fmt"
+	"strings"
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/temporal"
@@ -71,6 +73,50 @@ func uiEnv(cluster *temporalv1alpha1.TemporalCluster) []corev1.EnvVar {
 	}
 	if cluster.Spec.UI != nil && cluster.Spec.UI.CodecServer != nil {
 		env = append(env, corev1.EnvVar{Name: "TEMPORAL_CODEC_ENDPOINT", Value: cluster.Spec.UI.CodecServer.Endpoint})
+	}
+	if cluster.Spec.UI != nil && cluster.Spec.UI.Auth != nil && cluster.Spec.UI.Auth.Enabled {
+		a := cluster.Spec.UI.Auth
+		providerURL := a.ProviderURL
+		if a.Entra != nil {
+			providerURL = fmt.Sprintf("https://login.microsoftonline.com/%s/v2.0", a.Entra.TenantID)
+		}
+		scopes := a.Scopes
+		if len(scopes) == 0 {
+			scopes = []string{"openid", "profile", "email"}
+		}
+		env = append(env,
+			corev1.EnvVar{Name: "TEMPORAL_AUTH_ENABLED", Value: "true"},
+			corev1.EnvVar{Name: "TEMPORAL_AUTH_TYPE", Value: "oidc"},
+			corev1.EnvVar{Name: "TEMPORAL_AUTH_PROVIDER_URL", Value: providerURL},
+			corev1.EnvVar{Name: "TEMPORAL_AUTH_CLIENT_ID", Value: a.ClientID},
+			corev1.EnvVar{Name: "TEMPORAL_AUTH_SCOPES", Value: strings.Join(scopes, ",")},
+			corev1.EnvVar{Name: "TEMPORAL_AUTH_CALLBACK_URL", Value: a.CallbackURL},
+		)
+		if a.ClientSecretRef != nil {
+			// Mirror the SecretKeyReference CRD default (+kubebuilder:default=password)
+			// so direct/unset keys behave consistently with passwordSecretRef.
+			key := a.ClientSecretRef.Key
+			if key == "" {
+				key = "password"
+			}
+			env = append(env, corev1.EnvVar{
+				Name: "TEMPORAL_AUTH_CLIENT_SECRET",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: a.ClientSecretRef.Name},
+						Key:                  key,
+					},
+				},
+			})
+		}
+		if a.ExtraEnv != nil && len(a.ExtraEnv.Raw) > 0 {
+			extra := map[string]string{}
+			if err := yaml.Unmarshal(a.ExtraEnv.Raw, &extra); err == nil {
+				for k, v := range extra {
+					env = append(env, corev1.EnvVar{Name: k, Value: v})
+				}
+			}
+		}
 	}
 	return env
 }

@@ -1,0 +1,48 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: entra-auth
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        database: temporal
+        host: temporal-pg-rw
+        port: 5432
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        database: temporal_visibility
+        host: temporal-pg-rw
+        port: 5432
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+  # Service-to-service: validate Entra-issued JWTs and enforce per-namespace
+  # roles from the "roles" claim (Entra app roles).
+  authorization:
+    entra:
+      tenantID: "00000000-0000-0000-0000-000000000000"
+  ui:
+    enabled: true
+    ingress:
+      enabled: true
+      host: temporal.example.com
+    # Human login via Entra OIDC.
+    auth:
+      enabled: true
+      entra:
+        tenantID: "00000000-0000-0000-0000-000000000000"
+      clientID: "11111111-1111-1111-1111-111111111111"
+      clientSecretRef:
+        name: temporal-ui-oidc
+        key: client-secret
+      callbackURL: https://temporal.example.com/auth/sso/callback

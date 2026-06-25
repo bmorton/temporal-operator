@@ -51,7 +51,8 @@ _Appears in:_
 
 
 
-AuthorizationSpec configures the authorizer and claim mapper.
+AuthorizationSpec configures the frontend authorizer, claim mapper, and JWT
+key provider used to validate inbound bearer tokens.
 
 
 
@@ -60,9 +61,12 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `authorizer` _string_ |  |  | Optional: \{\} <br /> |
-| `claimMapper` _string_ |  |  | Optional: \{\} <br /> |
-| `config` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | Config is a passthrough for authorization provider configuration. |  | Optional: \{\} <br /> |
+| `authorizer` _string_ | Authorizer selects the Temporal authorizer plugin. If unset, it defaults<br />to "default" (per-namespace RBAC) when JWT validation is configured.<br />Set it to "" to select the no-op (allow-all) authorizer for<br />authenticate-only mode. |  | Optional: \{\} <br /> |
+| `claimMapper` _string_ | ClaimMapper is the Temporal claim mapper. Defaults to "default" when JWT<br />validation is configured. |  | Optional: \{\} <br /> |
+| `permissionsClaimName` _string_ | PermissionsClaimName maps to global.authorization.permissionsClaimName.<br />Defaults to "roles" when Entra is set, otherwise "permissions". |  | Optional: \{\} <br /> |
+| `jwtKeyProvider` _[JWTKeyProviderSpec](#jwtkeyproviderspec)_ | JWTKeyProvider configures JWKS-based token signature validation. |  | Optional: \{\} <br /> |
+| `entra` _[EntraAuthSpec](#entraauthspec)_ | Entra derives the Entra JWKS keySourceURI from a tenant ID and applies<br />sensible JWT defaults. |  | Optional: \{\} <br /> |
+| `config` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | Config is a passthrough merged into the authorization block for any knob<br />not modeled above. |  | Optional: \{\} <br /> |
 
 
 #### AzureWorkloadIdentitySpec
@@ -392,6 +396,38 @@ _Appears in:_
 | `metrics` _string_ |  |  | Optional: \{\} <br /> |
 
 
+#### EntraAuthSpec
+
+
+
+EntraAuthSpec is a Microsoft Entra convenience for server JWT validation.
+
+
+
+_Appears in:_
+- [AuthorizationSpec](#authorizationspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `tenantID` _string_ | TenantID is the Entra (Azure AD) tenant. Derives the JWKS keySourceURI<br />https://login.microsoftonline.com/\{tenantID\}/discovery/v2.0/keys. |  | MinLength: 1 <br /> |
+
+
+#### EntraUIAuthSpec
+
+
+
+EntraUIAuthSpec is a Microsoft Entra convenience for UI OIDC login.
+
+
+
+_Appears in:_
+- [UIAuthSpec](#uiauthspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `tenantID` _string_ |  |  | MinLength: 1 <br /> |
+
+
 #### FrontendMTLSSpec
 
 
@@ -460,6 +496,23 @@ _Appears in:_
 | `name` _string_ |  |  |  |
 | `kind` _string_ |  | Issuer | Enum: [Issuer ClusterIssuer] <br />Optional: \{\} <br /> |
 | `group` _string_ |  | cert-manager.io | Optional: \{\} <br /> |
+
+
+#### JWTKeyProviderSpec
+
+
+
+JWTKeyProviderSpec configures JWKS-based JWT validation.
+
+
+
+_Appears in:_
+- [AuthorizationSpec](#authorizationspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `keySourceURIs` _string array_ | KeySourceURIs are JWKS endpoints used to validate token signatures. |  | Optional: \{\} <br /> |
+| `refreshInterval` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#duration-v1-meta)_ | RefreshInterval controls how often keys are refreshed, e.g. "1m". |  | Optional: \{\} <br /> |
 
 
 #### MTLSSpec
@@ -770,6 +823,7 @@ _Appears in:_
 - [DatastoreTLSSpec](#datastoretlsspec)
 - [ElasticsearchDatastoreSpec](#elasticsearchdatastorespec)
 - [SQLDatastoreSpec](#sqldatastorespec)
+- [UIAuthSpec](#uiauthspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1260,6 +1314,29 @@ _Appears in:_
 
 
 
+#### UIAuthSpec
+
+
+
+UIAuthSpec configures temporal-ui OIDC authentication.
+
+
+
+_Appears in:_
+- [UISpec](#uispec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ |  | false |  |
+| `entra` _[EntraUIAuthSpec](#entrauiauthspec)_ | Entra derives ProviderURL from a Microsoft Entra tenant ID. |  | Optional: \{\} <br /> |
+| `providerURL` _string_ | ProviderURL is the OIDC issuer URL (set directly or via Entra). |  | Optional: \{\} <br /> |
+| `clientID` _string_ |  |  | Optional: \{\} <br /> |
+| `clientSecretRef` _[SecretKeyReference](#secretkeyreference)_ | ClientSecretRef references a Secret key holding the OIDC client secret. |  | Optional: \{\} <br /> |
+| `scopes` _string array_ | Scopes default to ["openid", "profile", "email"]. |  | Optional: \{\} <br /> |
+| `callbackURL` _string_ |  |  | Optional: \{\} <br /> |
+| `extraEnv` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | ExtraEnv is a passthrough of additional temporal-ui auth env vars<br />(map of string to string). |  | Optional: \{\} <br /> |
+
+
 #### UICodecServerSpec
 
 
@@ -1315,7 +1392,7 @@ _Appears in:_
 | `version` _string_ |  |  | Optional: \{\} <br /> |
 | `replicas` _integer_ |  | 1 | Minimum: 1 <br />Optional: \{\} <br /> |
 | `ingress` _[UIIngressSpec](#uiingressspec)_ |  |  | Optional: \{\} <br /> |
-| `auth` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | Auth is a passthrough for temporal-ui authentication config. |  | Optional: \{\} <br /> |
+| `auth` _[UIAuthSpec](#uiauthspec)_ | Auth configures temporal-ui authentication (OIDC, e.g. Microsoft Entra). |  | Optional: \{\} <br /> |
 | `codecServer` _[UICodecServerSpec](#uicodecserverspec)_ |  |  | Optional: \{\} <br /> |
 
 

@@ -22,8 +22,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -340,5 +342,116 @@ func TestRenderConfigMTLSSystemWorker(t *testing.T) {
 	}
 	if strings.Contains(plain, "systemWorker:") {
 		t.Errorf("non-mtls config must not contain systemWorker block\n%s", plain)
+	}
+}
+
+func TestRenderConfig_AuthorizationEntra(t *testing.T) {
+	cluster := baseCluster()
+	cluster.Spec.Authorization = &temporalv1alpha1.AuthorizationSpec{
+		Entra: &temporalv1alpha1.EntraAuthSpec{TenantID: "11111111-2222-3333-4444-555555555555"},
+	}
+
+	out, err := RenderClusterConfig(cluster, BuildOptions{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	for _, want := range []string{
+		"authorization:",
+		`authorizer: "default"`,
+		`claimMapper: "default"`,
+		`permissionsClaimName: "roles"`,
+		"jwtKeyProvider:",
+		"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/discovery/v2.0/keys",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rendered config missing %q\n---\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderConfig_AuthorizationExplicitAndPassthrough(t *testing.T) {
+	cluster := baseCluster()
+	cluster.Spec.Authorization = &temporalv1alpha1.AuthorizationSpec{
+		JWTKeyProvider: &temporalv1alpha1.JWTKeyProviderSpec{
+			KeySourceURIs:   []string{"https://example.test/jwks"},
+			RefreshInterval: &metav1.Duration{Duration: 2 * time.Minute},
+		},
+		Config: &runtime.RawExtension{Raw: []byte(`{"permissionsClaimName":"perms"}`)},
+	}
+
+	out, err := RenderClusterConfig(cluster, BuildOptions{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	for _, want := range []string{
+		"https://example.test/jwks",
+		`refreshInterval: "2m0s"`,
+		"permissionsClaimName: perms",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rendered config missing %q\n---\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, `permissionsClaimName: "permissions"`) {
+		t.Errorf("passthrough should override the modeled permissionsClaimName, got duplicate\n---\n%s", out)
+	}
+}
+
+func TestRenderConfig_AuthorizationEntraJWTProviderPassthrough(t *testing.T) {
+	// TDD: Entra + passthrough jwtKeyProvider — the passthrough must win and
+	// there must be exactly one jwtKeyProvider: key in the rendered YAML.
+	cluster := baseCluster()
+	cluster.Spec.Authorization = &temporalv1alpha1.AuthorizationSpec{
+		Entra: &temporalv1alpha1.EntraAuthSpec{TenantID: "11111111-2222-3333-4444-555555555555"},
+		Config: &runtime.RawExtension{
+			Raw: []byte(`{"jwtKeyProvider":{"keySourceURIs":["https://override/jwks"]}}`),
+		},
+	}
+
+	out, err := RenderClusterConfig(cluster, BuildOptions{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	// The passthrough URI must be present.
+	if !strings.Contains(out, "https://override/jwks") {
+		t.Errorf("rendered config missing override URI\n---\n%s", out)
+	}
+	// The entra-derived JWKS URI must NOT appear.
+	if strings.Contains(out, "discovery/v2.0/keys") {
+		t.Errorf("rendered config must not contain entra-derived JWKS URI when passthrough jwtKeyProvider is set\n---\n%s", out)
+	}
+	// Exactly one jwtKeyProvider: occurrence.
+	if count := strings.Count(out, "jwtKeyProvider:"); count != 1 {
+		t.Errorf("expected exactly 1 'jwtKeyProvider:' line, got %d\n---\n%s", count, out)
+	}
+}
+
+func TestRenderConfig_AuthorizationAuthenticateOnly(t *testing.T) {
+	cluster := baseCluster()
+	cluster.Spec.Authorization = &temporalv1alpha1.AuthorizationSpec{
+		Entra:      &temporalv1alpha1.EntraAuthSpec{TenantID: "tid"},
+		Authorizer: ptr[string](""),
+	}
+
+	out, err := RenderClusterConfig(cluster, BuildOptions{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	// Explicit empty string must emit authorizer: "" (no-op), never "default".
+	if !strings.Contains(out, `authorizer: ""`) {
+		t.Errorf(`rendered config missing authorizer: ""\n---\n%s`, out)
+	}
+	if strings.Contains(out, `authorizer: "default"`) {
+		t.Errorf(`rendered config must not contain authorizer: "default" when explicit "" is set\n---\n%s`, out)
+	}
+	// JWT / Entra config must still be present.
+	if !strings.Contains(out, "https://login.microsoftonline.com/tid/discovery/v2.0/keys") {
+		t.Errorf("rendered config missing Entra JWKS URL\n---\n%s", out)
+	}
+	if !strings.Contains(out, `permissionsClaimName: "roles"`) {
+		t.Errorf(`rendered config missing permissionsClaimName: "roles"\n---\n%s`, out)
 	}
 }
