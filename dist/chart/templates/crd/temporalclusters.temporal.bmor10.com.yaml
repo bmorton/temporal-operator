@@ -100,18 +100,15 @@ spec:
                                             - tenantID
                                         type: object
                                     jwtKeyProvider:
-                                        description: JWTKeyProvider configures JWKS-based token signature
-                                            validation.
+                                        description: JWTKeyProvider configures JWKS-based token signature validation.
                                         properties:
                                             keySourceURIs:
-                                                description: KeySourceURIs are JWKS endpoints used to validate
-                                                    token signatures.
+                                                description: KeySourceURIs are JWKS endpoints used to validate token signatures.
                                                 items:
                                                     type: string
                                                 type: array
                                             refreshInterval:
-                                                description: RefreshInterval controls how often keys are refreshed,
-                                                    e.g. "1m".
+                                                description: RefreshInterval controls how often keys are refreshed, e.g. "1m".
                                                 type: string
                                         type: object
                                     permissionsClaimName:
@@ -5811,16 +5808,14 @@ spec:
                                 description: UI configures temporal-ui as part of this cluster.
                                 properties:
                                     auth:
-                                        description: Auth configures temporal-ui authentication (OIDC,
-                                            e.g. Microsoft Entra).
+                                        description: Auth configures temporal-ui authentication (OIDC, e.g. Microsoft Entra).
                                         properties:
                                             callbackURL:
                                                 type: string
                                             clientID:
                                                 type: string
                                             clientSecretRef:
-                                                description: ClientSecretRef references a Secret key holding
-                                                    the OIDC client secret.
+                                                description: ClientSecretRef references a Secret key holding the OIDC client secret.
                                                 properties:
                                                     key:
                                                         default: password
@@ -5834,8 +5829,7 @@ spec:
                                                 default: false
                                                 type: boolean
                                             entra:
-                                                description: Entra derives ProviderURL from a Microsoft Entra
-                                                    tenant ID.
+                                                description: Entra derives ProviderURL from a Microsoft Entra tenant ID.
                                                 properties:
                                                     tenantID:
                                                         minLength: 1
@@ -5850,8 +5844,7 @@ spec:
                                                 type: object
                                                 x-kubernetes-preserve-unknown-fields: true
                                             providerURL:
-                                                description: ProviderURL is the OIDC issuer URL (set directly
-                                                    or via Entra).
+                                                description: ProviderURL is the OIDC issuer URL (set directly or via Entra).
                                                 type: string
                                             scopes:
                                                 description: Scopes default to ["openid", "profile", "email"].
@@ -5909,6 +5902,29 @@ spec:
                                 description: Version is the Temporal server version, e.g. "1.31.1".
                                 pattern: ^\d+\.\d+\.\d+$
                                 type: string
+                            workflowRunPolicy:
+                                description: |-
+                                    WorkflowRunPolicy gates operator-initiated TemporalWorkflowRun executions
+                                    against this cluster. Absent means disabled (closed by default).
+                                properties:
+                                    allowedNamespaces:
+                                        description: |-
+                                            AllowedNamespaces optionally restricts which Temporal namespaces runs may
+                                            target. Empty means any namespace is allowed.
+                                        items:
+                                            type: string
+                                        type: array
+                                    allowedTaskQueues:
+                                        description: |-
+                                            AllowedTaskQueues optionally restricts which task queues runs may use.
+                                            Empty means any task queue is allowed.
+                                        items:
+                                            type: string
+                                        type: array
+                                    enabled:
+                                        description: Enabled permits operator-initiated workflow runs against this target.
+                                        type: boolean
+                                type: object
                         required:
                             - numHistoryShards
                             - persistence
