@@ -48,3 +48,21 @@ var _ = Describe("resolveTarget", func() {
 		Expect(target.Ready).To(BeFalse())
 	})
 })
+
+var _ = Describe("effectiveWorkflowRunPolicy", func() {
+	It("defaults TemporalCluster to disabled when nil", func() {
+		p := effectiveWorkflowRunPolicy(temporalv1alpha1.ClusterKindTemporalCluster, nil)
+		Expect(p.Enabled).To(BeFalse())
+	})
+	It("defaults TemporalDevServer to enabled when nil", func() {
+		p := effectiveWorkflowRunPolicy(temporalv1alpha1.ClusterKindTemporalDevServer, nil)
+		Expect(p.Enabled).To(BeTrue())
+		Expect(p.AllowedNamespaces).To(BeEmpty())
+	})
+	It("passes an explicit policy through unchanged", func() {
+		in := &temporalv1alpha1.WorkflowRunPolicy{Enabled: true, AllowedTaskQueues: []string{"q"}}
+		p := effectiveWorkflowRunPolicy(temporalv1alpha1.ClusterKindTemporalCluster, in)
+		Expect(p.Enabled).To(BeTrue())
+		Expect(p.AllowedTaskQueues).To(Equal([]string{"q"}))
+	})
+})
