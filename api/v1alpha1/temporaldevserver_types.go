@@ -76,6 +76,11 @@ type TemporalDevServerSpec struct {
 	// Affinity applied to the dev server pod.
 	// +optional
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// WorkflowRunPolicy gates operator-initiated TemporalWorkflowRun executions
+	// against this dev server. Absent means enabled with no allowlist.
+	// +optional
+	WorkflowRunPolicy *WorkflowRunPolicy `json:"workflowRunPolicy,omitempty"`
 }
 
 // DevServerUISpec controls the bundled Web UI.

@@ -74,4 +74,14 @@ const (
 	ReasonReplicationDrift = "ReplicationConfigDrift"
 	// ReasonActiveClusterInvalid indicates the active cluster selection is invalid.
 	ReasonActiveClusterInvalid = "ActiveClusterInvalid"
+	// ReasonWorkflowRunNotPermitted indicates the target's WorkflowRunPolicy denied the run.
+	ReasonWorkflowRunNotPermitted = "WorkflowRunNotPermitted"
+	// ReasonWorkflowRunning indicates the workflow is currently running.
+	ReasonWorkflowRunning = "WorkflowRunning"
+	// ReasonWorkflowFinished indicates the workflow reached a terminal state.
+	ReasonWorkflowFinished = "WorkflowFinished"
+	// ReasonClusterNotFound indicates the referenced Temporal target was not found.
+	ReasonClusterNotFound = "ClusterNotFound"
+	// ReasonClusterNotReady indicates the referenced Temporal target is not ready.
+	ReasonClusterNotReady = "ClusterNotReady"
 )
