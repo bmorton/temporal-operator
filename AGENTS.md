@@ -60,6 +60,21 @@ make lint                # golangci-lint
 Run `make generate manifests` after changing API types, and `make lint` before
 opening a PR. The project targets the Go version pinned in `go.mod`.
 
+## Helm chart
+
+`dist/chart` is generated — do **not** edit it by hand. Run:
+
+```sh
+make helm-chart   # regenerates dist/chart deterministically
+```
+
+Generation is `kubebuilder edit` plus a post-processor (`hack/helmgen`). Files
+that must be hand-maintained live in `hack/helm/overrides/` (mirroring their
+`dist/chart/` paths) and are copied over the generated output; edit those, not
+`dist/chart`. The `Verify generated chart` CI job fails if `dist/chart` is stale,
+so always run `make helm-chart` and commit the result after changing API types,
+RBAC markers, or chart overrides.
+
 ## Releases
 
 Releases are automated by `release-please`. Do **not** hand-edit version numbers

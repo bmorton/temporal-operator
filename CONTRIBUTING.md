@@ -29,6 +29,21 @@ make test              # unit + envtest suites
 make lint              # golangci-lint
 ```
 
+### Helm chart
+
+`dist/chart` is generated — do **not** edit it by hand. Run:
+
+```sh
+make helm-chart   # regenerates dist/chart deterministically
+```
+
+Generation is `kubebuilder edit` plus a post-processor (`hack/helmgen`). Files
+that must be hand-maintained live in `hack/helm/overrides/` (mirroring their
+`dist/chart/` paths) and are copied over the generated output; edit those, not
+`dist/chart`. The `Verify generated chart` CI job fails if `dist/chart` is stale,
+so always run `make helm-chart` and commit the result after changing API types,
+RBAC markers, or chart overrides.
+
 ### Run against a local cluster
 
 ```sh
