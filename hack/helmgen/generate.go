@@ -37,6 +37,7 @@ func Generate(opts Options) error {
 	}
 
 	if err := opts.RunKubebuilder(); err != nil {
+		_ = restore(snaps)
 		return fmt.Errorf("run kubebuilder: %w", err)
 	}
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -113,5 +114,26 @@ func TestGenerateIsIdempotent(t *testing.T) {
 	}
 	if secondKust := readFile(t, root, "config/manager/kustomization.yaml"); secondKust != firstKust {
 		t.Errorf("kustomization not stable: %q != %q", secondKust, firstKust)
+	}
+}
+
+func TestGenerateRestoresPreservedFilesOnKubebuilderError(t *testing.T) {
+	root, opts := fixture(t)
+
+	// Replace RunKubebuilder to clobber a preserved file then error.
+	opts.RunKubebuilder = func() error {
+		writeFile(t, root, "config/manager/kustomization.yaml", "CLOBBERED-KUSTOMIZATION\n")
+		return fmt.Errorf("simulated kubebuilder failure")
+	}
+
+	// Generate should return an error.
+	err := Generate(opts)
+	if err == nil {
+		t.Fatal("Generate should have returned an error")
+	}
+
+	// Preserved file must be restored to original content despite the error.
+	if got := readFile(t, root, "config/manager/kustomization.yaml"); got != "ORIGINAL-KUSTOMIZATION\n" {
+		t.Errorf("kustomization not restored on error: got %q, want %q", got, "ORIGINAL-KUSTOMIZATION\n")
 	}
 }
