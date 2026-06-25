@@ -2,220 +2,215 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
-  name: temporalnamespaces.temporal.bmor10.com
+    annotations:
+        controller-gen.kubebuilder.io/version: v0.19.0
+    name: temporalnamespaces.temporal.bmor10.com
 spec:
-  group: temporal.bmor10.com
-  names:
-    kind: TemporalNamespace
-    listKind: TemporalNamespaceList
-    plural: temporalnamespaces
-    shortNames:
-    - tns
-    singular: temporalnamespace
-  scope: Namespaced
-  versions:
-  - additionalPrinterColumns:
-    - jsonPath: .spec.clusterRef.name
-      name: Cluster
-      type: string
-    - jsonPath: .spec.retentionPeriod
-      name: Retention
-      type: string
-    - jsonPath: .status.conditions[?(@.type=="Ready")].status
-      name: Ready
-      type: string
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    name: v1alpha1
-    schema:
-      openAPIV3Schema:
-        description: TemporalNamespace is the Schema for the temporalnamespaces API.
-        properties:
-          apiVersion:
-            description: |-
-              APIVersion defines the versioned schema of this representation of an object.
-              Servers should convert recognized schemas to the latest internal value, and
-              may reject unrecognized values.
-              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
-            type: string
-          kind:
-            description: |-
-              Kind is a string value representing the REST resource this object represents.
-              Servers may infer this from the endpoint the client submits requests to.
-              Cannot be updated.
-              In CamelCase.
-              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: spec defines the desired state of TemporalNamespace
-            properties:
-              activeCluster:
-                description: |-
-                  ActiveCluster is the authoritative cluster for this namespace. Changing it
-                  triggers an operator-executed failover. Only meaningful when IsGlobal.
-                type: string
-              allowDeletion:
-                description: |-
-                  AllowDeletion permits the operator to delete the Temporal namespace when
-                  the CR is deleted. When false, the namespace is left in place.
-                type: boolean
-              clusterRef:
-                description: |-
-                  ClusterRef references the TemporalCluster or TemporalDevServer that owns
-                  this namespace.
+    group: temporal.bmor10.com
+    names:
+        kind: TemporalNamespace
+        listKind: TemporalNamespaceList
+        plural: temporalnamespaces
+        shortNames:
+            - tns
+        singular: temporalnamespace
+    scope: Namespaced
+    versions:
+        - additionalPrinterColumns:
+            - jsonPath: .spec.clusterRef.name
+              name: Cluster
+              type: string
+            - jsonPath: .spec.retentionPeriod
+              name: Retention
+              type: string
+            - jsonPath: .status.conditions[?(@.type=="Ready")].status
+              name: Ready
+              type: string
+            - jsonPath: .metadata.creationTimestamp
+              name: Age
+              type: date
+          name: v1alpha1
+          schema:
+            openAPIV3Schema:
+                description: TemporalNamespace is the Schema for the temporalnamespaces API.
                 properties:
-                  kind:
-                    default: TemporalCluster
-                    description: Kind selects the referenced object type.
-                    enum:
-                    - TemporalCluster
-                    - TemporalDevServer
-                    type: string
-                  name:
-                    description: Name is the name of the referenced object.
-                    type: string
-                required:
-                - name
-                type: object
-              clusters:
-                description: |-
-                  Clusters lists the cluster names this namespace is replicated to. Only
-                  meaningful when IsGlobal is true.
-                items:
-                  type: string
-                type: array
-              description:
-                description: Description is a human-friendly description of the namespace.
-                type: string
-              driftDetection:
-                default: reconcile
-                description: |-
-                  DriftDetection controls whether the operator reconciles drift between the
-                  spec and the live namespace.
-                enum:
-                - reconcile
-                - ignore
-                type: string
-              isGlobal:
-                description: IsGlobal marks the namespace as global for multi-cluster
-                  replication.
-                type: boolean
-              ownerEmail:
-                description: OwnerEmail is the owner contact for the namespace.
-                type: string
-              retentionPeriod:
-                default: 72h
-                description: RetentionPeriod is how long closed workflows are retained.
-                type: string
-            required:
-            - clusterRef
-            type: object
-          status:
-            description: status defines the observed state of TemporalNamespace
-            properties:
-              conditions:
-                items:
-                  description: Condition contains details for one aspect of the current
-                    state of this API Resource.
-                  properties:
-                    lastTransitionTime:
-                      description: |-
-                        lastTransitionTime is the last time the condition transitioned from one status to another.
-                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
-                      format: date-time
-                      type: string
-                    message:
-                      description: |-
-                        message is a human readable message indicating details about the transition.
-                        This may be an empty string.
-                      maxLength: 32768
-                      type: string
-                    observedGeneration:
-                      description: |-
-                        observedGeneration represents the .metadata.generation that the condition was set based upon.
-                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                        with respect to the current state of the instance.
-                      format: int64
-                      minimum: 0
-                      type: integer
-                    reason:
-                      description: |-
-                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                        Producers of specific condition types may define expected values and meanings for this field,
-                        and whether the values are considered a guaranteed API.
-                        The value should be a CamelCase string.
-                        This field may not be empty.
-                      maxLength: 1024
-                      minLength: 1
-                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                      type: string
+                    apiVersion:
+                        description: |-
+                            APIVersion defines the versioned schema of this representation of an object.
+                            Servers should convert recognized schemas to the latest internal value, and
+                            may reject unrecognized values.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+                        type: string
+                    kind:
+                        description: |-
+                            Kind is a string value representing the REST resource this object represents.
+                            Servers may infer this from the endpoint the client submits requests to.
+                            Cannot be updated.
+                            In CamelCase.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                        type: string
+                    metadata:
+                        type: object
+                    spec:
+                        description: spec defines the desired state of TemporalNamespace
+                        properties:
+                            activeCluster:
+                                description: |-
+                                    ActiveCluster is the authoritative cluster for this namespace. Changing it
+                                    triggers an operator-executed failover. Only meaningful when IsGlobal.
+                                type: string
+                            allowDeletion:
+                                description: |-
+                                    AllowDeletion permits the operator to delete the Temporal namespace when
+                                    the CR is deleted. When false, the namespace is left in place.
+                                type: boolean
+                            clusterRef:
+                                description: |-
+                                    ClusterRef references the TemporalCluster or TemporalDevServer that owns
+                                    this namespace.
+                                properties:
+                                    kind:
+                                        default: TemporalCluster
+                                        description: Kind selects the referenced object type.
+                                        enum:
+                                            - TemporalCluster
+                                            - TemporalDevServer
+                                        type: string
+                                    name:
+                                        description: Name is the name of the referenced object.
+                                        type: string
+                                required:
+                                    - name
+                                type: object
+                            clusters:
+                                description: |-
+                                    Clusters lists the cluster names this namespace is replicated to. Only
+                                    meaningful when IsGlobal is true.
+                                items:
+                                    type: string
+                                type: array
+                            description:
+                                description: Description is a human-friendly description of the namespace.
+                                type: string
+                            driftDetection:
+                                default: reconcile
+                                description: |-
+                                    DriftDetection controls whether the operator reconciles drift between the
+                                    spec and the live namespace.
+                                enum:
+                                    - reconcile
+                                    - ignore
+                                type: string
+                            isGlobal:
+                                description: IsGlobal marks the namespace as global for multi-cluster replication.
+                                type: boolean
+                            ownerEmail:
+                                description: OwnerEmail is the owner contact for the namespace.
+                                type: string
+                            retentionPeriod:
+                                default: 72h
+                                description: RetentionPeriod is how long closed workflows are retained.
+                                type: string
+                        required:
+                            - clusterRef
+                        type: object
                     status:
-                      description: status of the condition, one of True, False, Unknown.
-                      enum:
-                      - "True"
-                      - "False"
-                      - Unknown
-                      type: string
-                    type:
-                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                      maxLength: 316
-                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                      type: string
-                  required:
-                  - lastTransitionTime
-                  - message
-                  - reason
-                  - status
-                  - type
-                  type: object
-                type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
-              lastUpdated:
-                description: LastUpdated is when the operator last reconciled the
-                  namespace.
-                format: date-time
-                type: string
-              namespaceID:
-                description: NamespaceID is the Temporal-assigned namespace UUID.
-                type: string
-              observedGeneration:
-                format: int64
-                type: integer
-              registered:
-                description: Registered indicates whether the namespace exists in
-                  the Temporal cluster.
-                type: boolean
-              replication:
-                description: Replication reports the observed replication state of
-                  a global namespace.
-                properties:
-                  activeCluster:
-                    type: string
-                  clusters:
-                    items:
-                      type: string
-                    type: array
-                  failoverInProgress:
-                    type: boolean
-                  isGlobal:
-                    type: boolean
-                  lastFailoverTime:
-                    format: date-time
-                    type: string
+                        description: status defines the observed state of TemporalNamespace
+                        properties:
+                            conditions:
+                                items:
+                                    description: Condition contains details for one aspect of the current state of this API Resource.
+                                    properties:
+                                        lastTransitionTime:
+                                            description: |-
+                                                lastTransitionTime is the last time the condition transitioned from one status to another.
+                                                This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                            format: date-time
+                                            type: string
+                                        message:
+                                            description: |-
+                                                message is a human readable message indicating details about the transition.
+                                                This may be an empty string.
+                                            maxLength: 32768
+                                            type: string
+                                        observedGeneration:
+                                            description: |-
+                                                observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                                For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                                with respect to the current state of the instance.
+                                            format: int64
+                                            minimum: 0
+                                            type: integer
+                                        reason:
+                                            description: |-
+                                                reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                                Producers of specific condition types may define expected values and meanings for this field,
+                                                and whether the values are considered a guaranteed API.
+                                                The value should be a CamelCase string.
+                                                This field may not be empty.
+                                            maxLength: 1024
+                                            minLength: 1
+                                            pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                            type: string
+                                        status:
+                                            description: status of the condition, one of True, False, Unknown.
+                                            enum:
+                                                - "True"
+                                                - "False"
+                                                - Unknown
+                                            type: string
+                                        type:
+                                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                                            maxLength: 316
+                                            pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                            type: string
+                                    required:
+                                        - lastTransitionTime
+                                        - message
+                                        - reason
+                                        - status
+                                        - type
+                                    type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                    - type
+                                x-kubernetes-list-type: map
+                            lastUpdated:
+                                description: LastUpdated is when the operator last reconciled the namespace.
+                                format: date-time
+                                type: string
+                            namespaceID:
+                                description: NamespaceID is the Temporal-assigned namespace UUID.
+                                type: string
+                            observedGeneration:
+                                format: int64
+                                type: integer
+                            registered:
+                                description: Registered indicates whether the namespace exists in the Temporal cluster.
+                                type: boolean
+                            replication:
+                                description: Replication reports the observed replication state of a global namespace.
+                                properties:
+                                    activeCluster:
+                                        type: string
+                                    clusters:
+                                        items:
+                                            type: string
+                                        type: array
+                                    failoverInProgress:
+                                        type: boolean
+                                    isGlobal:
+                                        type: boolean
+                                    lastFailoverTime:
+                                        format: date-time
+                                        type: string
+                                type: object
+                        type: object
+                required:
+                    - spec
                 type: object
-            type: object
-        required:
-        - spec
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
+          served: true
+          storage: true
+          subresources:
+            status: {}
 {{- end }}
