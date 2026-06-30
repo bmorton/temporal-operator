@@ -32,6 +32,7 @@ Package v1alpha1 contains API Schema definitions for the temporal v1alpha1 API g
 - [TemporalNamespace](#temporalnamespace)
 - [TemporalSchedule](#temporalschedule)
 - [TemporalSearchAttribute](#temporalsearchattribute)
+- [TemporalWorkflowRun](#temporalworkflowrun)
 
 
 
@@ -211,6 +212,7 @@ _Appears in:_
 - [TemporalNamespaceSpec](#temporalnamespacespec)
 - [TemporalScheduleSpec](#temporalschedulespec)
 - [TemporalSearchAttributeSpec](#temporalsearchattributespec)
+- [TemporalWorkflowRunSpec](#temporalworkflowrunspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -981,6 +983,7 @@ StartWorkflowAction starts a workflow when the schedule fires.
 
 _Appears in:_
 - [ScheduleActionSpec](#scheduleactionspec)
+- [TemporalWorkflowRunSpec](#temporalworkflowrunspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1139,6 +1142,7 @@ _Appears in:_
 | `authorization` _[AuthorizationSpec](#authorizationspec)_ | Authorization configures the authorizer and claim mapper. |  | Optional: \{\} <br /> |
 | `clusterMetadata` _[ClusterMetadataSpec](#clustermetadataspec)_ | ClusterMetadata configures multi-cluster replication. |  | Optional: \{\} <br /> |
 | `preventDeletion` _boolean_ | PreventDeletion, when true, blocks deletion of the cluster via the<br />validating webhook as a safety measure. |  | Optional: \{\} <br /> |
+| `workflowRunPolicy` _[WorkflowRunPolicy](#workflowrunpolicy)_ | WorkflowRunPolicy gates operator-initiated TemporalWorkflowRun executions<br />against this cluster. Absent means disabled (closed by default). |  | Optional: \{\} <br /> |
 
 
 
@@ -1188,6 +1192,7 @@ _Appears in:_
 | `nodeSelector` _object (keys:string, values:string)_ | NodeSelector constrains the dev server pod to matching nodes. |  | Optional: \{\} <br /> |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#toleration-v1-core) array_ | Tolerations applied to the dev server pod. |  | Optional: \{\} <br /> |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#affinity-v1-core)_ | Affinity applied to the dev server pod. |  | Optional: \{\} <br /> |
+| `workflowRunPolicy` _[WorkflowRunPolicy](#workflowrunpolicy)_ | WorkflowRunPolicy gates operator-initiated TemporalWorkflowRun executions<br />against this dev server. Absent means enabled with no allowlist. |  | Optional: \{\} <br /> |
 
 
 
@@ -1319,6 +1324,46 @@ _Appears in:_
 
 
 
+#### TemporalWorkflowRun
+
+
+
+TemporalWorkflowRun is the Schema for the temporalworkflowruns API.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `temporal.bmor10.com/v1alpha1` | | |
+| `kind` _string_ | `TemporalWorkflowRun` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  | Optional: \{\} <br /> |
+| `spec` _[TemporalWorkflowRunSpec](#temporalworkflowrunspec)_ |  |  | Required: \{\} <br /> |
+
+
+#### TemporalWorkflowRunSpec
+
+
+
+TemporalWorkflowRunSpec defines the desired state of a one-off workflow run.
+
+
+
+_Appears in:_
+- [TemporalWorkflowRun](#temporalworkflowrun)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `clusterRef` _[ClusterReference](#clusterreference)_ | ClusterRef references the TemporalCluster or TemporalDevServer that runs<br />the workflow. Resolved in the same Kubernetes namespace as this CR. |  |  |
+| `namespace` _string_ | Namespace is the Temporal namespace to start the workflow in. |  |  |
+| `workflow` _[StartWorkflowAction](#startworkflowaction)_ | Workflow describes the one-off workflow to start. Immutable after create. |  |  |
+| `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished, when set, deletes this CR that many seconds after<br />the workflow reaches a terminal state. Unset keeps the CR indefinitely. |  | Optional: \{\} <br /> |
+| `cancellationPolicy` _string_ | CancellationPolicy controls what happens to a still-running workflow when<br />this CR is deleted. | Abandon | Enum: [Abandon Cancel Terminate] <br />Optional: \{\} <br /> |
+
+
+
+
 #### UIAuthSpec
 
 
@@ -1419,5 +1464,46 @@ _Appears in:_
 | `phase` _string_ |  |  | Optional: \{\} <br /> |
 | `rollbackable` _boolean_ | Rollbackable is true until schema migration begins, after which a<br />rollback is no longer safe. |  | Optional: \{\} <br /> |
 | `startedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#time-v1-meta)_ |  |  | Optional: \{\} <br /> |
+
+
+#### WorkflowRunFailure
+
+
+
+WorkflowRunFailure carries failure detail for non-success terminal states.
+
+
+
+_Appears in:_
+- [TemporalWorkflowRunStatus](#temporalworkflowrunstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `message` _string_ |  |  | Optional: \{\} <br /> |
+| `type` _string_ |  |  | Optional: \{\} <br /> |
+
+
+#### WorkflowRunPolicy
+
+
+
+WorkflowRunPolicy is a per-target opt-in gate controlling operator-initiated
+workflow runs. It is declared on a TemporalCluster or TemporalDevServer by the
+cluster owner. Defaults differ per kind and are applied by the controller's
+target resolver, not by kubebuilder defaults, so an absent policy is
+meaningful: disabled for TemporalCluster, enabled (no allowlist) for
+TemporalDevServer.
+
+
+
+_Appears in:_
+- [TemporalClusterSpec](#temporalclusterspec)
+- [TemporalDevServerSpec](#temporaldevserverspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled permits operator-initiated workflow runs against this target. |  | Optional: \{\} <br /> |
+| `allowedNamespaces` _string array_ | AllowedNamespaces optionally restricts which Temporal namespaces runs may<br />target. Empty means any namespace is allowed. |  | Optional: \{\} <br /> |
+| `allowedTaskQueues` _string array_ | AllowedTaskQueues optionally restricts which task queues runs may use.<br />Empty means any task queue is allowed. |  | Optional: \{\} <br /> |
 
 

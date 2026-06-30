@@ -44,6 +44,9 @@ type ResolvedTarget struct {
 	TLSConfig *tls.Config
 	// Ready reports whether the referenced target's Ready condition is true.
 	Ready bool
+	// WorkflowRunPolicy is the effective (defaults-applied) policy for
+	// operator-initiated workflow runs against this target.
+	WorkflowRunPolicy temporalv1alpha1.WorkflowRunPolicy
 }
 
 // resolveTarget resolves a ClusterReference to a connectable Temporal frontend.
@@ -65,9 +68,10 @@ func resolveTarget(ctx context.Context, c client.Client, namespace string, ref t
 			return nil, fmt.Errorf("building temporal client tls: %w", err)
 		}
 		return &ResolvedTarget{
-			Address:   frontendAddress(&cluster),
-			TLSConfig: tlsConfig,
-			Ready:     meta.IsStatusConditionTrue(cluster.Status.Conditions, temporalv1alpha1.ConditionReady),
+			Address:           frontendAddress(&cluster),
+			TLSConfig:         tlsConfig,
+			Ready:             meta.IsStatusConditionTrue(cluster.Status.Conditions, temporalv1alpha1.ConditionReady),
+			WorkflowRunPolicy: effectiveWorkflowRunPolicy(temporalv1alpha1.ClusterKindTemporalCluster, cluster.Spec.WorkflowRunPolicy),
 		}, nil
 
 	case temporalv1alpha1.ClusterKindTemporalDevServer:
@@ -79,12 +83,28 @@ func resolveTarget(ctx context.Context, c client.Client, namespace string, ref t
 			return nil, err
 		}
 		return &ResolvedTarget{
-			Address:   resources.DevServerFrontendEndpoint(&dev),
-			TLSConfig: nil,
-			Ready:     meta.IsStatusConditionTrue(dev.Status.Conditions, temporalv1alpha1.ConditionReady),
+			Address:           resources.DevServerFrontendEndpoint(&dev),
+			TLSConfig:         nil,
+			Ready:             meta.IsStatusConditionTrue(dev.Status.Conditions, temporalv1alpha1.ConditionReady),
+			WorkflowRunPolicy: effectiveWorkflowRunPolicy(temporalv1alpha1.ClusterKindTemporalDevServer, dev.Spec.WorkflowRunPolicy),
 		}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown cluster reference kind %q", ref.Kind)
+	}
+}
+
+// effectiveWorkflowRunPolicy applies per-kind defaults to a possibly-nil policy.
+// A nil policy means disabled for TemporalCluster (closed by default) and
+// enabled with no allowlist for TemporalDevServer (throwaway dev environments).
+func effectiveWorkflowRunPolicy(kind string, p *temporalv1alpha1.WorkflowRunPolicy) temporalv1alpha1.WorkflowRunPolicy {
+	if p != nil {
+		return *p
+	}
+	switch kind {
+	case temporalv1alpha1.ClusterKindTemporalDevServer:
+		return temporalv1alpha1.WorkflowRunPolicy{Enabled: true}
+	default:
+		return temporalv1alpha1.WorkflowRunPolicy{Enabled: false}
 	}
 }

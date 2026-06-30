@@ -5902,6 +5902,29 @@ spec:
                                 description: Version is the Temporal server version, e.g. "1.31.1".
                                 pattern: ^\d+\.\d+\.\d+$
                                 type: string
+                            workflowRunPolicy:
+                                description: |-
+                                    WorkflowRunPolicy gates operator-initiated TemporalWorkflowRun executions
+                                    against this cluster. Absent means disabled (closed by default).
+                                properties:
+                                    allowedNamespaces:
+                                        description: |-
+                                            AllowedNamespaces optionally restricts which Temporal namespaces runs may
+                                            target. Empty means any namespace is allowed.
+                                        items:
+                                            type: string
+                                        type: array
+                                    allowedTaskQueues:
+                                        description: |-
+                                            AllowedTaskQueues optionally restricts which task queues runs may use.
+                                            Empty means any task queue is allowed.
+                                        items:
+                                            type: string
+                                        type: array
+                                    enabled:
+                                        description: Enabled permits operator-initiated workflow runs against this target.
+                                        type: boolean
+                                type: object
                         required:
                             - numHistoryShards
                             - persistence

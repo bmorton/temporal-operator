@@ -1,0 +1,7 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalWorkflowRun
+metadata:
+  name: greet-once
+status:
+  phase: Terminated
+  (conditions[?type == 'Finished'].status | [0]): "True"

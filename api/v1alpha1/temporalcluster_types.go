@@ -83,6 +83,11 @@ type TemporalClusterSpec struct {
 	// validating webhook as a safety measure.
 	// +optional
 	PreventDeletion bool `json:"preventDeletion,omitempty"`
+
+	// WorkflowRunPolicy gates operator-initiated TemporalWorkflowRun executions
+	// against this cluster. Absent means disabled (closed by default).
+	// +optional
+	WorkflowRunPolicy *WorkflowRunPolicy `json:"workflowRunPolicy,omitempty"`
 }
 
 // ServicesSpec configures each Temporal service plus shared overrides.
