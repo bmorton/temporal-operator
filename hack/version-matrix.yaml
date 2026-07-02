@@ -57,7 +57,7 @@ versions:
     minSchemaCassandra: "v1.9"
     minSchemaES: "v7"
     allowedFromVersions: ["1.30"]
-    uiSeries: "2.34"
-    defaultUIVersion: "2.34.0"
+    uiSeries: "2.51"
+    defaultUIVersion: "2.51.1"
     devServerCLIVersion: "1.7.2"
     cassandraVisibilitySupported: false
