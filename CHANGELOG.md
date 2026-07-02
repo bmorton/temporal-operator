@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/bmorton/temporal-operator/compare/v0.9.0...v0.10.0) (2026-07-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* spec.ui.auth is now a typed object, not raw YAML.
+
+### Features
+
+* Microsoft Entra authentication for Temporal (server JWT + UI OIDC) ([#89](https://github.com/bmorton/temporal-operator/issues/89)) ([d674939](https://github.com/bmorton/temporal-operator/commit/d67493934706cab29c9787785714f0ab680a5f5b))
+* **versions:** default to Temporal UI v2.51.1 for latest server ([#108](https://github.com/bmorton/temporal-operator/issues/108)) ([a604c94](https://github.com/bmorton/temporal-operator/commit/a604c94c08acf61c2fa88fc75ac66651b9bb6662))
+
 ## [0.9.0](https://github.com/bmorton/temporal-operator/compare/v0.8.0...v0.9.0) (2026-06-24)
 
 
