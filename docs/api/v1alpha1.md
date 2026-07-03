@@ -23,6 +23,7 @@ Package v1alpha1 contains API Schema definitions for the temporal v1alpha1 API g
 - [TemporalCluster](#temporalcluster)
 - [TemporalClusterClient](#temporalclusterclient)
 - [TemporalClusterConnection](#temporalclusterconnection)
+- [TemporalClusterProxy](#temporalclusterproxy)
 - [TemporalDevServer](#temporaldevserver)
 - [TemporalNamespace](#temporalnamespace)
 - [TemporalSchedule](#temporalschedule)
@@ -202,7 +203,9 @@ namespace: either a TemporalCluster (default) or a TemporalDevServer.
 
 _Appears in:_
 - [ClusterConnectionPeer](#clusterconnectionpeer)
+- [ProxyPeer](#proxypeer)
 - [TemporalClusterClientSpec](#temporalclusterclientspec)
+- [TemporalClusterProxySpec](#temporalclusterproxyspec)
 - [TemporalNamespaceSpec](#temporalnamespacespec)
 - [TemporalScheduleSpec](#temporalschedulespec)
 - [TemporalSearchAttributeSpec](#temporalsearchattributespec)
@@ -490,6 +493,7 @@ IssuerReference references a cert-manager Issuer or ClusterIssuer.
 
 _Appears in:_
 - [MTLSSpec](#mtlsspec)
+- [ProxyMuxTLS](#proxymuxtls)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -648,6 +652,198 @@ _Appears in:_
 | `labels` _object (keys:string, values:string)_ |  |  | Optional: \{\} <br /> |
 | `annotations` _object (keys:string, values:string)_ |  |  | Optional: \{\} <br /> |
 | `spec` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | Spec is a partial PodSpec (strategic-merge patch) merged onto the<br />generated pod template. It is stored as an opaque object to keep the<br />CRD schema small. |  | Optional: \{\} <br /> |
+
+
+#### ProxyACL
+
+
+
+ProxyACL restricts what the proxy relays.
+
+
+
+_Appears in:_
+- [TemporalClusterProxySpec](#temporalclusterproxyspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `allowedNamespaces` _string array_ |  |  | Optional: \{\} <br /> |
+| `allowedAdminMethods` _string array_ | AllowedAdminMethods defaults to the standard replication allowlist when empty. |  | Optional: \{\} <br /> |
+
+
+#### ProxyFailoverVersionIncrement
+
+
+
+ProxyFailoverVersionIncrement translates failover-version increments across the link.
+
+
+
+_Appears in:_
+- [TemporalClusterProxySpec](#temporalclusterproxyspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `local` _integer_ |  |  |  |
+| `remote` _integer_ |  |  |  |
+
+
+#### ProxyFieldMapping
+
+
+
+ProxyFieldMapping maps a local search-attribute field name to a remote one.
+
+
+
+_Appears in:_
+- [ProxySearchAttributeMapping](#proxysearchattributemapping)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `localFieldName` _string_ |  |  |  |
+| `remoteFieldName` _string_ |  |  |  |
+
+
+#### ProxyMux
+
+
+
+ProxyMux configures the s2s-proxy mux transport for one link.
+
+
+
+_Appears in:_
+- [TemporalClusterProxySpec](#temporalclusterproxyspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `role` _string_ | Role selects whether this proxy opens a port (server) or dials out (client). |  | Enum: [server client] <br /> |
+| `server` _[ProxyMuxServer](#proxymuxserver)_ | Server configures the listening side. Required when role=server. |  | Optional: \{\} <br /> |
+| `client` _[ProxyMuxClient](#proxymuxclient)_ | Client configures the dialing side. Required when role=client. |  | Optional: \{\} <br /> |
+| `muxCount` _integer_ | MuxCount is the number of multiplexed sessions. Defaults to the upstream default. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+| `tls` _[ProxyMuxTLS](#proxymuxtls)_ | TLS configures the mux mTLS material. |  |  |
+
+
+#### ProxyMuxClient
+
+
+
+ProxyMuxClient configures a mux-client (dialing) proxy.
+
+
+
+_Appears in:_
+- [ProxyMux](#proxymux)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `serverAddress` _string_ | ServerAddress is the reachable host:port of the remote mux-server. |  |  |
+
+
+#### ProxyMuxServer
+
+
+
+ProxyMuxServer configures a mux-server (listening) proxy.
+
+
+
+_Appears in:_
+- [ProxyMux](#proxymux)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `listenPort` _integer_ | ListenPort is the port the mux listens on. |  | Maximum: 65535 <br />Minimum: 1 <br /> |
+| `exposure` _[ServiceExposureSpec](#serviceexposurespec)_ | Exposure controls how the mux port is exposed (ClusterIP/NodePort/LoadBalancer). |  | Optional: \{\} <br /> |
+
+
+#### ProxyMuxTLS
+
+
+
+ProxyMuxTLS configures the mux mTLS material for one side.
+
+
+
+_Appears in:_
+- [ProxyMux](#proxymux)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `provider` _string_ | Provider selects how this side's mux certificate is sourced. | cert-manager | Enum: [cert-manager secret] <br />Optional: \{\} <br /> |
+| `issuerRef` _[IssuerReference](#issuerreference)_ | IssuerRef mints this side's mux certificate. Required when provider=cert-manager. |  | Optional: \{\} <br /> |
+| `secretRef` _[SecretReference](#secretreference)_ | SecretRef supplies BYO cert/key/CA. Required when provider=secret. |  | Optional: \{\} <br /> |
+| `peerCARef` _[SecretReference](#secretreference)_ | PeerCARef supplies the remote side's CA to trust. When unset the CA bundle<br />from this side's own material is used (shared-issuer case). |  | Optional: \{\} <br /> |
+
+
+#### ProxyNamespaceMapping
+
+
+
+ProxyNamespaceMapping maps a local namespace name to a remote one.
+
+
+
+_Appears in:_
+- [ProxyTranslation](#proxytranslation)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `local` _string_ |  |  |  |
+| `remote` _string_ |  |  |  |
+
+
+#### ProxyPeer
+
+
+
+ProxyPeer identifies the remote replication cluster reached over the mux.
+
+
+
+_Appears in:_
+- [TemporalClusterProxySpec](#temporalclusterproxyspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the remote replication cluster name (== its currentClusterName). |  |  |
+| `clusterRef` _[ClusterReference](#clusterreference)_ | ClusterRef optionally references an operator-managed remote TemporalCluster.<br />It is used only to reuse the peer's issuer CA when available. |  | Optional: \{\} <br /> |
+| `enableConnection` _boolean_ | EnableConnection toggles replication without deleting the CR. | true | Optional: \{\} <br /> |
+
+
+#### ProxySearchAttributeMapping
+
+
+
+ProxySearchAttributeMapping maps search-attribute field names for a namespace.
+
+
+
+_Appears in:_
+- [ProxyTranslation](#proxytranslation)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `namespace` _string_ |  |  |  |
+| `mappings` _[ProxyFieldMapping](#proxyfieldmapping) array_ |  |  |  |
+
+
+#### ProxyTranslation
+
+
+
+ProxyTranslation renames namespaces and search attributes in-flight.
+
+
+
+_Appears in:_
+- [TemporalClusterProxySpec](#temporalclusterproxyspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `namespaces` _[ProxyNamespaceMapping](#proxynamespacemapping) array_ |  |  | Optional: \{\} <br /> |
+| `searchAttributes` _[ProxySearchAttributeMapping](#proxysearchattributemapping) array_ |  |  | Optional: \{\} <br /> |
 
 
 #### RetryPolicySpec
@@ -843,6 +1039,7 @@ for connecting to an external Temporal peer. Keys default to the conventional
 
 _Appears in:_
 - [ClusterConnectionPeer](#clusterconnectionpeer)
+- [ProxyMuxTLS](#proxymuxtls)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -861,6 +1058,7 @@ ServiceExposureSpec configures how a service is exposed.
 
 
 _Appears in:_
+- [ProxyMuxServer](#proxymuxserver)
 - [ServiceSpec](#servicespec)
 - [TemporalDevServerSpec](#temporaldevserverspec)
 
@@ -1103,6 +1301,50 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `peers` _[ClusterConnectionPeer](#clusterconnectionpeer) array_ | Peers participating in replication. At least two are required. Each peer's<br />Name must equal that cluster's clusterMetadata.currentClusterName. |  | MinItems: 2 <br /> |
+
+
+
+
+#### TemporalClusterProxy
+
+
+
+TemporalClusterProxy is the Schema for the temporalclusterproxies API.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `temporal.bmor10.com/v1alpha1` | | |
+| `kind` _string_ | `TemporalClusterProxy` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  | Optional: \{\} <br /> |
+| `spec` _[TemporalClusterProxySpec](#temporalclusterproxyspec)_ |  |  | Required: \{\} <br /> |
+
+
+#### TemporalClusterProxySpec
+
+
+
+TemporalClusterProxySpec describes one local cluster's s2s-proxy and its link
+to one replication peer over an s2s-proxy mux connection.
+
+
+
+_Appears in:_
+- [TemporalClusterProxy](#temporalclusterproxy)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `localClusterRef` _[ClusterReference](#clusterreference)_ | LocalClusterRef references the local operator-managed TemporalCluster this<br />proxy fronts. Its frontend address and issuer CA are resolved automatically. |  |  |
+| `localClusterName` _string_ | LocalClusterName overrides the replication-group name of the local cluster.<br />Defaults to the referenced cluster's clusterMetadata.currentClusterName. |  | Optional: \{\} <br /> |
+| `peer` _[ProxyPeer](#proxypeer)_ | Peer is the remote replication cluster on the far side of the mux. |  |  |
+| `mux` _[ProxyMux](#proxymux)_ | Mux configures the s2s-proxy multiplexed transport. |  |  |
+| `translation` _[ProxyTranslation](#proxytranslation)_ | Translation optionally renames namespaces and search attributes in-flight. |  | Optional: \{\} <br /> |
+| `failoverVersionIncrement` _[ProxyFailoverVersionIncrement](#proxyfailoverversionincrement)_ | FailoverVersionIncrement optionally translates failover-version increments. |  | Optional: \{\} <br /> |
+| `acl` _[ProxyACL](#proxyacl)_ | ACL optionally restricts the admin methods and namespaces the proxy relays. |  | Optional: \{\} <br /> |
+| `image` _string_ | Image overrides the pinned s2s-proxy image. |  | Optional: \{\} <br /> |
 
 
 
