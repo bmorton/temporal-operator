@@ -5,7 +5,7 @@ the `TemporalClusterProxy` CRD.
 
 ## Architecture
 
-```
+```text
 cluster-a                      cluster-b
 ┌─────────────────────┐        ┌─────────────────────┐
 │  Temporal frontend  │        │  Temporal frontend  │
