@@ -18,6 +18,7 @@ package resources
 
 import (
 	"fmt"
+	"net"
 
 	sigsyaml "sigs.k8s.io/yaml"
 
@@ -53,9 +54,11 @@ func DefaultAllowedAdminMethods() []string {
 // --- s2s-proxy config schema (subset we render) ---
 
 type proxyTLS struct {
-	CertificatePath string `json:"certificatePath"`
-	KeyPath         string `json:"keyPath"`
-	RemoteCAPath    string `json:"remoteCAPath"`
+	CertificatePath    string `json:"certificatePath"`
+	KeyPath            string `json:"keyPath"`
+	RemoteCAPath       string `json:"remoteCAPath"`
+	CAServerName       string `json:"caServerName,omitempty"`
+	SkipCAVerification bool   `json:"skipCAVerification,omitempty"`
 }
 
 type proxyAddressInfo struct {
@@ -132,13 +135,15 @@ type proxyConfigFile struct {
 func BuildClusterProxyConfig(cr *temporalv1alpha1.TemporalClusterProxy, localFrontendAddress string) (string, error) {
 	mux := cr.Spec.Mux
 
+	skipVerify := mux.TLS.SkipCAVerification != nil && *mux.TLS.SkipCAVerification
 	remote := proxyRemote{
 		MuxCount: mux.MuxCount,
 		MuxAddressInfo: proxyAddressInfo{
 			TLS: proxyTLS{
-				CertificatePath: ProxyTLSMountPath + "/tls.crt",
-				KeyPath:         ProxyTLSMountPath + "/tls.key",
-				RemoteCAPath:    proxyRemoteCAPath(cr),
+				CertificatePath:    ProxyTLSMountPath + "/tls.crt",
+				KeyPath:            ProxyTLSMountPath + "/tls.key",
+				RemoteCAPath:       proxyRemoteCAPath(cr),
+				SkipCAVerification: skipVerify,
 			},
 		},
 	}
@@ -155,6 +160,12 @@ func BuildClusterProxyConfig(cr *temporalv1alpha1.TemporalClusterProxy, localFro
 		}
 		remote.ConnectionType = "mux-client"
 		remote.MuxAddressInfo.Address = mux.Client.ServerAddress
+		// s2s-proxy requires the mux-client to verify the server certificate by
+		// name unless verification is skipped. Use the explicit override, else
+		// derive it from the server address host (matches the server proxy cert).
+		if !skipVerify {
+			remote.MuxAddressInfo.TLS.CAServerName = proxyClientCAServerName(mux)
+		}
 	default:
 		return "", fmt.Errorf("unknown mux.role %q", mux.Role)
 	}
@@ -206,6 +217,22 @@ func proxyRemoteCAPath(cr *temporalv1alpha1.TemporalClusterProxy) string {
 		return ProxyPeerCAMountPath + "/ca.crt"
 	}
 	return ProxyTLSMountPath + "/ca.crt"
+}
+
+// proxyClientCAServerName returns the TLS server name a mux-client verifies the
+// remote server certificate against. It uses the explicit CAServerName override
+// when set, otherwise the host portion of the client's server address.
+func proxyClientCAServerName(mux temporalv1alpha1.ProxyMux) string {
+	if mux.TLS.CAServerName != "" {
+		return mux.TLS.CAServerName
+	}
+	if mux.Client == nil {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(mux.Client.ServerAddress); err == nil {
+		return host
+	}
+	return mux.Client.ServerAddress
 }
 
 func buildACLPolicy(cr *temporalv1alpha1.TemporalClusterProxy) *proxyACLPolicy {

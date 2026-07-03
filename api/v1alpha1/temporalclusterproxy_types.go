@@ -140,6 +140,21 @@ type ProxyMuxTLS struct {
 	// from this side's own material is used (shared-issuer case).
 	// +optional
 	PeerCARef *SecretReference `json:"peerCARef,omitempty"`
+
+	// CAServerName is the TLS server name a mux-client verifies against the
+	// remote mux-server's certificate. s2s-proxy requires it on the client side
+	// unless SkipCAVerification is true. When empty for a client, the operator
+	// derives it from the host portion of mux.client.serverAddress (which matches
+	// the server proxy's certificate SANs for operator-managed peers). Ignored
+	// for the server role.
+	// +optional
+	CAServerName string `json:"caServerName,omitempty"`
+
+	// SkipCAVerification disables CA verification of the mux peer's certificate.
+	// Leave unset (false) for real mTLS; set true only for testing or when a
+	// verifiable server name is unavailable.
+	// +optional
+	SkipCAVerification *bool `json:"skipCAVerification,omitempty"`
 }
 
 // ProxyTranslation renames namespaces and search attributes in-flight.

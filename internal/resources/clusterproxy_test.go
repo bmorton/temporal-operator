@@ -125,6 +125,43 @@ func TestBuildClusterProxyConfig_ClientRoleWithTranslation(t *testing.T) {
 	if !strings.Contains(out, "ns.acct") {
 		t.Errorf("expected namespace translation in:\n%s", out)
 	}
+	// s2s-proxy requires the mux-client to verify the server certificate by name;
+	// with no explicit override it is derived from the server address host.
+	if !strings.Contains(out, "caServerName: b.example.com") {
+		t.Errorf("expected derived caServerName (host of serverAddress) in:\n%s", out)
+	}
+}
+
+func TestBuildClusterProxyConfig_ClientCAServerNameOverrideAndSkip(t *testing.T) {
+	cr := serverProxyCR()
+	cr.Spec.Mux.Role = temporalv1alpha1.ProxyRoleClient
+	cr.Spec.Mux.Server = nil
+	cr.Spec.Mux.Client = &temporalv1alpha1.ProxyMuxClient{ServerAddress: "b.example.com:6334"}
+
+	// Explicit override wins over the derived host.
+	cr.Spec.Mux.TLS.CAServerName = "custom-name"
+	out, err := resources.BuildClusterProxyConfig(cr, "cluster-a-frontend:7233")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(out, "caServerName: custom-name") {
+		t.Errorf("expected caServerName override in:\n%s", out)
+	}
+
+	// SkipCAVerification true emits skipCAVerification and drops caServerName.
+	skip := true
+	cr.Spec.Mux.TLS.CAServerName = ""
+	cr.Spec.Mux.TLS.SkipCAVerification = &skip
+	out, err = resources.BuildClusterProxyConfig(cr, "cluster-a-frontend:7233")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(out, "skipCAVerification: true") {
+		t.Errorf("expected skipCAVerification true in:\n%s", out)
+	}
+	if strings.Contains(out, "caServerName:") {
+		t.Errorf("caServerName must be omitted when skipping verification:\n%s", out)
+	}
 }
 
 func TestBuildClusterProxyService_ServerExposesMux(t *testing.T) {

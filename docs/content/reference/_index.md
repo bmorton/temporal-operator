@@ -780,6 +780,8 @@ _Appears in:_
 | `issuerRef` _[IssuerReference](#issuerreference)_ | IssuerRef mints this side's mux certificate. Required when provider=cert-manager. |  | Optional: \{\} <br /> |
 | `secretRef` _[SecretReference](#secretreference)_ | SecretRef supplies BYO cert/key/CA. Required when provider=secret. |  | Optional: \{\} <br /> |
 | `peerCARef` _[SecretReference](#secretreference)_ | PeerCARef supplies the remote side's CA to trust. When unset the CA bundle<br />from this side's own material is used (shared-issuer case). |  | Optional: \{\} <br /> |
+| `caServerName` _string_ | CAServerName is the TLS server name a mux-client verifies against the<br />remote mux-server's certificate. s2s-proxy requires it on the client side<br />unless SkipCAVerification is true. When empty for a client, the operator<br />derives it from the host portion of mux.client.serverAddress (which matches<br />the server proxy's certificate SANs for operator-managed peers). Ignored<br />for the server role. |  | Optional: \{\} <br /> |
+| `skipCAVerification` _boolean_ | SkipCAVerification disables CA verification of the mux peer's certificate.<br />Leave unset (false) for real mTLS; set true only for testing or when a<br />verifiable server name is unavailable. |  | Optional: \{\} <br /> |
 
 
 #### ProxyNamespaceMapping
