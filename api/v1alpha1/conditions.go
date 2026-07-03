@@ -36,6 +36,11 @@ const (
 	ConditionUpgradeBlocked = "UpgradeBlocked"
 	// ConditionShardCountLocked indicates the immutable shard count is locked in.
 	ConditionShardCountLocked = "ShardCountLocked"
+	// ConditionProxyDeployed indicates the s2s-proxy Deployment is available.
+	ConditionProxyDeployed = "ProxyDeployed"
+	// ConditionRemoteClusterRegistered indicates the local Temporal registered the
+	// peer as a remote cluster via the local proxy.
+	ConditionRemoteClusterRegistered = "RemoteClusterRegistered"
 )
 
 // Condition reasons reported on Temporal resource status.
@@ -74,4 +79,14 @@ const (
 	ReasonReplicationDrift = "ReplicationConfigDrift"
 	// ReasonActiveClusterInvalid indicates the active cluster selection is invalid.
 	ReasonActiveClusterInvalid = "ActiveClusterInvalid"
+	// ReasonProxyNotReady indicates the s2s-proxy Deployment is not yet available.
+	ReasonProxyNotReady = "ProxyNotReady"
+	// ReasonProxyReady indicates the s2s-proxy Deployment is available.
+	ReasonProxyReady = "ProxyReady"
+	// ReasonClusterNotReady indicates the referenced cluster is not yet ready.
+	ReasonClusterNotReady = "ClusterNotReady"
+	// ReasonMTLSNotReady indicates mTLS material is not yet provisioned.
+	ReasonMTLSNotReady = "MTLSNotReady"
+	// ReasonRegistrationFailed indicates remote cluster registration failed.
+	ReasonRegistrationFailed = "RegistrationFailed"
 )
