@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	sigsyaml "sigs.k8s.io/yaml"
 
@@ -194,5 +196,91 @@ func TestBuildClusterProxyCertificate_UsesIssuer(t *testing.T) {
 	}
 	if crt.Spec.SecretName != resources.ClusterProxyTLSSecretName(cr) {
 		t.Errorf("secretName = %q", crt.Spec.SecretName)
+	}
+}
+
+func TestBuildClusterProxyDeployment_ConfigYMLEnvVar(t *testing.T) {
+	cr := serverProxyCR()
+	dep := resources.BuildClusterProxyDeployment(cr, "abc123")
+	c := dep.Spec.Template.Spec.Containers[0]
+	want := resources.ProxyConfigMountPath + "/" + resources.ProxyConfigFileName
+	for _, e := range c.Env {
+		if e.Name == "CONFIG_YML" {
+			if e.Value != want {
+				t.Errorf("CONFIG_YML = %q, want %q", e.Value, want)
+			}
+			return
+		}
+	}
+	t.Error("CONFIG_YML env var not found in container env")
+}
+
+func TestBuildClusterProxyService_LoadBalancerExposure(t *testing.T) {
+	cr := serverProxyCR()
+	cr.Spec.Mux.Server.Exposure = &temporalv1alpha1.ServiceExposureSpec{
+		Type:        corev1.ServiceTypeLoadBalancer,
+		Annotations: map[string]string{"k": "v"},
+	}
+	svc := resources.BuildClusterProxyService(cr)
+	if svc.Spec.Type != corev1.ServiceTypeLoadBalancer {
+		t.Errorf("service type = %q, want LoadBalancer", svc.Spec.Type)
+	}
+	if svc.Annotations["k"] != "v" {
+		t.Errorf("annotation k = %q, want v", svc.Annotations["k"])
+	}
+}
+
+func TestClusterProxyTLSSecretName_BYO(t *testing.T) {
+	cr := serverProxyCR()
+	cr.Spec.Mux.TLS = temporalv1alpha1.ProxyMuxTLS{
+		Provider:  "secret",
+		SecretRef: &temporalv1alpha1.SecretReference{Name: "byo-tls"},
+	}
+	if got := resources.ClusterProxyTLSSecretName(cr); got != "byo-tls" {
+		t.Errorf("TLSSecretName (secret provider) = %q, want byo-tls", got)
+	}
+
+	cr2 := serverProxyCR()
+	if got := resources.ClusterProxyTLSSecretName(cr2); got != resources.ClusterProxyCertName(cr2) {
+		t.Errorf("TLSSecretName (cert-manager) = %q, want %q", got, resources.ClusterProxyCertName(cr2))
+	}
+}
+
+func TestBuildClusterProxyCertificate_DNSNamesAndUsages(t *testing.T) {
+	cr := serverProxyCR()
+	cr.Spec.Mux.TLS.IssuerRef = &temporalv1alpha1.IssuerReference{Name: "ca-issuer"}
+	crt := resources.BuildClusterProxyCertificate(cr)
+
+	svc := resources.ClusterProxyServiceName(cr)
+	ns := cr.Namespace
+	wantDNS := []string{
+		svc,
+		svc + "." + ns + ".svc",
+		svc + "." + ns + ".svc.cluster.local",
+	}
+	dnsSet := make(map[string]bool, len(crt.Spec.DNSNames))
+	for _, d := range crt.Spec.DNSNames {
+		dnsSet[d] = true
+	}
+	for _, d := range wantDNS {
+		if !dnsSet[d] {
+			t.Errorf("DNS name %q missing from certificate", d)
+		}
+	}
+
+	var haveServer, haveClient bool
+	for _, u := range crt.Spec.Usages {
+		if u == certmanagerv1.UsageServerAuth {
+			haveServer = true
+		}
+		if u == certmanagerv1.UsageClientAuth {
+			haveClient = true
+		}
+	}
+	if !haveServer {
+		t.Error("UsageServerAuth missing from certificate usages")
+	}
+	if !haveClient {
+		t.Error("UsageClientAuth missing from certificate usages")
 	}
 }
