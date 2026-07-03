@@ -21,9 +21,9 @@
 #      global with active=clusterA -- proves the mux tunnel carries replication
 #      traffic end-to-end (namespace metadata propagated through the proxy).
 #
-# NOTE: this test cannot be run in this development environment (no docker/kind).
-# It is authored to faithfully follow the test/e2e/multicluster/ conventions and
-# validated for YAML correctness only. See task-6-report.md for details.
+# This suite passes against a real 2-cluster environment via the nsc runner
+# (`SUITE=clusterproxy make chainsaw-test-nsc`); kind-based CI runs it too. It
+# faithfully follows the test/e2e/multicluster/ conventions.
 #
 # Prerequisites (installed by the e2e workflow):
 #   - temporal-operator + CRDs

@@ -56,7 +56,7 @@ var _ admission.Defaulter[*temporalv1alpha1.TemporalClusterProxy] = &TemporalClu
 
 func (d *TemporalClusterProxyCustomDefaulter) Default(_ context.Context, cr *temporalv1alpha1.TemporalClusterProxy) error {
 	if cr.Spec.Mux.TLS.Provider == "" {
-		cr.Spec.Mux.TLS.Provider = "cert-manager"
+		cr.Spec.Mux.TLS.Provider = tlsProviderCertManager
 	}
 	if cr.Spec.Peer.EnableConnection == nil {
 		enable := true
