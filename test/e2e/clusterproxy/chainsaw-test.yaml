@@ -1,0 +1,235 @@
+# Chainsaw test: PROVE that TemporalClusterProxy establishes a working mux
+# replication link between two Temporal clusters in a single kind cluster.
+#
+# Architecture (single-cluster variant):
+#   - Both TemporalClusters (clusterA active, clusterB standby) share one Postgres
+#     instance with per-cluster databases, identical to the multicluster suite.
+#   - A server proxy (proxy-server, next to cluster-b) opens mux port 6334 via
+#     ClusterIP. A client proxy (proxy-client, next to cluster-a) dials the server
+#     proxy over in-cluster DNS: proxy-server-s2s-proxy.<ns>.svc.cluster.local:6334.
+#   - Both proxies use a shared cert-manager CA (mux-ca-issuer) so mTLS succeeds
+#     without a separate peerCARef.
+#
+# Assertions:
+#   1. Both TemporalClusters reach Ready=True (same proof as multicluster suite).
+#   2. cert-manager CA issuer is Ready.
+#   3. Both TemporalClusterProxy CRs reach Ready=True -- proves:
+#        a. s2s-proxy Deployments came up and pulled the image.
+#        b. cert-manager issued mux TLS certificates.
+#        c. Each cluster's frontend accepted UpsertRemoteCluster via the proxy.
+#   4. A global namespace created on cluster-a is describable on cluster-b as
+#      global with active=clusterA -- proves the mux tunnel carries replication
+#      traffic end-to-end (namespace metadata propagated through the proxy).
+#
+# NOTE: this test cannot be run in this development environment (no docker/kind).
+# It is authored to faithfully follow the test/e2e/multicluster/ conventions and
+# validated for YAML correctness only. See task-6-report.md for details.
+#
+# Prerequisites (installed by the e2e workflow):
+#   - temporal-operator + CRDs
+#   - cert-manager
+#   - CloudNativePG (CNPG)
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: clusterproxy
+spec:
+  timeouts:
+    apply: 2m
+    assert: 15m
+    exec: 15m
+  steps:
+    # ----------------------------------------------------------------------
+    # Provision a single Postgres instance with one database pair per cluster.
+    # Identical to the multicluster suite setup.
+    # ----------------------------------------------------------------------
+    - name: provision-postgres
+      try:
+        - apply:
+            file: 00-postgres.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+        - apply:
+            file: 00-databases.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: create-databases
+              status:
+                succeeded: 1
+
+    # ----------------------------------------------------------------------
+    # Bring up both clusters and wait for Ready.
+    # ----------------------------------------------------------------------
+    - name: clusters
+      try:
+        - apply:
+            file: 01-cluster-a.yaml
+        - apply:
+            file: 01-cluster-b.yaml
+        - assert:
+            file: 01-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalCluster
+        - events: {}
+
+    # ----------------------------------------------------------------------
+    # Set up the cert-manager CA issuer used by both proxy TLS certificates.
+    # A SelfSigned issuer mints the CA cert; a CA-backed issuer derives from it.
+    # Both proxies reference mux-ca-issuer so they share the same CA root.
+    # ----------------------------------------------------------------------
+    - name: issuer
+      try:
+        - apply:
+            file: 02-issuer.yaml
+        - assert:
+            file: 02-assert.yaml
+      catch:
+        - describe:
+            apiVersion: cert-manager.io/v1
+            kind: Issuer
+        - describe:
+            apiVersion: cert-manager.io/v1
+            kind: Certificate
+        - events: {}
+
+    # ----------------------------------------------------------------------
+    # Deploy the server proxy (next to cluster-b) and the client proxy (next to
+    # cluster-a). The client proxy's serverAddress uses a JMESPath expression to
+    # embed the dynamic namespace so the in-cluster DNS resolves correctly.
+    #
+    # Wait for both proxies to reach Ready=True. This condition is set only when:
+    #   - the s2s-proxy Deployment has an available replica
+    #   - the local cluster frontend is accepting gRPC
+    #   - UpsertRemoteCluster succeeded (peer registered on the local cluster)
+    # ----------------------------------------------------------------------
+    - name: proxies
+      try:
+        - apply:
+            file: 03-proxies.yaml
+        - assert:
+            file: 03-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalClusterProxy
+        - describe:
+            apiVersion: cert-manager.io/v1
+            kind: Certificate
+        - events: {}
+
+    # ----------------------------------------------------------------------
+    # Create a GLOBAL namespace on cluster-a. Because the mux link is live,
+    # Temporal propagates namespace metadata to cluster-b through the proxy.
+    # ----------------------------------------------------------------------
+    - name: namespace
+      try:
+        - apply:
+            file: 04-namespace.yaml
+        - assert:
+            file: 04-assert.yaml
+      catch:
+        - describe:
+            apiVersion: temporal.bmor10.com/v1alpha1
+            kind: TemporalNamespace
+
+    # ======================================================================
+    # PROOF: namespace metadata replicated through the proxy mux.
+    # Confirm the namespace is global+active=clusterA on cluster-a, then
+    # assert the SAME namespace is describable on cluster-b (bounded retry
+    # for async propagation through the mux tunnel).
+    # ======================================================================
+    - name: proof-namespace-replicated-via-proxy
+      try:
+        - script:
+            env:
+              - name: NS
+                value: ($namespace)
+            content: |
+              set -eu
+              # Sanity: cluster-a reports the namespace global with active=clusterA.
+              outa=$(kubectl run -n "$NS" nsdesc-a --rm -i --restart=Never \
+                --image=temporalio/admin-tools:1.31.1 -- \
+                temporal operator namespace describe --namespace orders \
+                --address temporal-cluster-a-frontend:7233 -o json 2>/dev/null || true)
+              echo "$outa"
+              packed=$(echo "$outa" | tr -d '[:space:]')
+              echo "$packed" | grep -q '"isGlobalNamespace":true' \
+                || { echo "PROOF FAIL: orders not global on clusterA"; exit 1; }
+              echo "$packed" | grep -q '"activeClusterName":"clusterA"' \
+                || { echo "PROOF FAIL: orders not active=clusterA on clusterA"; exit 1; }
+              echo "PROOF OK: orders is global active=clusterA on clusterA"
+
+              # Replicated via proxy mux: cluster-b must learn the namespace as
+              # global active=clusterA within the bounded poll window.
+              for i in $(seq 1 30); do
+                outb=$(kubectl run -n "$NS" "nsdesc-b-${i}" --rm -i --restart=Never \
+                  --image=temporalio/admin-tools:1.31.1 -- \
+                  temporal operator namespace describe --namespace orders \
+                  --address temporal-cluster-b-frontend:7233 -o json 2>/dev/null || true)
+                echo "--- clusterB describe attempt ${i} ---"
+                echo "$outb"
+                packedb=$(echo "$outb" | tr -d '[:space:]')
+                if echo "$packedb" | grep -q '"isGlobalNamespace":true' \
+                   && echo "$packedb" | grep -q '"activeClusterName":"clusterA"'; then
+                  echo "PROOF OK: orders replicated to clusterB via proxy mux (global, active=clusterA)"
+                  exit 0
+                fi
+                sleep 10
+              done
+              echo "PROOF FAIL: orders never replicated to clusterB via proxy mux"
+              exit 1
+
+  # Runs on ANY step failure so operator-managed CRs/pods/events are inspectable.
+  catch:
+    - describe:
+        apiVersion: temporal.bmor10.com/v1alpha1
+        kind: TemporalCluster
+    - describe:
+        apiVersion: temporal.bmor10.com/v1alpha1
+        kind: TemporalClusterProxy
+    - describe:
+        apiVersion: temporal.bmor10.com/v1alpha1
+        kind: TemporalNamespace
+    - describe:
+        apiVersion: cert-manager.io/v1
+        kind: Certificate
+    - script:
+        env:
+          - name: NS
+            value: ($namespace)
+        content: |
+          set +e
+          echo "===== PODS ====="
+          kubectl -n "$NS" get pods -o wide
+          echo "===== DEPLOYMENTS ====="
+          kubectl -n "$NS" get deploy
+          echo "===== SERVICES ====="
+          kubectl -n "$NS" get svc
+          echo "===== EVENTS ====="
+          kubectl -n "$NS" get events --sort-by=.lastTimestamp | tail -80
+          echo "===== PROXY LOGS ====="
+          for inst in proxy-server proxy-client; do
+            for p in $(kubectl -n "$NS" get pods -l app.kubernetes.io/instance=$inst -o name 2>/dev/null); do
+              echo "----- $p -----"
+              kubectl -n "$NS" logs "$p" --all-containers --tail=80
+            done
+          done
+          echo "===== CLUSTER LOGS ====="
+          for inst in temporal-cluster-a temporal-cluster-b; do
+            for p in $(kubectl -n "$NS" get pods -l app.kubernetes.io/instance=$inst -o name 2>/dev/null); do
+              echo "----- $p -----"
+              kubectl -n "$NS" logs "$p" --all-containers --tail=40
+            done
+          done
+    - events: {}

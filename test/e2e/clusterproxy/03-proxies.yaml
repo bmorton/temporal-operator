@@ -1,0 +1,55 @@
+# Server proxy: deployed next to cluster-b, opens the mux port (6334) for
+# cluster-a's client proxy to dial. ClusterIP is used here because both proxies
+# run in the same kind cluster; no LoadBalancer is needed for in-cluster access.
+# The operator creates a Service named proxy-server-s2s-proxy which the client
+# proxy below targets via in-cluster DNS.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterProxy
+metadata:
+  name: proxy-server
+spec:
+  localClusterRef:
+    name: temporal-cluster-b
+  # Must match temporal-cluster-b's clusterMetadata.currentClusterName.
+  localClusterName: clusterB
+  peer:
+    name: clusterA
+  mux:
+    role: server
+    server:
+      listenPort: 6334
+      # ClusterIP suffices: client proxy reaches this via the in-cluster Service DNS.
+      exposure:
+        type: ClusterIP
+    tls:
+      provider: cert-manager
+      issuerRef:
+        name: mux-ca-issuer
+---
+# Client proxy: deployed next to cluster-a, dials the server proxy over the
+# in-cluster Service DNS. The serverAddress uses a chainsaw JMESPath expression
+# to embed the dynamic test namespace so the address resolves correctly regardless
+# of which ephemeral namespace chainsaw creates.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterProxy
+metadata:
+  name: proxy-client
+spec:
+  localClusterRef:
+    name: temporal-cluster-a
+  # Must match temporal-cluster-a's clusterMetadata.currentClusterName.
+  localClusterName: clusterA
+  peer:
+    name: clusterB
+  mux:
+    role: client
+    client:
+      # proxy-server-s2s-proxy is the Service created for the proxy-server CR
+      # (name = <cr.name>-s2s-proxy). Port 6334 is the mux listen port.
+      serverAddress: (join(':', [join('.', ['proxy-server-s2s-proxy', $namespace, 'svc.cluster.local']), '6334']))
+    tls:
+      provider: cert-manager
+      issuerRef:
+        name: mux-ca-issuer
+      # No peerCARef needed: both proxies share the same mux-ca-issuer CA, so
+      # the CA bundle from each proxy's own cert secret is sufficient for mutual auth.

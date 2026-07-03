@@ -1,0 +1,36 @@
+# Server-side TemporalClusterProxy: deployed next to cluster-b, opens the mux
+# port (6334) that cluster-a's client proxy dials into. The operator deploys an
+# s2s-proxy instance, mints a cert-manager TLS certificate signed by temporal-ca,
+# and registers cluster-a as a remote cluster on cluster-b's frontend.
+#
+# Prerequisites:
+#   - cluster-b (TemporalCluster) in the same namespace
+#   - cert-manager installed with a temporal-ca Issuer in the same namespace
+#   - cluster-a's client proxy configured to dial this service on port 6334
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterProxy
+metadata:
+  name: to-cluster-a
+  namespace: temporal-system
+spec:
+  # Reference to the local TemporalCluster this proxy fronts (cluster-b).
+  localClusterRef:
+    name: cluster-b
+  # Must match cluster-b's clusterMetadata.currentClusterName.
+  localClusterName: cluster-b
+  # The remote replication cluster on the far side of the mux.
+  peer:
+    name: cluster-a
+  mux:
+    # Server role: opens a listening mux port for cluster-a's client proxy to dial.
+    role: server
+    server:
+      listenPort: 6334
+      # Expose the mux port via a LoadBalancer so cluster-a (in a different
+      # network) can dial in. Use ClusterIP when both clusters share one network.
+      exposure:
+        type: LoadBalancer
+    tls:
+      provider: cert-manager
+      issuerRef:
+        name: temporal-ca
