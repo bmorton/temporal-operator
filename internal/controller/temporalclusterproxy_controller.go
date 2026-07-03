@@ -25,6 +25,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,6 +43,7 @@ import (
 const (
 	clusterProxyFinalizer   = "temporal.bmor10.com/clusterproxy"
 	proxyServicesFieldOwner = client.FieldOwner("temporal-operator-clusterproxy")
+	proxyTLSProviderSecret  = "secret"
 )
 
 // TemporalClusterProxyReconciler deploys an s2s-proxy for one local cluster and
@@ -56,7 +58,7 @@ type TemporalClusterProxyReconciler struct {
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalclusterproxies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalclusterproxies/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services;configmaps;secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 
 func (r *TemporalClusterProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -92,6 +94,9 @@ func (r *TemporalClusterProxyReconciler) Reconcile(ctx context.Context, req ctrl
 	deployReady := r.deploymentAvailable(ctx, &cr)
 	r.setProxyDeployedCondition(&cr, deployReady)
 
+	mtlsReady, mtlsMsg := r.checkMTLS(ctx, &cr)
+	r.setMTLSCondition(&cr, mtlsReady, mtlsMsg)
+
 	// Publish endpoint for server role.
 	if cr.Spec.Mux.Role == temporalv1alpha1.ProxyRoleServer && cr.Spec.Mux.Server != nil {
 		cr.Status.ProxyEndpoint = r.serverEndpoint(ctx, &cr)
@@ -100,12 +105,71 @@ func (r *TemporalClusterProxyReconciler) Reconcile(ctx context.Context, req ctrl
 	// Register the peer via the local proxy once the proxy and local cluster are ready.
 	registered := r.reconcileRegistration(ctx, &cr, deployReady, target.Ready)
 
-	if deployReady && registered {
+	switch {
+	case !mtlsReady:
+		r.setReady(&cr, metav1.ConditionFalse, temporalv1alpha1.ReasonMTLSNotReady, mtlsMsg)
+	case deployReady && registered:
 		r.setReady(&cr, metav1.ConditionTrue, temporalv1alpha1.ReasonProxyReady, "proxy deployed and peer registered")
-	} else {
+	default:
 		r.setReady(&cr, metav1.ConditionFalse, temporalv1alpha1.ReasonProxyNotReady, "proxy not fully converged")
 	}
 	return ctrl.Result{RequeueAfter: namespaceDriftRequeue}, r.statusUpdate(ctx, &cr)
+}
+
+// checkMTLS reports whether the mux TLS material is present and complete. For a
+// cert-manager provider the Secret appears once the Certificate is issued; for a
+// BYO secret provider it must already exist with the certificate, key, and CA
+// keys. It returns false with a diagnostic message while the material is absent
+// or incomplete so a missing/misconfigured secret surfaces an explicit reason
+// instead of a silently stuck Deployment.
+func (r *TemporalClusterProxyReconciler) checkMTLS(ctx context.Context, cr *temporalv1alpha1.TemporalClusterProxy) (bool, string) {
+	secretName := resources.ClusterProxyTLSSecretName(cr)
+	var sec corev1.Secret
+	if err := r.Get(ctx, types.NamespacedName{Namespace: cr.Namespace, Name: secretName}, &sec); err != nil {
+		if apierrors.IsNotFound(err) {
+			if cr.Spec.Mux.TLS.Provider == proxyTLSProviderSecret {
+				return false, fmt.Sprintf("mux TLS secret %q not found", secretName)
+			}
+			return false, fmt.Sprintf("mux TLS certificate secret %q not yet issued", secretName)
+		}
+		return false, fmt.Sprintf("reading mux TLS secret %q: %v", secretName, err)
+	}
+
+	certKey, keyKey, caKey := "tls.crt", "tls.key", "ca.crt"
+	if cr.Spec.Mux.TLS.Provider == proxyTLSProviderSecret && cr.Spec.Mux.TLS.SecretRef != nil {
+		ref := cr.Spec.Mux.TLS.SecretRef
+		if ref.CertKey != "" {
+			certKey = ref.CertKey
+		}
+		if ref.KeyKey != "" {
+			keyKey = ref.KeyKey
+		}
+		if ref.CAKey != "" {
+			caKey = ref.CAKey
+		}
+	}
+	for _, k := range []string{certKey, keyKey, caKey} {
+		if len(sec.Data[k]) == 0 {
+			return false, fmt.Sprintf("mux TLS secret %q is missing key %q", secretName, k)
+		}
+	}
+	return true, "mux TLS material present"
+}
+
+func (r *TemporalClusterProxyReconciler) setMTLSCondition(cr *temporalv1alpha1.TemporalClusterProxy, ready bool, message string) {
+	status := metav1.ConditionFalse
+	reason := temporalv1alpha1.ReasonMTLSNotReady
+	if ready {
+		status = metav1.ConditionTrue
+		reason = temporalv1alpha1.ReasonProxyReady
+	}
+	meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
+		Type:               temporalv1alpha1.ConditionMTLSReady,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: cr.Generation,
+	})
 }
 
 // applyResources renders and server-side-applies the proxy's owned resources.
@@ -122,7 +186,7 @@ func (r *TemporalClusterProxyReconciler) applyResources(ctx context.Context, cr 
 		resources.BuildClusterProxyService(cr),
 		resources.BuildClusterProxyDeployment(cr, configHash),
 	}
-	if cr.Spec.Mux.TLS.Provider != "secret" && cr.Spec.Mux.TLS.IssuerRef != nil {
+	if cr.Spec.Mux.TLS.Provider != proxyTLSProviderSecret && cr.Spec.Mux.TLS.IssuerRef != nil {
 		objs = append([]client.Object{resources.BuildClusterProxyCertificate(cr)}, objs...)
 	}
 	for _, obj := range objs {

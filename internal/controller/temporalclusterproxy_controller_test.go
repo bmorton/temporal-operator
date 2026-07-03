@@ -134,6 +134,43 @@ var _ = Describe("TemporalClusterProxy reconciler", func() {
 		// The ProxyDeployed condition is present.
 		cond := meta.FindStatusCondition(got.Status.Conditions, temporalv1alpha1.ConditionProxyDeployed)
 		Expect(cond).NotTo(BeNil())
+
+		// The BYO TLS secret is present and complete, so MTLSReady is True.
+		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, temporalv1alpha1.ConditionMTLSReady)).To(BeTrue())
+	})
+
+	It("reports MTLSReady=False and Ready=False when the BYO TLS secret is missing", func() {
+		localCluster := readyProxyCluster("cluster-a")
+
+		proxyName := fmt.Sprintf("proxy-nomtls-%d", counter)
+		proxy := &temporalv1alpha1.TemporalClusterProxy{
+			ObjectMeta: metav1.ObjectMeta{Name: proxyName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalClusterProxySpec{
+				LocalClusterRef: temporalv1alpha1.ClusterReference{Name: localCluster},
+				Peer:            temporalv1alpha1.ProxyPeer{Name: "cluster-b"},
+				Mux: temporalv1alpha1.ProxyMux{
+					Role:   temporalv1alpha1.ProxyRoleServer,
+					Server: &temporalv1alpha1.ProxyMuxServer{ListenPort: 6334},
+					TLS: temporalv1alpha1.ProxyMuxTLS{
+						Provider:  "secret",
+						SecretRef: &temporalv1alpha1.SecretReference{Name: "does-not-exist"},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, proxy)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, proxy) })
+
+		reconcileProxy(proxyName) // adds finalizer
+		reconcileProxy(proxyName) // renders + applies, checks MTLS
+
+		got := &temporalv1alpha1.TemporalClusterProxy{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: proxyName, Namespace: "default"}, got)).To(Succeed())
+
+		mtls := meta.FindStatusCondition(got.Status.Conditions, temporalv1alpha1.ConditionMTLSReady)
+		Expect(mtls).NotTo(BeNil())
+		Expect(mtls.Status).To(Equal(metav1.ConditionFalse))
+		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, temporalv1alpha1.ConditionReady)).To(BeFalse())
 	})
 
 	It("registers the local proxy address with the local cluster when the deployment is available", func() {
