@@ -56,7 +56,7 @@ func TestBuildClusterProxyConfig_ServerRole(t *testing.T) {
 		ClusterConnections []struct {
 			Name  string `json:"name"`
 			Local struct {
-				ConnectionType string `json:"connectionType"`
+				ConnectionType string                   `json:"connectionType"`
 				TCPClient      struct{ Address string } `json:"tcpClient"`
 				TCPServer      struct{ Address string } `json:"tcpServer"`
 			} `json:"local"`
