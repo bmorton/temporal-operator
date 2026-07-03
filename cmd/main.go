@@ -287,6 +287,12 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	if webhooksEnabled {
+		if err := webhookv1alpha1.SetupTemporalClusterProxyWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "TemporalClusterProxy")
+			os.Exit(1)
+		}
+	}
 	// +kubebuilder:scaffold:builder
 
 	uiOpts := ui.Options{

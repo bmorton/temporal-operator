@@ -222,7 +222,7 @@ func validatePersistence(cluster *temporalv1alpha1.TemporalCluster, specPath *fi
 }
 
 func validateMTLS(cluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
-	if cluster.Spec.MTLS != nil && cluster.Spec.MTLS.Provider == "cert-manager" && cluster.Spec.MTLS.IssuerRef == nil {
+	if cluster.Spec.MTLS != nil && cluster.Spec.MTLS.Provider == tlsProviderCertManager && cluster.Spec.MTLS.IssuerRef == nil {
 		return field.ErrorList{field.Required(specPath.Child("mtls", "issuerRef"),
 			"issuerRef is required when mtls.provider is cert-manager")}
 	}
