@@ -124,3 +124,75 @@ func TestBuildClusterProxyConfig_ClientRoleWithTranslation(t *testing.T) {
 		t.Errorf("expected namespace translation in:\n%s", out)
 	}
 }
+
+func TestBuildClusterProxyService_ServerExposesMux(t *testing.T) {
+	cr := serverProxyCR()
+	svc := resources.BuildClusterProxyService(cr)
+	if svc.Name != resources.ClusterProxyServiceName(cr) {
+		t.Errorf("service name = %q", svc.Name)
+	}
+	var haveTCP, haveMux bool
+	for _, p := range svc.Spec.Ports {
+		if p.Port == resources.ProxyTCPServerPort {
+			haveTCP = true
+		}
+		if p.Port == 6334 {
+			haveMux = true
+		}
+	}
+	if !haveTCP {
+		t.Error("expected tcpServer port 6233")
+	}
+	if !haveMux {
+		t.Error("expected mux port 6334 for server role")
+	}
+}
+
+func TestBuildClusterProxyService_ClientOmitsMuxPort(t *testing.T) {
+	cr := serverProxyCR()
+	cr.Spec.Mux.Role = temporalv1alpha1.ProxyRoleClient
+	cr.Spec.Mux.Server = nil
+	cr.Spec.Mux.Client = &temporalv1alpha1.ProxyMuxClient{ServerAddress: "b:6334"}
+	svc := resources.BuildClusterProxyService(cr)
+	for _, p := range svc.Spec.Ports {
+		if p.Name == "mux" {
+			t.Error("client role must not expose a mux port")
+		}
+	}
+}
+
+func TestBuildClusterProxyDeployment_MountsConfigAndTLS(t *testing.T) {
+	cr := serverProxyCR()
+	dep := resources.BuildClusterProxyDeployment(cr, "abc123")
+	if dep.Name != resources.ClusterProxyName(cr) {
+		t.Errorf("deployment name = %q", dep.Name)
+	}
+	c := dep.Spec.Template.Spec.Containers[0]
+	var haveConfig, haveTLS bool
+	for _, m := range c.VolumeMounts {
+		if m.MountPath == resources.ProxyConfigMountPath {
+			haveConfig = true
+		}
+		if m.MountPath == resources.ProxyTLSMountPath {
+			haveTLS = true
+		}
+	}
+	if !haveConfig || !haveTLS {
+		t.Errorf("missing mounts: config=%v tls=%v", haveConfig, haveTLS)
+	}
+	if dep.Spec.Template.Annotations[resources.ConfigHashAnnotation] != "abc123" {
+		t.Errorf("config hash annotation = %q", dep.Spec.Template.Annotations[resources.ConfigHashAnnotation])
+	}
+}
+
+func TestBuildClusterProxyCertificate_UsesIssuer(t *testing.T) {
+	cr := serverProxyCR()
+	cr.Spec.Mux.TLS.IssuerRef = &temporalv1alpha1.IssuerReference{Name: "ca-issuer"}
+	crt := resources.BuildClusterProxyCertificate(cr)
+	if crt.Spec.IssuerRef.Name != "ca-issuer" {
+		t.Errorf("issuer = %q", crt.Spec.IssuerRef.Name)
+	}
+	if crt.Spec.SecretName != resources.ClusterProxyTLSSecretName(cr) {
+		t.Errorf("secretName = %q", crt.Spec.SecretName)
+	}
+}
