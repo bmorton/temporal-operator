@@ -17,7 +17,7 @@
 - After changing `api/v1alpha1`: run `make generate manifests`, then `make api-docs docs-crd-reference` and commit `docs/api/v1alpha1.md` + `docs/content/reference/_index.md` (docs CI drift check).
 - After changing API types or RBAC markers: run `make helm-chart` and commit `dist/chart` (verify-chart CI). Do NOT hand-edit `dist/chart`. Do NOT commit `.github/workflows/test-chart.yml` (kept deleted/untracked).
 - Every commit: Conventional Commit prefix (`feat`/`test`/`docs`/`chore`) + DCO sign-off (`git commit -s`) + the `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer.
-- Pin the s2s-proxy image (binary-only project; internal APIs may change). Default image constant in this plan: `temporalio/s2s-proxy:v1.0.0` — before implementing Task 5, verify the latest published tag on Docker Hub and update the constant + any config-key assumptions against that release.
+- Pin the s2s-proxy image (binary-only project; internal APIs may change). Verified pinned image: `temporalio/s2s-proxy:v0.2.1` (latest published tag as of 2026-07). The container entrypoint runs `s2s-proxy start --config $CONFIG_YML`, so the config path is passed via the `CONFIG_YML` env var (verified from the upstream `scripts/start.sh`).
 
 ---
 
@@ -721,7 +721,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
   - `ClusterProxyName(cr) string` → `cr.Name + "-s2s-proxy"`
   - `ClusterProxyConfigMapName(cr) string`, `ClusterProxyServiceName(cr) string`, `ClusterProxyCertName(cr) string`, `ClusterProxyTLSSecretName(cr) string`
   - `ClusterProxyLabels(cr) map[string]string`
-  - `DefaultClusterProxyImage = "temporalio/s2s-proxy:v1.0.0"`
+  - `DefaultClusterProxyImage = "temporalio/s2s-proxy:v0.2.1"`
   - `func BuildClusterProxyConfigMap(cr, configYAML string) *corev1.ConfigMap`
   - `func BuildClusterProxyCertificate(cr) *certmanagerv1.Certificate` (nil-safe: caller only invokes when provider=cert-manager)
   - `func BuildClusterProxyDeployment(cr, configHash string) *appsv1.Deployment`
@@ -827,7 +827,7 @@ import (
 )
 
 // DefaultClusterProxyImage is the pinned s2s-proxy image.
-const DefaultClusterProxyImage = "temporalio/s2s-proxy:v1.0.0"
+const DefaultClusterProxyImage = "temporalio/s2s-proxy:v0.2.1"
 
 // ClusterProxyName returns the proxy Deployment (and base) name.
 func ClusterProxyName(cr *temporalv1alpha1.TemporalClusterProxy) string {
@@ -974,7 +974,7 @@ func BuildClusterProxyDeployment(cr *temporalv1alpha1.TemporalClusterProxy, conf
 					Containers: []corev1.Container{{
 						Name:         "s2s-proxy",
 						Image:        clusterProxyImage(cr),
-						Args:         []string{"start", "--config", ProxyConfigMountPath + "/" + ProxyConfigFileName},
+						Env:          []corev1.EnvVar{{Name: "CONFIG_YML", Value: ProxyConfigMountPath + "/" + ProxyConfigFileName}},
 						VolumeMounts: mounts,
 					}},
 					Volumes: volumes,
@@ -985,7 +985,7 @@ func BuildClusterProxyDeployment(cr *temporalv1alpha1.TemporalClusterProxy, conf
 }
 ```
 
-Note: confirm the s2s-proxy entrypoint args (`start --config <path>`) against the pinned image's `cmd/`/Dockerfile before Task 5; adjust the `Args` slice if the CLI differs.
+Note: the upstream container entrypoint (`scripts/start.sh`) reads the config path from the `CONFIG_YML` env var and runs `s2s-proxy start --config $CONFIG_YML` (verified against the pinned `v0.2.1` image). The builder therefore sets `CONFIG_YML` rather than overriding the container command.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -1483,7 +1483,7 @@ func (v *TemporalClusterProxyCustomValidator) ValidateDelete(_ context.Context, 
 }
 ```
 
-Note: if the `Defaulter` mutating webhook causes an import cycle or the webhook package must not import `internal/resources`, inline the default image string constant instead of importing `resources`. Check whether other webhooks import `internal/resources`; if not, define a local `const defaultProxyImage = "temporalio/s2s-proxy:v1.0.0"` and use it in the defaulter.
+Note: if the `Defaulter` mutating webhook causes an import cycle or the webhook package must not import `internal/resources`, inline the default image string constant instead of importing `resources`. Check whether other webhooks import `internal/resources`; if not, define a local `const defaultProxyImage = "temporalio/s2s-proxy:v0.2.1"` and use it in the defaulter.
 
 - [ ] **Step 4: Run to verify pass**
 
@@ -1615,4 +1615,4 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 - **Spec coverage:** API (Task 1) ↔ spec §API; rendering (Task 2) ↔ §Config rendering; builders (Task 3) ↔ §Rendered resources; reconcile/registration/finalizer/status (Task 4) ↔ §Reconciliation + §Error handling; validation/defaulting (Task 5) ↔ §Webhook validation; testing + examples + e2e (Tasks 2–6) ↔ §Testing + §Delivery; chart/docs regen folded into each task per §Delivery.
 - **Known simplifications flagged inline for the implementer:** the `registerPeer` signature and the `serverEndpoint` LoadBalancer read in Task 4 Step 1 are marked as fixups to apply while writing (the first-draft code intentionally shows the shape, the fixups make it compile).
 - **Type consistency:** builder/name helpers (`ClusterProxyName`, `ClusterProxyServiceName`, `ClusterProxyTLSSecretName`, `ProxyTCPServerPort`, `ProxyTLSMountPath`) are defined in Tasks 2–3 and referenced verbatim in Task 4. Condition/reason constants are defined in Task 1 Step 2 and used in Task 4.
-- **External assumptions to verify against the pinned s2s-proxy release before Task 5/6:** the image tag, the container entrypoint args (`start --config`), and the exact config keys (`muxCount`, `caServerName`/`skipCAVerification`, health-check blocks). Update the constant and the `Args`/config structs if the pinned release differs.
+- **External assumptions already verified against the pinned `v0.2.1` release:** image tag (`temporalio/s2s-proxy:v0.2.1`), the container entrypoint (`CONFIG_YML` env var → `s2s-proxy start --config`), and the config keys used by the render func (`clusterConnections`, `tcpClient`/`tcpServer`, `mux-server`/`mux-client`, `muxAddressInfo.tls`, `namespaceTranslation`, `searchAttributeTranslation`, `failoverVersionIncrementTranslation`, `aclPolicy`) — all present in the upstream `develop/config` examples at that ref.
