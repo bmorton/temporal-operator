@@ -135,4 +135,69 @@ var _ = Describe("TemporalClusterProxy reconciler", func() {
 		cond := meta.FindStatusCondition(got.Status.Conditions, temporalv1alpha1.ConditionProxyDeployed)
 		Expect(cond).NotTo(BeNil())
 	})
+
+	It("registers the local proxy address with the local cluster when the deployment is available", func() {
+		localCluster := readyProxyCluster("cluster-a")
+
+		tlsSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "mux-tls-reg", Namespace: "default"},
+			Data:       map[string][]byte{"tls.crt": []byte("x"), "tls.key": []byte("y"), "ca.crt": []byte("z")},
+		}
+		Expect(k8sClient.Create(ctx, tlsSecret)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, tlsSecret) })
+
+		proxyName := fmt.Sprintf("proxy-reg-%d", counter)
+		proxy := &temporalv1alpha1.TemporalClusterProxy{
+			ObjectMeta: metav1.ObjectMeta{Name: proxyName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalClusterProxySpec{
+				LocalClusterRef: temporalv1alpha1.ClusterReference{Name: localCluster},
+				Peer:            temporalv1alpha1.ProxyPeer{Name: "cluster-b"},
+				Mux: temporalv1alpha1.ProxyMux{
+					Role:   temporalv1alpha1.ProxyRoleServer,
+					Server: &temporalv1alpha1.ProxyMuxServer{ListenPort: 6334},
+					TLS: temporalv1alpha1.ProxyMuxTLS{
+						Provider:  "secret",
+						SecretRef: &temporalv1alpha1.SecretReference{Name: "mux-tls-reg"},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, proxy)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, proxy) })
+
+		reconcileProxy(proxyName) // adds finalizer
+		reconcileProxy(proxyName) // renders + applies resources; Deployment is created
+
+		// Patch the Deployment status to simulate AvailableReplicas=1.
+		// envtest has no kubelet, so we must do this manually.
+		// availableReplicas cannot exceed readyReplicas; set both.
+		var dep appsv1.Deployment
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: resources.ClusterProxyName(proxy), Namespace: "default"}, &dep)).To(Succeed())
+		dep.Status.Replicas = 1
+		dep.Status.ReadyReplicas = 1
+		dep.Status.AvailableReplicas = 1
+		Expect(k8sClient.Status().Update(ctx, &dep)).To(Succeed())
+
+		// Reconcile again: deploymentAvailable→true, clusterReady→true → registerPeer fires.
+		reconcileProxy(proxyName)
+
+		// Determine the local cluster frontend address (the key the factory uses).
+		localC := &temporalv1alpha1.TemporalCluster{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: localCluster, Namespace: "default"}, localC)).To(Succeed())
+		localAddr := frontendAddress(localC)
+
+		// Expected proxy DNS address that must be upserted on the local cluster.
+		expectedProxyAddr := fmt.Sprintf("%s.%s.svc.cluster.local:%d",
+			resources.ClusterProxyServiceName(proxy), "default", resources.ProxyTCPServerPort)
+
+		Expect(fakes).To(HaveKey(localAddr), "factory should have dialed the local cluster frontend")
+		Expect(fakes[localAddr].upserts).To(ContainElement(expectedProxyAddr),
+			"UpsertRemoteCluster must be called with the proxy's in-cluster DNS address")
+
+		// Verify the CR's RemoteClusterRegistered and Ready conditions are True.
+		got := &temporalv1alpha1.TemporalClusterProxy{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: proxyName, Namespace: "default"}, got)).To(Succeed())
+		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, temporalv1alpha1.ConditionRemoteClusterRegistered)).To(BeTrue())
+		Expect(meta.IsStatusConditionTrue(got.Status.Conditions, temporalv1alpha1.ConditionReady)).To(BeTrue())
+	})
 })
