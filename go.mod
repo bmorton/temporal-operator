@@ -1,6 +1,6 @@
 module github.com/bmorton/temporal-operator
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
