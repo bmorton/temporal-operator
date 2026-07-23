@@ -21,7 +21,7 @@ var supportedVersions = []VersionInfo{
 	},
 	{
 		Version:                      "1.28",
-		PatchVersions:                []string{"1.28.3"},
+		PatchVersions:                []string{"1.28.3", "1.28.4"},
 		MinSchemaSQL:                 "v1.12",
 		MinSchemaCassandra:           "v1.9",
 		MinSchemaES:                  "v7",
@@ -35,7 +35,7 @@ var supportedVersions = []VersionInfo{
 	},
 	{
 		Version:                      "1.29",
-		PatchVersions:                []string{"1.29.6"},
+		PatchVersions:                []string{"1.29.6", "1.29.7"},
 		MinSchemaSQL:                 "v1.12",
 		MinSchemaCassandra:           "v1.9",
 		MinSchemaES:                  "v7",
@@ -49,7 +49,7 @@ var supportedVersions = []VersionInfo{
 	},
 	{
 		Version:                      "1.30",
-		PatchVersions:                []string{"1.30.4"},
+		PatchVersions:                []string{"1.30.4", "1.30.5", "1.30.6"},
 		MinSchemaSQL:                 "v1.12",
 		MinSchemaCassandra:           "v1.9",
 		MinSchemaES:                  "v7",
@@ -63,13 +63,13 @@ var supportedVersions = []VersionInfo{
 	},
 	{
 		Version:                      "1.31",
-		PatchVersions:                []string{"1.31.0", "1.31.1"},
+		PatchVersions:                []string{"1.31.0", "1.31.1", "1.31.2"},
 		MinSchemaSQL:                 "v1.12",
 		MinSchemaCassandra:           "v1.9",
 		MinSchemaES:                  "v7",
 		AllowedFromVersions:          []string{"1.30"},
-		UISeries:                     "2.51",
-		DefaultUIVersion:             "2.51.1",
+		UISeries:                     "2.52",
+		DefaultUIVersion:             "2.52.1",
 		DevServerCLIVersion:          "1.7.2",
 		CassandraVisibilitySupported: false,
 		RemovedDynamicConfig:         nil,
