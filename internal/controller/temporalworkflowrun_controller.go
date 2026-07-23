@@ -66,7 +66,15 @@ func (r *TemporalWorkflowRunReconciler) Reconcile(ctx context.Context, req ctrl.
 	target, err := resolveTarget(ctx, r.Client, run.Namespace, run.Spec.ClusterRef)
 	if err != nil {
 		if !run.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizer(ctx, &run)
+			// Only abandon cancellation when the target is genuinely gone; there
+			// is nothing left to Cancel/Terminate. For any other (potentially
+			// transient) error, requeue so the cancellation policy is still
+			// honored once the target becomes resolvable again, rather than
+			// silently dropping the finalizer with a workflow still in flight.
+			if errors.Is(err, ErrTargetNotFound) {
+				return ctrl.Result{}, r.removeFinalizer(ctx, &run)
+			}
+			return ctrl.Result{}, err
 		}
 		if errors.Is(err, ErrTargetNotFound) {
 			r.setReady(&run, metav1.ConditionFalse, temporalv1alpha1.ReasonClusterNotFound, "referenced Temporal target not found")
@@ -77,9 +85,8 @@ func (r *TemporalWorkflowRunReconciler) Reconcile(ctx context.Context, req ctrl.
 
 	wc, err := r.clientFactory()(ctx, target.Address, target.TLSConfig)
 	if err != nil {
-		if !run.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizer(ctx, &run)
-		}
+		// A client build failure during deletion is likely transient; requeue so
+		// the cancellation policy is applied rather than silently skipped.
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}
 	defer func() { _ = wc.Close() }()
@@ -107,6 +114,14 @@ func (r *TemporalWorkflowRunReconciler) reconcileRun(ctx context.Context, run *t
 	log := logf.FromContext(ctx)
 	wfID := resolveWorkflowID(run)
 	taskQueue := run.Spec.Workflow.TaskQueue
+
+	// Already terminal: the recorded phase/completion/failure are persisted, so
+	// avoid re-describing the execution. Temporal retention may have purged it
+	// (Describe would return ErrWorkflowNotFound), which must not turn a finished
+	// run into a perpetual reconcile-error loop. Only TTL bookkeeping remains.
+	if run.Status.CompletionTime != nil {
+		return r.ttlCleanup(ctx, run)
+	}
 
 	// Start the workflow once.
 	if run.Status.RunID == "" {
@@ -171,16 +186,21 @@ func (r *TemporalWorkflowRunReconciler) reconcileRun(ctx context.Context, run *t
 		return ctrl.Result{}, err
 	}
 
-	// TTL cleanup.
-	if run.Spec.TTLSecondsAfterFinished != nil {
-		deadline := run.Status.CompletionTime.Add(time.Duration(*run.Spec.TTLSecondsAfterFinished) * time.Second)
-		if remaining := time.Until(deadline); remaining > 0 {
-			return ctrl.Result{RequeueAfter: remaining}, nil
-		}
-		log.Info("deleting workflow run after TTL", "name", run.Name)
-		return ctrl.Result{}, client.IgnoreNotFound(r.Delete(ctx, run))
+	return r.ttlCleanup(ctx, run)
+}
+
+// ttlCleanup deletes the CR once its post-finished TTL elapses, requeuing until
+// the deadline. When no TTL is set the run is kept indefinitely.
+func (r *TemporalWorkflowRunReconciler) ttlCleanup(ctx context.Context, run *temporalv1alpha1.TemporalWorkflowRun) (ctrl.Result, error) {
+	if run.Spec.TTLSecondsAfterFinished == nil {
+		return ctrl.Result{}, nil
 	}
-	return ctrl.Result{}, nil
+	deadline := run.Status.CompletionTime.Add(time.Duration(*run.Spec.TTLSecondsAfterFinished) * time.Second)
+	if remaining := time.Until(deadline); remaining > 0 {
+		return ctrl.Result{RequeueAfter: remaining}, nil
+	}
+	logf.FromContext(ctx).Info("deleting workflow run after TTL", "name", run.Name)
+	return ctrl.Result{}, client.IgnoreNotFound(r.Delete(ctx, run))
 }
 
 func (r *TemporalWorkflowRunReconciler) reconcileDelete(ctx context.Context, run *temporalv1alpha1.TemporalWorkflowRun, wc temporal.WorkflowRunClient) error {
@@ -192,12 +212,12 @@ func (r *TemporalWorkflowRunReconciler) reconcileDelete(ctx context.Context, run
 	if run.Status.RunID != "" && run.Status.CompletionTime == nil {
 		wfID := resolveWorkflowID(run)
 		switch run.Spec.CancellationPolicy {
-		case "Cancel":
+		case temporalv1alpha1.CancellationPolicyCancel:
 			if err := wc.Cancel(ctx, run.Spec.Namespace, wfID, run.Status.RunID, "TemporalWorkflowRun deleted"); err != nil && !errors.Is(err, temporal.ErrWorkflowNotFound) {
 				return fmt.Errorf("cancelling workflow: %w", err)
 			}
 			log.Info("requested workflow cancellation on delete", "workflowID", wfID)
-		case "Terminate":
+		case temporalv1alpha1.CancellationPolicyTerminate:
 			if err := wc.Terminate(ctx, run.Spec.Namespace, wfID, run.Status.RunID, "TemporalWorkflowRun deleted"); err != nil && !errors.Is(err, temporal.ErrWorkflowNotFound) {
 				return fmt.Errorf("terminating workflow: %w", err)
 			}

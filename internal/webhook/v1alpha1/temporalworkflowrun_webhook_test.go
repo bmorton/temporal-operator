@@ -62,7 +62,7 @@ func TestValidateWorkflowRunImmutability(t *testing.T) {
 	ttl := int32(60)
 	mutable := validRun()
 	mutable.Spec.TTLSecondsAfterFinished = &ttl
-	mutable.Spec.CancellationPolicy = "Terminate"
+	mutable.Spec.CancellationPolicy = temporalv1alpha1.CancellationPolicyTerminate
 	if _, err := v.ValidateUpdate(context.Background(), old, mutable); err != nil {
 		t.Fatalf("expected mutable update to pass, got %v", err)
 	}

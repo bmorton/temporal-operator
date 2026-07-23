@@ -65,6 +65,17 @@ type TemporalWorkflowRunSpec struct {
 	CancellationPolicy string `json:"cancellationPolicy,omitempty"`
 }
 
+// Cancellation policies applied to a still-running workflow when its
+// TemporalWorkflowRun is deleted.
+const (
+	// CancellationPolicyAbandon leaves the workflow running.
+	CancellationPolicyAbandon = "Abandon"
+	// CancellationPolicyCancel requests graceful cancellation of the workflow.
+	CancellationPolicyCancel = "Cancel"
+	// CancellationPolicyTerminate forcefully terminates the workflow.
+	CancellationPolicyTerminate = "Terminate"
+)
+
 // WorkflowRunFailure carries failure detail for non-success terminal states.
 type WorkflowRunFailure struct {
 	// +optional

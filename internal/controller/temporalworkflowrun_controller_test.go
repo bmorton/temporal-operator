@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -40,6 +42,8 @@ type fakeWorkflowRunClient struct {
 	canceled, terminated []string
 	status               enumspb.WorkflowExecutionStatus
 	failure              *temporal.WorkflowFailure
+	describeErr          error
+	describeCalls        int
 }
 
 func (f *fakeWorkflowRunClient) Start(_ context.Context, _, _ string, p temporal.StartWorkflowParams) (string, error) {
@@ -51,6 +55,10 @@ func (f *fakeWorkflowRunClient) Start(_ context.Context, _, _ string, p temporal
 }
 
 func (f *fakeWorkflowRunClient) Describe(_ context.Context, _, _, _ string) (*temporal.WorkflowExecutionInfo, error) {
+	f.describeCalls++
+	if f.describeErr != nil {
+		return nil, f.describeErr
+	}
 	return &temporal.WorkflowExecutionInfo{Status: f.status, RunID: "run", Failure: f.failure}, nil
 }
 
@@ -71,8 +79,12 @@ var _ = Describe("TemporalWorkflowRun reconciler", func() {
 	ctx := context.Background()
 	var counter int
 	var fake *fakeWorkflowRunClient
+	var factoryErr error
 
 	var factory temporal.WorkflowRunClientFactory = func(_ context.Context, _ string, _ *tls.Config) (temporal.WorkflowRunClient, error) {
+		if factoryErr != nil {
+			return nil, factoryErr
+		}
 		return fake, nil
 	}
 	reconciler := func() *TemporalWorkflowRunReconciler {
@@ -108,6 +120,7 @@ var _ = Describe("TemporalWorkflowRun reconciler", func() {
 	BeforeEach(func() {
 		counter++
 		fake = &fakeWorkflowRunClient{}
+		factoryErr = nil
 	})
 
 	It("starts the workflow and records Running status", func() {
@@ -172,7 +185,7 @@ var _ = Describe("TemporalWorkflowRun reconciler", func() {
 	It("terminates a running workflow on delete with cancellationPolicy=Terminate", func() {
 		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{Enabled: true})
 		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
-		run.Spec.CancellationPolicy = "Terminate"
+		run.Spec.CancellationPolicy = temporalv1alpha1.CancellationPolicyTerminate
 		Expect(k8sClient.Create(ctx, run)).To(Succeed())
 
 		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
@@ -257,7 +270,7 @@ var _ = Describe("TemporalWorkflowRun reconciler", func() {
 	It("cancels a running workflow on delete with cancellationPolicy=Cancel", func() {
 		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{Enabled: true})
 		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
-		run.Spec.CancellationPolicy = "Cancel"
+		run.Spec.CancellationPolicy = temporalv1alpha1.CancellationPolicyCancel
 		Expect(k8sClient.Create(ctx, run)).To(Succeed())
 
 		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
@@ -273,7 +286,7 @@ var _ = Describe("TemporalWorkflowRun reconciler", func() {
 	It("does not cancel or terminate with cancellationPolicy=Abandon", func() {
 		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{Enabled: true})
 		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
-		run.Spec.CancellationPolicy = "Abandon"
+		run.Spec.CancellationPolicy = temporalv1alpha1.CancellationPolicyAbandon
 		Expect(k8sClient.Create(ctx, run)).To(Succeed())
 
 		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
@@ -285,5 +298,63 @@ var _ = Describe("TemporalWorkflowRun reconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fake.canceled).To(BeEmpty())
 		Expect(fake.terminated).To(BeEmpty())
+	})
+
+	It("does not re-describe a finished run whose execution has aged out of Temporal", func() {
+		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{Enabled: true})
+		fake.status = enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED
+		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
+		Expect(k8sClient.Create(ctx, run)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, run) })
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
+		_, err := reconciler().Reconcile(ctx, req) // start + reach terminal, record CompletionTime
+		Expect(err).NotTo(HaveOccurred())
+
+		var got temporalv1alpha1.TemporalWorkflowRun
+		Expect(k8sClient.Get(ctx, req.NamespacedName, &got)).To(Succeed())
+		Expect(got.Status.CompletionTime).NotTo(BeNil())
+
+		// Simulate the execution being purged from Temporal by retention.
+		fake.describeErr = temporal.ErrWorkflowNotFound
+		callsBefore := fake.describeCalls
+		_, err = reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred(), "a finished run must not error when its execution is gone")
+		Expect(fake.describeCalls).To(Equal(callsBefore), "a finished run must not re-describe the execution")
+	})
+
+	It("keeps the finalizer and requeues when the client is unavailable during deletion", func() {
+		c := newReadyCluster(fmt.Sprintf("cluster-%d", counter), &temporalv1alpha1.WorkflowRunPolicy{Enabled: true})
+		run := newRun(fmt.Sprintf("run-%d", counter), c.Name)
+		run.Spec.CancellationPolicy = temporalv1alpha1.CancellationPolicyTerminate
+		Expect(k8sClient.Create(ctx, run)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: run.Name, Namespace: testNamespace}}
+		_, err := reconciler().Reconcile(ctx, req) // adds finalizer + starts
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(k8sClient.Delete(ctx, run)).To(Succeed())
+
+		// Transient client failure during deletion must not drop the finalizer.
+		factoryErr = errors.New("dial timeout")
+		_, err = reconciler().Reconcile(ctx, req)
+		Expect(err).To(HaveOccurred())
+
+		var got temporalv1alpha1.TemporalWorkflowRun
+		Expect(k8sClient.Get(ctx, req.NamespacedName, &got)).To(Succeed())
+		Expect(controllerutil.ContainsFinalizer(&got, workflowRunFinalizer)).To(BeTrue())
+		Expect(fake.terminated).To(BeEmpty())
+
+		// Once the client recovers, the cancellation policy is honored and the
+		// finalizer is released.
+		factoryErr = nil
+		_, err = reconciler().Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.terminated).NotTo(BeEmpty())
+		Eventually(func() bool {
+			var g temporalv1alpha1.TemporalWorkflowRun
+			err := k8sClient.Get(ctx, req.NamespacedName, &g)
+			return err != nil && apierrors.IsNotFound(err)
+		}).Should(BeTrue())
 	})
 })
