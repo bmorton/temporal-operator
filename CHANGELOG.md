@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.10.0](https://github.com/bmorton/temporal-operator/compare/v0.9.0...v0.10.0) (2026-07-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* spec.ui.auth is now a typed object, not raw YAML.
+
+### Features
+
+* add TemporalWorkflowRun CRD for one-off workflow runs ([#100](https://github.com/bmorton/temporal-operator/issues/100)) ([b03268d](https://github.com/bmorton/temporal-operator/commit/b03268dbb830261aab5be6f0c69122fee8374c73))
+* Microsoft Entra authentication for Temporal (server JWT + UI OIDC) ([#89](https://github.com/bmorton/temporal-operator/issues/89)) ([d674939](https://github.com/bmorton/temporal-operator/commit/d67493934706cab29c9787785714f0ab680a5f5b))
+* **versions:** add latest Temporal server patches and UI 2.52.1 ([#131](https://github.com/bmorton/temporal-operator/issues/131)) ([9c616b0](https://github.com/bmorton/temporal-operator/commit/9c616b0599f6bc681ab3dd5b022639a1b7d90ce4))
+* **versions:** default to Temporal UI v2.51.1 for latest server ([#108](https://github.com/bmorton/temporal-operator/issues/108)) ([a604c94](https://github.com/bmorton/temporal-operator/commit/a604c94c08acf61c2fa88fc75ac66651b9bb6662))
+
+
+### Bug Fixes
+
+* **deps:** bump go to 1.26.5 and x/text to v0.39.0 (govulncheck) ([#117](https://github.com/bmorton/temporal-operator/issues/117)) ([0aa5437](https://github.com/bmorton/temporal-operator/commit/0aa543786c43348f4196aff007fd3eadc11804fd))
+
 ## [0.9.0](https://github.com/bmorton/temporal-operator/compare/v0.8.0...v0.9.0) (2026-06-24)
 
 
