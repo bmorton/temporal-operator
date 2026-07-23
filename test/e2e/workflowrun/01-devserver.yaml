@@ -1,0 +1,10 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalDevServer
+metadata:
+  name: wfr
+spec:
+  version: "1.31.1"
+  namespaces: ["orders"]
+  workflowRunPolicy:
+    enabled: true
+    allowedTaskQueues: ["greeting-tq"]

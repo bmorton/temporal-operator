@@ -1,0 +1,12 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalWorkflowRun
+metadata:
+  name: denied-run
+spec:
+  clusterRef:
+    name: wfr
+    kind: TemporalDevServer
+  namespace: orders
+  workflow:
+    workflowType: GreetingWorkflow
+    taskQueue: not-allowed-tq

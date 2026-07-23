@@ -1,0 +1,53 @@
+# Chainsaw test: stand up a disposable TemporalDevServer, start a one-off
+# workflow via TemporalWorkflowRun, drive it to a terminal state by terminating
+# it with admin-tools, verify TTL deletes the CR, and verify the
+# WorkflowRunPolicy denies a run using a disallowed task queue. No external DB
+# and no custom worker image are required.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: workflowrun
+spec:
+  timeouts:
+    apply: 1m
+    assert: 5m
+    exec: 2m
+  steps:
+    - name: dev-server
+      try:
+        - apply:
+            file: 01-devserver.yaml
+        - assert:
+            file: 01-assert.yaml
+    - name: register-namespace
+      try:
+        - apply:
+            file: 02-namespace.yaml
+        - assert:
+            file: 02-assert.yaml
+    - name: start-workflow
+      try:
+        - apply:
+            file: 03-workflowrun.yaml
+        - assert:
+            file: 03-assert.yaml
+    - name: terminate-and-ttl
+      try:
+        - script:
+            content: |
+              kubectl run -n $NAMESPACE wf-terminate --rm -i --restart=Never \
+                --image=temporalio/admin-tools:1.31.1 -- \
+                temporal workflow terminate \
+                --address wfr-devserver:7233 --namespace orders \
+                --workflow-id greet-once --reason e2e
+        - assert:
+            file: 04-assert-terminated.yaml
+        - error:
+            # After TTL (30s) the operator deletes the CR.
+            file: 04-assert-terminated.yaml
+    - name: policy-deny
+      try:
+        - apply:
+            file: 05-deny.yaml
+        - assert:
+            file: 05-assert.yaml

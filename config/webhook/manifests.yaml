@@ -131,3 +131,23 @@ webhooks:
     resources:
     - temporalsearchattributes
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-temporal-bmor10-com-v1alpha1-temporalworkflowrun
+  failurePolicy: Fail
+  name: vtemporalworkflowrun-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - temporal.bmor10.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - temporalworkflowruns
+  sideEffects: None

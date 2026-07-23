@@ -10,7 +10,7 @@ on:
       suite:
         description: Which suite(s) to run
         type: choice
-        options: [default, devserver, mtls, upgrade, opensearch, cassandra, multicluster, all]
+        options: [default, devserver, workflowrun, mtls, upgrade, opensearch, cassandra, multicluster, all]
         default: default
 
 permissions:
@@ -32,22 +32,24 @@ jobs:
         run: |
           postgres='{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"}'
           devserver='{"suite":"devserver"}'
+          workflowrun='{"suite":"workflowrun"}'
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
           upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
           opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
           cassandra='{"temporal":"1.31.1","persistence":"cassandra","suite":"cassandra"}'
           multicluster='{"temporal":"1.31.1","persistence":"multicluster","suite":"multicluster"}'
           if [ "$EVENT" = "schedule" ]; then
-            echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres,$devserver,$workflowrun,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             case "$SUITE" in
               devserver)    echo "combos=[$devserver]" >> "$GITHUB_OUTPUT" ;;
+              workflowrun)  echo "combos=[$workflowrun]" >> "$GITHUB_OUTPUT" ;;
               mtls)         echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
               upgrade)      echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
               opensearch)   echo "combos=[$opensearch]" >> "$GITHUB_OUTPUT" ;;
               cassandra)    echo "combos=[$cassandra]" >> "$GITHUB_OUTPUT" ;;
               multicluster) echo "combos=[$multicluster]" >> "$GITHUB_OUTPUT" ;;
-              all)          echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT" ;;
+              all)          echo "combos=[$postgres,$devserver,$workflowrun,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT" ;;
               *)            echo "combos=[$postgres,$devserver]" >> "$GITHUB_OUTPUT" ;;
             esac
           else
@@ -119,7 +121,7 @@ jobs:
             | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
           images=""
           for v in $versions; do
-            if echo "${{ matrix.combo.suite }}" | grep -q "^devserver"; then
+            if echo "${{ matrix.combo.suite }}" | grep -qE "^(devserver|workflowrun)"; then
               # The dev server's spec.version is a Temporal *server* version, but
               # it runs the temporalio/temporal *CLI* image, which is versioned
               # independently (its tags are CLI releases, e.g. 1.7.x, not server
