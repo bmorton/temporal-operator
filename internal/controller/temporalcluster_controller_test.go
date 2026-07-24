@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -159,5 +160,25 @@ var _ = Describe("TemporalCluster CRD validation", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, fetched)).To(Succeed())
 		fetched.Spec.NumHistoryShards = 1024
 		Expect(k8sClient.Update(ctx, fetched)).NotTo(Succeed())
+	})
+
+	It("accepts scalar dynamicConfig values (bool, number, string)", func() {
+		resource := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "scalar-dynamic-config", Namespace: "default"},
+			Spec:       validClusterSpec("1.31.1"),
+		}
+		resource.Spec.DynamicConfig = &temporalv1alpha1.DynamicConfigSpec{
+			Values: map[string][]temporalv1alpha1.DynamicConfigValue{
+				"history.enableTransitionHistory": {{Value: apiextensionsv1.JSON{Raw: []byte("true")}}},
+				"history.enableChasm":             {{Value: apiextensionsv1.JSON{Raw: []byte("false")}}},
+				"activity.enableStandalone":       {{Value: apiextensionsv1.JSON{Raw: []byte("true")}}},
+				"limit.maxIDLength":               {{Value: apiextensionsv1.JSON{Raw: []byte("3000")}}},
+				"system.someString":               {{Value: apiextensionsv1.JSON{Raw: []byte(`"hello"`)}}},
+			},
+		}
+		Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+		DeferCleanup(func() {
+			_ = k8sClient.Delete(ctx, resource)
+		})
 	})
 })

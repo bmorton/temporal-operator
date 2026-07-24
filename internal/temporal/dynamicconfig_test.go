@@ -20,13 +20,13 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/yaml"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
 
-func raw(s string) runtime.RawExtension { return runtime.RawExtension{Raw: []byte(s)} }
+func raw(s string) apiextensionsv1.JSON { return apiextensionsv1.JSON{Raw: []byte(s)} }
 
 func TestRenderDynamicConfigEmpty(t *testing.T) {
 	out, warnings, err := RenderDynamicConfig(nil, "1.31.1")

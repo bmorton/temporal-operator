@@ -355,7 +355,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `value` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg)_ | Value is an arbitrary JSON value for the dynamic config key. |  |  |
+| `value` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Value is an arbitrary JSON value for the dynamic config key. It may be a<br />scalar (bool, number, string), object, or array. |  | Schemaless: \{\} <br /> |
 | `constraints` _[DynamicConfigConstraints](#dynamicconfigconstraints)_ |  |  | Optional: \{\} <br /> |
 
 
