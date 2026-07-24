@@ -84,4 +84,7 @@ const (
 	ReasonClusterNotFound = "ClusterNotFound"
 	// ReasonClusterNotReady indicates the referenced Temporal target is not ready.
 	ReasonClusterNotReady = "ClusterNotReady"
+	// ReasonFrontendUnavailable indicates the Temporal frontend is reachable
+	// but not yet accepting RPCs (transient startup window).
+	ReasonFrontendUnavailable = "FrontendUnavailable"
 )

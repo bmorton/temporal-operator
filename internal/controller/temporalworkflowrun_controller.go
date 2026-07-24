@@ -26,10 +26,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/temporal"
@@ -107,7 +111,13 @@ func (r *TemporalWorkflowRunReconciler) Reconcile(ctx context.Context, req ctrl.
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, r.statusUpdate(ctx, &run)
 	}
 
-	return r.reconcileRun(ctx, &run, wc, target.WorkflowRunPolicy)
+	res, err := r.reconcileRun(ctx, &run, wc, target.WorkflowRunPolicy)
+	if err != nil && isTransientClusterErr(err) {
+		r.setReady(&run, metav1.ConditionFalse, temporalv1alpha1.ReasonFrontendUnavailable,
+			"waiting for the Temporal frontend to become available")
+		return ctrl.Result{RequeueAfter: clusterUnavailableRequeue}, r.statusUpdate(ctx, &run)
+	}
+	return res, err
 }
 
 func (r *TemporalWorkflowRunReconciler) reconcileRun(ctx context.Context, run *temporalv1alpha1.TemporalWorkflowRun, wc temporal.WorkflowRunClient, policy temporalv1alpha1.WorkflowRunPolicy) (ctrl.Result, error) {
@@ -256,10 +266,37 @@ func (r *TemporalWorkflowRunReconciler) statusUpdate(ctx context.Context, run *t
 	return client.IgnoreNotFound(r.Status().Update(ctx, run))
 }
 
+// mapClusterToWorkflowRuns enqueues every TemporalWorkflowRun in the changed
+// target's namespace whose ClusterRef points at it.
+func (r *TemporalWorkflowRunReconciler) mapClusterToWorkflowRuns(kind string) handler.MapFunc {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		var list temporalv1alpha1.TemporalWorkflowRunList
+		if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
+			return nil
+		}
+		var reqs []reconcile.Request
+		for i := range list.Items {
+			item := &list.Items[i]
+			if refTargets(item.Spec.ClusterRef, kind, obj.GetName()) {
+				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+					Namespace: item.Namespace, Name: item.Name,
+				}})
+			}
+		}
+		return reqs
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *TemporalWorkflowRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&temporalv1alpha1.TemporalWorkflowRun{}).
+		Watches(&temporalv1alpha1.TemporalCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToWorkflowRuns(temporalv1alpha1.ClusterKindTemporalCluster)),
+			builder.WithPredicates(clusterReadinessChanged)).
+		Watches(&temporalv1alpha1.TemporalDevServer{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToWorkflowRuns(temporalv1alpha1.ClusterKindTemporalDevServer)),
+			builder.WithPredicates(clusterReadinessChanged)).
 		Named("temporalworkflowrun").
 		Complete(r)
 }

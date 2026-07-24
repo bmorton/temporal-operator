@@ -23,6 +23,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,6 +40,7 @@ type fakeNamespaceClient struct {
 	registered, updated, deleted []string
 	registerParams, updateParams []temporal.NamespaceParams
 	failovers                    []failoverCall
+	registerErr                  error
 }
 
 // failoverCall records a single Failover invocation.
@@ -59,6 +62,9 @@ func (f *fakeNamespaceClient) Describe(_ context.Context, name string) (*tempora
 }
 
 func (f *fakeNamespaceClient) Register(_ context.Context, p temporal.NamespaceParams) error {
+	if f.registerErr != nil {
+		return f.registerErr
+	}
 	f.registered = append(f.registered, p.Name)
 	f.registerParams = append(f.registerParams, p)
 	f.store[p.Name] = &temporal.NamespaceInfo{
@@ -351,5 +357,33 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 		}
 		Expect(upd).NotTo(BeNil())
 		Expect(upd.Clusters).To(ConsistOf("a", "b", "c"))
+	})
+
+	It("requeues without error when the frontend is transiently unavailable", func() {
+		clusterName := readyCluster()
+		nsName := fmt.Sprintf("ns-transient-%d", counter)
+		ns := &temporalv1alpha1.TemporalNamespace{
+			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalNamespaceSpec{
+				ClusterRef: temporalv1alpha1.ClusterReference{Name: clusterName},
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+
+		fake = &fakeNamespaceClient{
+			store:       map[string]*temporal.NamespaceInfo{},
+			registerErr: status.Error(codes.Unavailable, "frontend starting"),
+		}
+
+		res, err := reconciler().Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: nsName, Namespace: "default"},
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(clusterUnavailableRequeue))
+
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nsName, Namespace: "default"}, ns)).To(Succeed())
+		cond := meta.FindStatusCondition(ns.Status.Conditions, temporalv1alpha1.ConditionReady)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Reason).To(Equal(temporalv1alpha1.ReasonFrontendUnavailable))
 	})
 })
