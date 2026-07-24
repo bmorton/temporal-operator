@@ -14,7 +14,7 @@ the operator's admission webhooks perform.
 Because the tool is built from the operator's source on every docs deploy, the
 preview stays in lockstep with the operator and never drifts.
 
-{{< button href="/temporal-operator/preview/" >}}Open Resource Preview{{< /button >}}
+{{< button href="/preview/" >}}Open Resource Preview{{< /button >}}
 
 > **Alpha.** The tool currently supports `TemporalCluster`. It uses placeholder
 > credentials when rendering configuration, so secret values shown are not real.
