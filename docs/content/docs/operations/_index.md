@@ -53,8 +53,10 @@ on non-mTLS clusters (which are unaffected and keep the more precise probe). Thi
 is an acceptable trade-off to keep mTLS clusters functional, but it is not ideal
 for production-grade health gating.
 
-> **Future work:** richer health checking under mTLS is planned — for example an
-> exec probe using `grpc-health-probe` with the internode client certificate, or
-> delegating mTLS to a service mesh (Linkerd, or Istio/Envoy) so Temporal serves
-> plaintext behind the sidecar and standard gRPC probes apply. Until then, TCP
-> probes are the supported behavior for mTLS clusters.
+{{< callout type="info" >}}
+**Future work:** richer health checking under mTLS is planned — for example an
+exec probe using `grpc-health-probe` with the internode client certificate, or
+delegating mTLS to a service mesh (Linkerd, or Istio/Envoy) so Temporal serves
+plaintext behind the sidecar and standard gRPC probes apply. Until then, TCP
+probes are the supported behavior for mTLS clusters.
+{{< /callout >}}
