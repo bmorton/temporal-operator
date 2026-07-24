@@ -3,8 +3,6 @@ title = "Authentication & Authorization"
 weight = 10
 +++
 
-# Authentication & Authorization
-
 This guide covers configuring Microsoft Entra (Azure AD) authentication and
 authorization for temporal-operator — both **server-side JWT validation** for
 programmatic callers and **UI OIDC login** for human users.

@@ -3,8 +3,6 @@ title = "Upgrades"
 weight = 50
 +++
 
-# Upgrades
-
 Upgrade a cluster by changing `spec.version` to an adjacent supported version
 (same minor patch bump, or the next minor). The admission webhook rejects
 non-adjacent jumps with `UpgradePathInvalid`.

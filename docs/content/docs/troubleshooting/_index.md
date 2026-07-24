@@ -3,8 +3,6 @@ title = "Troubleshooting"
 weight = 60
 +++
 
-# Troubleshooting
-
 ## PersistenceReachable=False
 
 - Check the datastore host/port and that the password Secret exists with the

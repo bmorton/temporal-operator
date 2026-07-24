@@ -3,8 +3,6 @@ title = "Getting Started"
 weight = 10
 +++
 
-# Getting Started
-
 This guide takes you from an empty kind cluster to a running Temporal cluster in
 about 15 minutes.
 

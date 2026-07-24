@@ -1,10 +1,7 @@
 +++
 title = "Tools"
 weight = 80
-bookCollapseSection = true
 +++
-
-# Tools
 
 Browser-based tools for working with temporal-operator.
 

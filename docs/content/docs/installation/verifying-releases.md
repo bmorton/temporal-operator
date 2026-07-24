@@ -3,8 +3,6 @@ title = "Verifying Releases"
 weight = 25
 +++
 
-# Verifying releases
-
 Every `temporal-operator` release is built with [GoReleaser](https://goreleaser.com),
 its container images and checksums are signed with [Cosign](https://docs.sigstore.dev/)
 (keyless, via GitHub OIDC), and a [SLSA Level 3](https://slsa.dev/) provenance

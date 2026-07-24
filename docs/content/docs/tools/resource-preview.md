@@ -3,8 +3,6 @@ title = "Resource Preview"
 weight = 10
 +++
 
-# Resource Preview
-
 The Resource Preview tool runs the operator's own object planner — compiled to
 WebAssembly — entirely in your browser. Paste a `TemporalCluster` custom
 resource and it shows every Kubernetes object the operator would create, grouped

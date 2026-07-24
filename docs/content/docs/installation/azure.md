@@ -3,8 +3,6 @@ title = "Running on Azure"
 weight = 30
 +++
 
-# Running on Azure
-
 This guide covers running the Temporal operator on Azure: AKS, Azure Database for
 PostgreSQL Flexible Server, Application Gateway ingress, and passwordless
 Microsoft Entra authentication.
