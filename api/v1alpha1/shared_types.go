@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -89,9 +90,11 @@ type DynamicConfigSpec struct {
 
 // DynamicConfigValue is a single dynamic config value with optional constraints.
 type DynamicConfigValue struct {
-	// Value is an arbitrary JSON value for the dynamic config key.
+	// Value is an arbitrary JSON value for the dynamic config key. It may be a
+	// scalar (bool, number, string), object, or array.
+	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:pruning:PreserveUnknownFields
-	Value runtime.RawExtension `json:"value"`
+	Value apiextensionsv1.JSON `json:"value"`
 
 	// +optional
 	Constraints *DynamicConfigConstraints `json:"constraints,omitempty"`

@@ -156,8 +156,9 @@ spec:
                                                                 type: string
                                                         type: object
                                                     value:
-                                                        description: Value is an arbitrary JSON value for the dynamic config key.
-                                                        type: object
+                                                        description: |-
+                                                            Value is an arbitrary JSON value for the dynamic config key. It may be a
+                                                            scalar (bool, number, string), object, or array.
                                                         x-kubernetes-preserve-unknown-fields: true
                                                 required:
                                                     - value
