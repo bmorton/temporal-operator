@@ -31,6 +31,7 @@ type ServicesInput struct {
 	RenderedConfig        string
 	RenderedDynamicConfig string
 	ConfigHash            string
+	DynamicConfigHash     string
 	ServiceVersions       map[string]string
 	MTLS                  *resources.MTLSMounts
 }
@@ -46,7 +47,7 @@ func PlanServices(cluster *temporalv1alpha1.TemporalCluster, in ServicesInput) (
 	}
 	for _, svc := range resources.EnabledServices(cluster) {
 		version := in.ServiceVersions[svc.Name]
-		deployment, err := resources.BuildDeployment(cluster, svc, in.ConfigHash, version, in.MTLS)
+		deployment, err := resources.BuildDeployment(cluster, svc, in.ConfigHash, in.DynamicConfigHash, version, in.MTLS)
 		if err != nil {
 			return nil, err
 		}
