@@ -25,10 +25,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/temporal"
@@ -384,6 +388,31 @@ func (r *TemporalClusterConnectionReconciler) clientFactory() temporal.RemoteClu
 	return temporal.NewRemoteClusterClient
 }
 
+// mapClusterToConnections enqueues every TemporalClusterConnection in the
+// changed target's namespace that has a local peer whose ClusterRef points at
+// it, so replication peers reconnect promptly when a cluster becomes Ready.
+func (r *TemporalClusterConnectionReconciler) mapClusterToConnections(kind string) handler.MapFunc {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		var list temporalv1alpha1.TemporalClusterConnectionList
+		if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
+			return nil
+		}
+		var reqs []reconcile.Request
+		for i := range list.Items {
+			item := &list.Items[i]
+			for _, p := range item.Spec.Peers {
+				if p.ClusterRef != nil && refTargets(*p.ClusterRef, kind, obj.GetName()) {
+					reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+						Namespace: item.Namespace, Name: item.Name,
+					}})
+					break
+				}
+			}
+		}
+		return reqs
+	}
+}
+
 func (r *TemporalClusterConnectionReconciler) setReady(conn *temporalv1alpha1.TemporalClusterConnection, status metav1.ConditionStatus, reason, message string) {
 	conn.Status.ObservedGeneration = conn.Generation
 	meta.SetStatusCondition(&conn.Status.Conditions, metav1.Condition{
@@ -403,6 +432,12 @@ func (r *TemporalClusterConnectionReconciler) statusUpdate(ctx context.Context, 
 func (r *TemporalClusterConnectionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&temporalv1alpha1.TemporalClusterConnection{}).
+		Watches(&temporalv1alpha1.TemporalCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToConnections(temporalv1alpha1.ClusterKindTemporalCluster)),
+			builder.WithPredicates(clusterReadinessChanged)).
+		Watches(&temporalv1alpha1.TemporalDevServer{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToConnections(temporalv1alpha1.ClusterKindTemporalDevServer)),
+			builder.WithPredicates(clusterReadinessChanged)).
 		Named("temporalclusterconnection").
 		Complete(r)
 }
