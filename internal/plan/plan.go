@@ -89,6 +89,7 @@ func PlanFromSpec(cluster *temporalv1alpha1.TemporalCluster) ([]PlannedObject, e
 		RenderedConfig:        renderedConfig,
 		RenderedDynamicConfig: renderedDynamic,
 		ConfigHash:            resources.ConfigHash(renderedConfig),
+		DynamicConfigHash:     resources.ConfigHash(renderedDynamic),
 		MTLS:                  mtls,
 	}
 

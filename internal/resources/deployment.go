@@ -128,7 +128,7 @@ type MTLSMounts struct {
 // BuildDeployment builds the Deployment for a single Temporal service. The
 // version overrides the server image tag (used for per-service rollout during
 // upgrades); when empty the cluster's spec version is used.
-func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash, version string, mtls *MTLSMounts) (*appsv1.Deployment, error) {
+func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash, dynamicConfigHash, version string, mtls *MTLSMounts) (*appsv1.Deployment, error) {
 	replicas := int32(1)
 	var resources corev1.ResourceRequirements
 	var nodeSelector map[string]string
@@ -224,7 +224,10 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 		},
 	}
 
-	podAnnotations := map[string]string{ConfigHashAnnotation: configHash}
+	podAnnotations := map[string]string{
+		ConfigHashAnnotation:        configHash,
+		DynamicConfigHashAnnotation: dynamicConfigHash,
+	}
 
 	if mtls != nil && mtls.Enabled {
 		if mtls.CertHash != "" {
