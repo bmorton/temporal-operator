@@ -480,9 +480,17 @@ Adjust `docs.yml` for Hugo Modules (no theme submodule, add module cache) and up
 
 In the `lint` job of `.github/workflows/docs.yml`, update the markdownlint `globs` and lychee `args` to the new generated paths and drop the vendored-theme exclusion. Replace `!docs/content/reference/**` with `!docs/content/docs/reference/**`, `!docs/content/examples/**` with `!docs/content/docs/examples/**`, and remove the `!docs/themes/**` line (markdownlint) / `--exclude-path docs/themes` (lychee). Keep `!docs/superpowers/**` / `--exclude-path docs/superpowers`.
 
+- [ ] **Step 1b: Repoint the `verify-generated` job's generated-docs diff path**
+
+In the `verify-generated` job, the staleness check diffs the generated CRD reference. Update the moved path: replace `docs/content/reference/_index.md` with `docs/content/docs/reference/_index.md` in both the `git diff --quiet -- …` line and the `git --no-pager diff -- …` line.
+
+- [ ] **Step 1c: Bump the Hugo version in both build jobs**
+
+In the `Setup Hugo` step of BOTH the `preview-wasm` and `build-deploy` jobs (`peaceiris/actions-hugo`), change `hugo-version: "0.140.2"` to `hugo-version: "0.164.0"` (current Hextra >=0.10 requires Hugo >=0.146.0). Keep `extended: true`.
+
 - [ ] **Step 2: Remove theme submodule checkout and add Hugo module cache**
 
-In the `preview-wasm` and `build-deploy` jobs: on the `actions/checkout` step, remove `submodules: recursive` from `preview-wasm` (keep `fetch-depth: 0` on `build-deploy` for `enableGitInfo`; `submodules: recursive` there was only for the theme — remove it). After the "Setup Hugo" step in each build job, add before the build:
+In the `preview-wasm` and `build-deploy` jobs: on the `actions/checkout` step, remove `submodules: recursive` (it existed only for the vendored theme). Keep `fetch-depth: 0` on `build-deploy` for `enableGitInfo`. After the "Setup Hugo" step in each build job, add a module cache before the build:
 
 ```yaml
       - name: Cache Hugo modules
@@ -491,35 +499,34 @@ In the `preview-wasm` and `build-deploy` jobs: on the `actions/checkout` step, r
           path: /home/runner/.cache/hugo_mod
           key: hugo-mod-${{ hashFiles('docs/go.sum') }}
           restore-keys: hugo-mod-
-      - name: Fetch Hugo modules
-        run: hugo mod get
-        working-directory: docs
 ```
+
+Do NOT add a bare `hugo mod get` step — it upgrades the theme to `latest`, which may be incompatible with the pinned Hugo. Hugo automatically downloads the modules pinned in `docs/go.mod` during the build (`hugo --source docs`), so no explicit fetch step is needed. (Go is already set up in these jobs.)
 
 - [ ] **Step 3: Verify the workflow references only new paths**
 
-Run: `grep -n "content/reference\|content/examples\|themes\|submodules" .github/workflows/docs.yml || echo CLEAN`
-Expected: no references to old `content/reference`, `content/examples`, `themes`, or leftover theme `submodules` lines (only intentional keeps, if any). Adjust until effectively `CLEAN` for the removed items.
+Run: `grep -n "content/reference\|content/examples\|themes\|submodules: recursive\|0.140.2" .github/workflows/docs.yml || echo CLEAN`
+Expected: no references to old `content/reference`, `content/examples`, `themes`, `submodules: recursive`, or the old Hugo version `0.140.2`. Adjust until `CLEAN`.
 
 - [ ] **Step 4: Full local verification (mirrors CI)**
 
 ```bash
 make preview-wasm docs-examples docs-crd-reference
-cd docs && hugo mod get && PATH="$PWD/node_modules/.bin:$PATH" hugo --minify 2>&1 | tail -15 && cd ..
+cd docs && PATH="$PWD/node_modules/.bin:$PATH" hugo --minify 2>&1 | tail -15 && cd ..
 npx --yes markdownlint-cli2 "docs/content/docs/**/*.md" "#docs/content/docs/reference/**" "#docs/content/docs/examples/**" 2>&1 | tail -5 || true
 ```
-Expected: WASM builds, Hugo build completes with no errors, markdownlint reports no violations on hand-written docs.
+Expected: WASM builds, Hugo build completes with no errors (a `.Site.Data` deprecation WARN from Hextra's own theme code is expected and harmless), markdownlint reports no violations on hand-written docs.
 
 - [ ] **Step 5: Verify search index, landing, docs, preview, and an alias in the built site**
 
-Run: `ls docs/public/index.json docs/public/index.html docs/public/docs/installation/index.html && grep -q 'http-equiv="refresh"' docs/public/installation/index.html && grep -q 'preview.wasm' docs/public/preview/index.html && echo ALL_OK`
-Expected: `ALL_OK`.
+Run: `ls docs/public/en.search-data.json docs/public/index.html docs/public/docs/installation/index.html && grep -q 'http-equiv="refresh"' docs/public/installation/index.html && grep -q 'preview.wasm' docs/public/preview/index.html && echo ALL_OK`
+Expected: `ALL_OK`. (The Hextra FlexSearch index is `en.search-data.json`.)
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/docs.yml
-git commit -m "ci(docs): build Hextra site via Hugo modules"
+git commit -m "ci(docs): build Hextra site via Hugo modules on Hugo 0.164"
 ```
 
 ---
