@@ -29,10 +29,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/temporal"
@@ -101,6 +105,11 @@ func (r *TemporalScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	if err := r.reconcileSchedule(ctx, &sched, sc); err != nil {
+		if isTransientClusterErr(err) {
+			r.setReady(&sched, metav1.ConditionFalse, temporalv1alpha1.ReasonFrontendUnavailable,
+				"waiting for the Temporal frontend to become available")
+			return ctrl.Result{RequeueAfter: clusterUnavailableRequeue}, r.statusUpdate(ctx, &sched)
+		}
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: scheduleDriftRequeue}, r.statusUpdate(ctx, &sched)
@@ -227,10 +236,37 @@ func (r *TemporalScheduleReconciler) statusUpdate(ctx context.Context, sched *te
 	return client.IgnoreNotFound(r.Status().Update(ctx, sched))
 }
 
+// mapClusterToSchedules enqueues every TemporalSchedule in the changed target's
+// namespace whose ClusterRef points at it.
+func (r *TemporalScheduleReconciler) mapClusterToSchedules(kind string) handler.MapFunc {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		var list temporalv1alpha1.TemporalScheduleList
+		if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
+			return nil
+		}
+		var reqs []reconcile.Request
+		for i := range list.Items {
+			item := &list.Items[i]
+			if refTargets(item.Spec.ClusterRef, kind, obj.GetName()) {
+				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+					Namespace: item.Namespace, Name: item.Name,
+				}})
+			}
+		}
+		return reqs
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *TemporalScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&temporalv1alpha1.TemporalSchedule{}).
+		Watches(&temporalv1alpha1.TemporalCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToSchedules(temporalv1alpha1.ClusterKindTemporalCluster)),
+			builder.WithPredicates(clusterReadinessChanged)).
+		Watches(&temporalv1alpha1.TemporalDevServer{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToSchedules(temporalv1alpha1.ClusterKindTemporalDevServer)),
+			builder.WithPredicates(clusterReadinessChanged)).
 		Named("temporalschedule").
 		Complete(r)
 }
