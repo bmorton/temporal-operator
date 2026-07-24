@@ -10,7 +10,10 @@
 
 ## Global Constraints
 
-- Hugo **0.140.2 extended** — do not change the pinned version.
+- Hugo **0.164.0 extended** — current Hextra (>=0.10) requires Hugo >=0.146.0 (uses the `try` function), so the previous 0.140.2 pin was bumped to 0.164.0. Keep CI and local at >=0.146.0.
+- Hextra theme pinned to **v0.12.3** in `docs/go.mod`.
+- The FlexSearch index file emitted by Hextra is `en.search-data.json` (verify this, not `index.json`).
+- Do not run bare `hugo mod get` in CI (it upgrades to `latest`); let Hugo auto-download modules from `go.mod` on build, or pin the exact version.
 - `baseURL = "https://temporal-operator.bmorton.dev/"` and `title = "temporal-operator"` — unchanged.
 - Hextra theme version MUST be pinned to a specific released tag in `docs/go.mod` (no floating `latest`).
 - `[markup.goldmark.renderer] unsafe = true` MUST be retained (content uses raw HTML).

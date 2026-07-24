@@ -1,6 +1,6 @@
 baseURL = "https://temporal-operator.bmorton.dev/"
 title = "temporal-operator"
-languageCode = "en-us"
+locale = "en-us"
 
 enableInlineShortcodes = true
 enableGitInfo = true
