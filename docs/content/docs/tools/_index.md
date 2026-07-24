@@ -1,10 +1,8 @@
 +++
 title = "Tools"
 weight = 80
-bookCollapseSection = true
+aliases = ["/tools/"]
 +++
-
-# Tools
 
 Browser-based tools for working with temporal-operator.
 

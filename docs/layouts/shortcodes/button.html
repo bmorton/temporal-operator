@@ -1,0 +1,4 @@
+{{- $href := .Get "href" | relURL -}}
+<a href="{{ $href }}" class="hx-inline-flex hx-items-center hx-rounded-md hx-border hx-border-transparent hx-bg-primary-600 hx-px-4 hx-py-2 hx-text-sm hx-font-semibold hx-text-white hover:hx-bg-primary-700" style="text-decoration:none;background:#3b82f6;color:#fff;padding:0.5rem 1rem;border-radius:0.375rem;display:inline-block;">
+  {{- .Inner -}}
+</a>

@@ -1,9 +1,8 @@
 +++
 title = "Resource Preview"
 weight = 10
+aliases = ["/tools/resource-preview/"]
 +++
-
-# Resource Preview
 
 The Resource Preview tool runs the operator's own object planner — compiled to
 WebAssembly — entirely in your browser. Paste a `TemporalCluster` custom
@@ -16,5 +15,7 @@ preview stays in lockstep with the operator and never drifts.
 
 {{< button href="/preview/" >}}Open Resource Preview{{< /button >}}
 
-> **Alpha.** The tool currently supports `TemporalCluster`. It uses placeholder
-> credentials when rendering configuration, so secret values shown are not real.
+{{< callout type="warning" >}}
+**Alpha.** The tool currently supports `TemporalCluster`. It uses placeholder
+credentials when rendering configuration, so secret values shown are not real.
+{{< /callout >}}

@@ -1,6 +1,7 @@
 +++
 title = "CRD Reference"
 weight = 70
+aliases = ["/reference/"]
 +++
 
 # API Reference

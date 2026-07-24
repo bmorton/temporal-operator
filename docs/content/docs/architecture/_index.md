@@ -1,9 +1,8 @@
 +++
 title = "Architecture"
 weight = 30
+aliases = ["/architecture/"]
 +++
-
-# Architecture
 
 The operator follows the standard controller-runtime model: each custom
 resource has a reconciler that drives observed state toward desired state.

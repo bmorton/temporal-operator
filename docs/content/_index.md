@@ -1,20 +1,30 @@
-+++
-title = "temporal-operator"
-type = "docs"
-+++
+---
+title: temporal-operator
+layout: hextra-home
+---
 
-# temporal-operator
+<div class="hx-mt-6 hx-mb-6">
+{{< hextra/hero-headline >}}
+  Kubernetes operator for Temporal
+{{< /hextra/hero-headline >}}
+</div>
 
-A Kubernetes operator that manages the full lifecycle of [Temporal](https://temporal.io)
-clusters — persistence and schema management, mTLS, the UI, monitoring,
-controlled version upgrades, and declarative namespaces, search attributes,
-schedules, and client credentials — plus disposable dev servers for local
-development and CI.
+<div class="hx-mb-12">
+{{< hextra/hero-subtitle >}}
+  Manage the full lifecycle of Temporal clusters — persistence, mTLS, the UI,
+  version upgrades, and declarative resources — the Kubernetes way.
+{{< /hextra/hero-subtitle >}}
+</div>
 
-- **[Getting Started](./getting-started/)** — zero to a running cluster.
-- **[Installation](./installation/)** — Helm, OLM, or kustomize.
-- **[Architecture](./architecture/)** — how the operator and CRDs fit together.
-- **[Operations](./operations/)** — status, conditions, day-2.
-- **[Upgrades](./upgrades/)** — moving between Temporal versions.
-- **[Troubleshooting](./troubleshooting/)** — common failures.
-- **[CRD Reference](./reference/)** — the full API.
+<div class="hx-mb-6">
+{{< hextra/hero-button text="Get Started" link="docs/getting-started" >}}
+</div>
+
+{{< hextra/feature-grid >}}
+  {{< hextra/feature-card title="Getting Started" subtitle="Zero to a running Temporal cluster on kind." link="docs/getting-started" >}}
+  {{< hextra/feature-card title="Installation" subtitle="Install via Helm, OLM, or kustomize." link="docs/installation" >}}
+  {{< hextra/feature-card title="Architecture" subtitle="How the operator and CRDs fit together." link="docs/architecture" >}}
+  {{< hextra/feature-card title="Operations" subtitle="Status, conditions, and day-2 operations." link="docs/operations" >}}
+  {{< hextra/feature-card title="CRD Reference" subtitle="The full API reference." link="docs/reference" >}}
+  {{< hextra/feature-card title="Resource Preview" subtitle="See what the operator would create, in your browser." link="preview" >}}
+{{< /hextra/feature-grid >}}

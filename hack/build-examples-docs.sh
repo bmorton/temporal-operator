@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Generates Hugo content pages for each example under examples/ into
-# docs/content/examples/ (git-ignored). Rebuilt on every docs deploy so the
+# docs/content/docs/examples/ (git-ignored). Rebuilt on every docs deploy so the
 # published examples can never drift from the examples/ directory.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 examples_root="${repo_root}/examples"
-out_dir="${repo_root}/docs/content/examples"
+out_dir="${repo_root}/docs/content/docs/examples"
 
 # Start clean so output is deterministic and deleted examples disappear.
 rm -rf "${out_dir}"
@@ -17,9 +17,8 @@ index="${out_dir}/_index.md"
   printf '+++\n'
   printf 'title = "Examples"\n'
   printf 'weight = 75\n'
-  printf 'bookCollapseSection = true\n'
+  printf 'aliases = ["/examples/"]\n'
   printf '+++\n\n'
-  printf '# Examples\n\n'
   printf 'Curated `TemporalCluster` (and related) custom resources for common\n'
   printf 'scenarios. Each page renders the example README and its manifests.\n\n'
   printf 'These pages are generated from the\n'
@@ -52,6 +51,7 @@ while IFS= read -r dir; do
     printf '+++\n'
     printf 'title = "%s"\n' "${title}"
     printf 'weight = %d\n' "${weight}"
+    printf 'aliases = ["/examples/%s/"]\n' "${name}"
     printf '+++\n\n'
 
     if [ -f "${readme}" ]; then

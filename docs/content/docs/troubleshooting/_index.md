@@ -1,9 +1,8 @@
 +++
 title = "Troubleshooting"
 weight = 60
+aliases = ["/troubleshooting/"]
 +++
-
-# Troubleshooting
 
 ## PersistenceReachable=False
 

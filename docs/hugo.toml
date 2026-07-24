@@ -1,18 +1,54 @@
 baseURL = "https://temporal-operator.bmorton.dev/"
 title = "temporal-operator"
-theme = "hugo-book"
-languageCode = "en-us"
+locale = "en-us"
+
+enableInlineShortcodes = true
+enableGitInfo = true
+
+[module]
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+
+[markup]
+  [markup.goldmark.renderer]
+    unsafe = true
+  [markup.highlight]
+    noClasses = false
+
+[menu]
+  [[menu.main]]
+    name = "Documentation"
+    pageRef = "/docs"
+    weight = 1
+  [[menu.main]]
+    name = "Search"
+    weight = 2
+    [menu.main.params]
+      type = "search"
+  [[menu.main]]
+    name = "GitHub"
+    weight = 3
+    url = "https://github.com/bmorton/temporal-operator"
+    [menu.main.params]
+      icon = "github"
 
 [params]
-  BookTheme = "auto"
-  BookToC = true
-  # Content lives directly under docs/content (no top-level "docs" section),
-  # so render the menu from all root sections.
-  BookSection = "*"
-  BookRepo = "https://github.com/bmorton/temporal-operator"
-  BookEditPath = "edit/main/docs"
-  # Search is intentionally disabled for now (see spec "Out of scope").
-  BookSearch = false
-
-[markup.goldmark.renderer]
-  unsafe = true
+  [params.navbar]
+    displayTitle = true
+    displayLogo = false
+  [params.theme]
+    default = "system"
+    displayToggle = true
+  [params.footer]
+    enable = true
+    displayCopyright = true
+    displayPoweredBy = true
+  [params.editURL]
+    enable = true
+    base = "https://github.com/bmorton/temporal-operator/edit/main/docs/content"
+  [params.search]
+    enable = true
+    type = "flexsearch"
+    [params.search.flexsearch]
+      index = "content"
+      tokenize = "forward"

@@ -41,16 +41,15 @@ jobs:
           globs: |
             docs/**/*.md
             examples/**/*.md
-            !docs/content/reference/**
-            !docs/content/examples/**
+            !docs/content/docs/reference/**
+            !docs/content/docs/examples/**
             !docs/api/**
-            !docs/themes/**
             !docs/superpowers/**
           config: ".markdownlint.yaml"
       - name: Check links
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md --exclude-path docs/content/reference --exclude-path docs/content/examples --exclude-path docs/api --exclude-path docs/themes --exclude-path docs/superpowers
+          args: --no-progress --accept 200,206,429 docs/**/*.md examples/**/*.md --exclude-path docs/content/docs/reference --exclude-path docs/content/docs/examples --exclude-path docs/api --exclude-path docs/superpowers
           fail: false
 
   verify-generated:
@@ -68,9 +67,9 @@ jobs:
         run: make api-docs docs-crd-reference
       - name: Fail if generated docs are stale
         run: |
-          if ! git diff --quiet -- docs/api/v1alpha1.md docs/content/reference/_index.md; then
+          if ! git diff --quiet -- docs/api/v1alpha1.md docs/content/docs/reference/_index.md; then
             echo "::error::Generated CRD docs are out of date. Run 'make api-docs docs-crd-reference' and commit the result."
-            git --no-pager diff -- docs/api/v1alpha1.md docs/content/reference/_index.md
+            git --no-pager diff -- docs/api/v1alpha1.md docs/content/docs/reference/_index.md
             exit 1
           fi
 
@@ -80,7 +79,6 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          submodules: recursive
           persist-credentials: false
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -98,8 +96,14 @@ jobs:
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@2752ce1d29631191ea3f27c23495fa06139a5b78 # v3.2.1
         with:
-          hugo-version: "0.140.2"
+          hugo-version: "0.164.0"
           extended: true
+      - name: Cache Hugo modules
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: /home/runner/.cache/hugo_mod
+          key: hugo-mod-${{ hashFiles('docs/go.sum') }}
+          restore-keys: hugo-mod-
       - name: Generate examples docs
         run: make docs-examples
       - name: Build site (no deploy)
@@ -122,7 +126,6 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          submodules: recursive
           fetch-depth: 0
           persist-credentials: false
       - name: Setup Go
@@ -144,8 +147,14 @@ jobs:
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@2752ce1d29631191ea3f27c23495fa06139a5b78 # v3.2.1
         with:
-          hugo-version: "0.140.2"
+          hugo-version: "0.164.0"
           extended: true
+      - name: Cache Hugo modules
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: /home/runner/.cache/hugo_mod
+          key: hugo-mod-${{ hashFiles('docs/go.sum') }}
+          restore-keys: hugo-mod-
       - name: Generate examples docs
         run: make docs-examples
       - name: Build site

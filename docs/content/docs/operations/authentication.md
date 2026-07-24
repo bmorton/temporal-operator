@@ -1,9 +1,8 @@
 +++
 title = "Authentication & Authorization"
 weight = 10
+aliases = ["/operations/authentication/"]
 +++
-
-# Authentication & Authorization
 
 This guide covers configuring Microsoft Entra (Azure AD) authentication and
 authorization for temporal-operator — both **server-side JWT validation** for
@@ -157,9 +156,11 @@ exactly the `<namespace>:<role>` strings Temporal expects:
 | Temporal default namespace write | `default:write` | Workflow submit |
 | Temporal system namespace admin | `temporal-system:admin` | Namespace admin |
 
-> **Important:** The `value` field is what ends up in the JWT's `roles` claim.
-> Any mismatch in namespace name or role name (e.g. `Default:Write` instead of
-> `default:write`) will result in authorization denials.
+{{< callout type="important" >}}
+**Important:** The `value` field is what ends up in the JWT's `roles` claim.
+Any mismatch in namespace name or role name (e.g. `Default:Write` instead of
+`default:write`) will result in authorization denials.
+{{< /callout >}}
 
 ### 2. Assign app roles to callers
 
