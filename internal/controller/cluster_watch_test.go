@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -24,6 +25,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -118,4 +121,41 @@ func TestClusterReadinessChangedUpdate(t *testing.T) {
 			t.Fatal("expected create to fire")
 		}
 	})
+}
+
+func TestMapClusterToNamespaces(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := temporalv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	mkNS := func(name, ns, refName, refKind string) *temporalv1alpha1.TemporalNamespace {
+		return &temporalv1alpha1.TemporalNamespace{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+			Spec: temporalv1alpha1.TemporalNamespaceSpec{
+				ClusterRef: temporalv1alpha1.ClusterReference{Name: refName, Kind: refKind},
+			},
+		}
+	}
+
+	match := mkNS("match", "team-a", "c1", "")                                               // empty kind -> cluster
+	otherNS := mkNS("other-ns", "team-b", "c1", "")                                          // different k8s namespace
+	otherCluster := mkNS("other-cluster", "team-a", "c2", "")                                // different cluster
+	devRef := mkNS("dev-ref", "team-a", "c1", temporalv1alpha1.ClusterKindTemporalDevServer) // wrong kind
+
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(match, otherNS, otherCluster, devRef).Build()
+	r := &TemporalNamespaceReconciler{Client: c, Scheme: scheme}
+
+	cluster := &temporalv1alpha1.TemporalCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "team-a"},
+	}
+	reqs := r.mapClusterToNamespaces(temporalv1alpha1.ClusterKindTemporalCluster)(context.Background(), cluster)
+
+	if len(reqs) != 1 {
+		t.Fatalf("expected 1 request, got %d: %v", len(reqs), reqs)
+	}
+	if reqs[0].Name != "match" || reqs[0].Namespace != "team-a" {
+		t.Fatalf("unexpected request: %v", reqs[0])
+	}
 }
