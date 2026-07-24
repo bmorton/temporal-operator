@@ -1,4 +1,4 @@
-baseURL = "https://bmorton.github.io/temporal-operator/"
+baseURL = "https://temporal-operator.bmorton.dev/"
 title = "temporal-operator"
 theme = "hugo-book"
 languageCode = "en-us"

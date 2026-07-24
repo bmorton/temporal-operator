@@ -149,9 +149,7 @@ jobs:
       - name: Generate examples docs
         run: make docs-examples
       - name: Build site
-        env:
-          BASE_URL: ${{ steps.pages.outputs.base_url }}
-        run: PATH="$PWD/docs/node_modules/.bin:$PATH" hugo --source docs --minify --baseURL "${BASE_URL}/"
+        run: PATH="$PWD/docs/node_modules/.bin:$PATH" hugo --source docs --minify
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
