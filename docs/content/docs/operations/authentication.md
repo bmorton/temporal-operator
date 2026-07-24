@@ -1,6 +1,7 @@
 +++
 title = "Authentication & Authorization"
 weight = 10
+aliases = ["/operations/authentication/"]
 +++
 
 This guide covers configuring Microsoft Entra (Azure AD) authentication and

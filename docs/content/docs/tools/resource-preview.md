@@ -1,6 +1,7 @@
 +++
 title = "Resource Preview"
 weight = 10
+aliases = ["/tools/resource-preview/"]
 +++
 
 The Resource Preview tool runs the operator's own object planner — compiled to

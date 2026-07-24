@@ -1,6 +1,7 @@
 +++
 title = "Tools"
 weight = 80
+aliases = ["/tools/"]
 +++
 
 Browser-based tools for working with temporal-operator.

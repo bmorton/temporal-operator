@@ -354,7 +354,7 @@ api-docs: crd-ref-docs ## Generate CRD API reference documentation.
 .PHONY: docs-crd-reference
 docs-crd-reference: crd-ref-docs ## Generate the Hugo CRD reference page (docs/content/docs/reference/_index.md).
 	@mkdir -p docs/content/docs/reference
-	@printf '+++\ntitle = "CRD Reference"\nweight = 70\n+++\n\n' > docs/content/docs/reference/_index.md
+	@printf '+++\ntitle = "CRD Reference"\nweight = 70\naliases = ["/reference/"]\n+++\n\n' > docs/content/docs/reference/_index.md
 	"$(CRD_REF_DOCS)" --source-path=./api/v1alpha1 --config=hack/crd-ref-docs-config.yaml --renderer=markdown --output-path=docs/content/docs/reference/.crd-reference-body.md
 	@cat docs/content/docs/reference/.crd-reference-body.md >> docs/content/docs/reference/_index.md
 	@rm -f docs/content/docs/reference/.crd-reference-body.md docs/content/docs/reference/crds.md

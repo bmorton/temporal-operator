@@ -1,6 +1,7 @@
 +++
 title = "Verifying Releases"
 weight = 25
+aliases = ["/installation/verifying-releases/"]
 +++
 
 Every `temporal-operator` release is built with [GoReleaser](https://goreleaser.com),

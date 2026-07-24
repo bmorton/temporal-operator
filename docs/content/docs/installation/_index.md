@@ -1,6 +1,7 @@
 +++
 title = "Installation"
 weight = 20
+aliases = ["/installation/"]
 +++
 
 The operator ships in three formats.

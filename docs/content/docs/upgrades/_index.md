@@ -1,6 +1,7 @@
 +++
 title = "Upgrades"
 weight = 50
+aliases = ["/upgrades/"]
 +++
 
 Upgrade a cluster by changing `spec.version` to an adjacent supported version

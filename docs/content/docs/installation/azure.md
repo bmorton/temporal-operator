@@ -1,6 +1,7 @@
 +++
 title = "Running on Azure"
 weight = 30
+aliases = ["/installation/azure/"]
 +++
 
 This guide covers running the Temporal operator on Azure: AKS, Azure Database for

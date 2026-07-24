@@ -1,6 +1,7 @@
 +++
 title = "Operations"
 weight = 40
+aliases = ["/operations/"]
 +++
 
 ## Reading status

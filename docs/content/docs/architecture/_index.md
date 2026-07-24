@@ -1,6 +1,7 @@
 +++
 title = "Architecture"
 weight = 30
+aliases = ["/architecture/"]
 +++
 
 The operator follows the standard controller-runtime model: each custom
