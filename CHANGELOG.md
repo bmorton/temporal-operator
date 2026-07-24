@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0](https://github.com/bmorton/temporal-operator/compare/v0.10.1...v0.11.0) (2026-07-24)
+
+
+### Features
+
+* **controller:** restart services when dynamicConfig changes ([#135](https://github.com/bmorton/temporal-operator/issues/135)) ([b42edb4](https://github.com/bmorton/temporal-operator/commit/b42edb4c11c0447dfe6815e3b2209a8d9fe5219e))
+
+
+### Bug Fixes
+
+* **docs:** serve site from temporal-operator.bmorton.dev custom domain ([#137](https://github.com/bmorton/temporal-operator/issues/137)) ([1f3a57e](https://github.com/bmorton/temporal-operator/commit/1f3a57e6a33747ca577435bc8c0c230e33a1b932))
+* **docs:** use hx: prefix for landing-page hero spacing ([#140](https://github.com/bmorton/temporal-operator/issues/140)) ([fd54c29](https://github.com/bmorton/temporal-operator/commit/fd54c2937fb3bc76ed95dca56ad715e469ad8730))
+
 ## [0.10.1](https://github.com/bmorton/temporal-operator/compare/v0.10.0...v0.10.1) (2026-07-24)
 
 
