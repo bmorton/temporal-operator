@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/bmorton/temporal-operator/compare/v0.10.0...v0.10.1) (2026-07-24)
+
+
+### Bug Fixes
+
+* **api:** accept scalar dynamicConfig values ([#133](https://github.com/bmorton/temporal-operator/issues/133)) ([d959157](https://github.com/bmorton/temporal-operator/commit/d959157630b862fcc7e311a5bc7e52a2b1d778fb))
+
 ## [0.10.0](https://github.com/bmorton/temporal-operator/compare/v0.9.0...v0.10.0) (2026-07-23)
 
 
