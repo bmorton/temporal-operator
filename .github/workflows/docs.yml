@@ -99,7 +99,7 @@ jobs:
           hugo-version: "0.164.0"
           extended: true
       - name: Cache Hugo modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: /home/runner/.cache/hugo_mod
           key: hugo-mod-${{ hashFiles('docs/go.sum') }}
@@ -150,7 +150,7 @@ jobs:
           hugo-version: "0.164.0"
           extended: true
       - name: Cache Hugo modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: /home/runner/.cache/hugo_mod
           key: hugo-mod-${{ hashFiles('docs/go.sum') }}
