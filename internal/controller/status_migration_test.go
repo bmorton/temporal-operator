@@ -26,70 +26,70 @@ import (
 
 // TestSetReadyStampsObservedGeneration asserts every controller's setReady
 // stamps observedGeneration on both the status and the condition. Before the
-// migration to internal/status, TemporalClusterClient did not.
-func TestSetReadyStampsObservedGeneration(t *testing.T) {
-	const gen int64 = 11
+// migration to internal/status, TemporalDevServer did not.
+const testGeneration int64 = 11
 
+func TestSetReadyStampsObservedGeneration(t *testing.T) {
 	t.Run("TemporalNamespace", func(t *testing.T) {
 		obj := &temporalv1alpha1.TemporalNamespace{}
-		obj.Generation = gen
+		obj.Generation = testGeneration
 		(&TemporalNamespaceReconciler{}).setReady(obj, metav1.ConditionTrue, "R", "m")
-		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions, gen)
+		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions)
 	})
 
 	t.Run("TemporalSchedule", func(t *testing.T) {
 		obj := &temporalv1alpha1.TemporalSchedule{}
-		obj.Generation = gen
+		obj.Generation = testGeneration
 		(&TemporalScheduleReconciler{}).setReady(obj, metav1.ConditionTrue, "R", "m")
-		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions, gen)
+		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions)
 	})
 
 	t.Run("TemporalSearchAttribute", func(t *testing.T) {
 		obj := &temporalv1alpha1.TemporalSearchAttribute{}
-		obj.Generation = gen
+		obj.Generation = testGeneration
 		(&TemporalSearchAttributeReconciler{}).setReady(obj, metav1.ConditionTrue, "R", "m")
-		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions, gen)
+		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions)
 	})
 
 	t.Run("TemporalClusterClient", func(t *testing.T) {
 		obj := &temporalv1alpha1.TemporalClusterClient{}
-		obj.Generation = gen
+		obj.Generation = testGeneration
 		(&TemporalClusterClientReconciler{}).setReady(obj, metav1.ConditionTrue, "R", "m")
-		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions, gen)
+		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions)
 	})
 
 	t.Run("TemporalClusterConnection", func(t *testing.T) {
 		obj := &temporalv1alpha1.TemporalClusterConnection{}
-		obj.Generation = gen
+		obj.Generation = testGeneration
 		(&TemporalClusterConnectionReconciler{}).setReady(obj, metav1.ConditionTrue, "R", "m")
-		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions, gen)
+		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions)
 	})
 
 	t.Run("TemporalDevServer", func(t *testing.T) {
 		obj := &temporalv1alpha1.TemporalDevServer{}
-		obj.Generation = gen
+		obj.Generation = testGeneration
 		(&TemporalDevServerReconciler{}).setReady(obj, metav1.ConditionTrue, "R", "m")
-		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions, gen)
+		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions)
 	})
 
 	t.Run("TemporalWorkflowRun", func(t *testing.T) {
 		obj := &temporalv1alpha1.TemporalWorkflowRun{}
-		obj.Generation = gen
+		obj.Generation = testGeneration
 		(&TemporalWorkflowRunReconciler{}).setReady(obj, metav1.ConditionTrue, "R", "m")
-		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions, gen)
+		assertStamped(t, obj.Status.ObservedGeneration, obj.Status.Conditions)
 	})
 }
 
-func assertStamped(t *testing.T, observed int64, conds []metav1.Condition, want int64) {
+func assertStamped(t *testing.T, observed int64, conds []metav1.Condition) {
 	t.Helper()
-	if observed != want {
-		t.Errorf("status.observedGeneration = %d, want %d", observed, want)
+	if observed != testGeneration {
+		t.Errorf("status.observedGeneration = %d, want %d", observed, testGeneration)
 	}
 	if len(conds) != 1 {
 		t.Fatalf("got %d conditions, want 1", len(conds))
 	}
-	if conds[0].ObservedGeneration != want {
-		t.Errorf("condition.observedGeneration = %d, want %d", conds[0].ObservedGeneration, want)
+	if conds[0].ObservedGeneration != testGeneration {
+		t.Errorf("condition.observedGeneration = %d, want %d", conds[0].ObservedGeneration, testGeneration)
 	}
 	if conds[0].Type != temporalv1alpha1.ConditionReady {
 		t.Errorf("condition.type = %q, want %q", conds[0].Type, temporalv1alpha1.ConditionReady)
