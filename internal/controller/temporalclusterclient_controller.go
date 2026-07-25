@@ -23,7 +23,6 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,6 +33,7 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/resources"
+	"github.com/bmorton/temporal-operator/internal/status"
 )
 
 const clientFieldOwner = client.FieldOwner("temporal-operator/client")
@@ -113,25 +113,12 @@ func (r *TemporalClusterClientReconciler) certificateReady(ctx context.Context, 
 	return false
 }
 
-func (r *TemporalClusterClientReconciler) setReady(cc *temporalv1alpha1.TemporalClusterClient, status metav1.ConditionStatus, reason, message string) {
-	cc.Status.ObservedGeneration = cc.Generation
-	meta.SetStatusCondition(&cc.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: cc.Generation,
-	})
+func (r *TemporalClusterClientReconciler) setReady(cc *temporalv1alpha1.TemporalClusterClient, s metav1.ConditionStatus, reason, message string) {
+	status.Set(cc, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalClusterClientReconciler) statusUpdate(ctx context.Context, cc *temporalv1alpha1.TemporalClusterClient) error {
-	if err := r.Status().Update(ctx, cc); err != nil {
-		if apierrors.IsConflict(err) {
-			return nil
-		}
-		return err
-	}
-	return nil
+	return status.Update(ctx, r.Client, cc)
 }
 
 // SetupWithManager sets up the controller with the Manager.

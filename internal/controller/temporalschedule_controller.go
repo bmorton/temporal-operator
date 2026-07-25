@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -221,19 +221,12 @@ func (r *TemporalScheduleReconciler) clientFactory() temporal.ScheduleClientFact
 	return temporal.NewScheduleClient
 }
 
-func (r *TemporalScheduleReconciler) setReady(sched *temporalv1alpha1.TemporalSchedule, status metav1.ConditionStatus, reason, message string) {
-	sched.Status.ObservedGeneration = sched.Generation
-	meta.SetStatusCondition(&sched.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: sched.Generation,
-	})
+func (r *TemporalScheduleReconciler) setReady(sched *temporalv1alpha1.TemporalSchedule, s metav1.ConditionStatus, reason, message string) {
+	status.Set(sched, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalScheduleReconciler) statusUpdate(ctx context.Context, sched *temporalv1alpha1.TemporalSchedule) error {
-	return client.IgnoreNotFound(r.Status().Update(ctx, sched))
+	return status.Update(ctx, r.Client, sched)
 }
 
 // mapClusterToSchedules enqueues every TemporalSchedule in the changed target's

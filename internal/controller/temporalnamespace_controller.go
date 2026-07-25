@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,6 +35,7 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/resources"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -295,19 +295,12 @@ func equalStringSets(a, b []string) bool {
 	return true
 }
 
-func (r *TemporalNamespaceReconciler) setReady(ns *temporalv1alpha1.TemporalNamespace, status metav1.ConditionStatus, reason, message string) {
-	ns.Status.ObservedGeneration = ns.Generation
-	meta.SetStatusCondition(&ns.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: ns.Generation,
-	})
+func (r *TemporalNamespaceReconciler) setReady(ns *temporalv1alpha1.TemporalNamespace, s metav1.ConditionStatus, reason, message string) {
+	status.Set(ns, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalNamespaceReconciler) statusUpdate(ctx context.Context, ns *temporalv1alpha1.TemporalNamespace) error {
-	return client.IgnoreNotFound(r.Status().Update(ctx, ns))
+	return status.Update(ctx, r.Client, ns)
 }
 
 // mapClusterToNamespaces enqueues every TemporalNamespace in the changed

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -190,19 +190,12 @@ func (r *TemporalSearchAttributeReconciler) clientFactory() temporal.SearchAttri
 	return temporal.NewSearchAttributeClient
 }
 
-func (r *TemporalSearchAttributeReconciler) setReady(sa *temporalv1alpha1.TemporalSearchAttribute, status metav1.ConditionStatus, reason, message string) {
-	sa.Status.ObservedGeneration = sa.Generation
-	meta.SetStatusCondition(&sa.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: sa.Generation,
-	})
+func (r *TemporalSearchAttributeReconciler) setReady(sa *temporalv1alpha1.TemporalSearchAttribute, s metav1.ConditionStatus, reason, message string) {
+	status.Set(sa, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalSearchAttributeReconciler) statusUpdate(ctx context.Context, sa *temporalv1alpha1.TemporalSearchAttribute) error {
-	return client.IgnoreNotFound(r.Status().Update(ctx, sa))
+	return status.Update(ctx, r.Client, sa)
 }
 
 // mapClusterToSearchAttributes enqueues every TemporalSearchAttribute in the

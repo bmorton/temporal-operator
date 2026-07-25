@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -413,19 +413,12 @@ func (r *TemporalClusterConnectionReconciler) mapClusterToConnections(kind strin
 	}
 }
 
-func (r *TemporalClusterConnectionReconciler) setReady(conn *temporalv1alpha1.TemporalClusterConnection, status metav1.ConditionStatus, reason, message string) {
-	conn.Status.ObservedGeneration = conn.Generation
-	meta.SetStatusCondition(&conn.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: conn.Generation,
-	})
+func (r *TemporalClusterConnectionReconciler) setReady(conn *temporalv1alpha1.TemporalClusterConnection, s metav1.ConditionStatus, reason, message string) {
+	status.Set(conn, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalClusterConnectionReconciler) statusUpdate(ctx context.Context, conn *temporalv1alpha1.TemporalClusterConnection) error {
-	return client.IgnoreNotFound(r.Status().Update(ctx, conn))
+	return status.Update(ctx, r.Client, conn)
 }
 
 // SetupWithManager sets up the controller with the Manager.
