@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,6 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
+	"github.com/bmorton/temporal-operator/internal/metrics"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -54,6 +56,8 @@ type TemporalScheduleReconciler struct {
 
 	// ClientFactory builds the Temporal schedule client; injectable for tests.
 	ClientFactory temporal.ScheduleClientFactory
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalschedules,verbs=get;list;watch;create;update;patch;delete
@@ -70,7 +74,7 @@ func (r *TemporalScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	target, err := resolveTarget(ctx, r.Client, sched.Namespace, sched.Spec.ClusterRef)
 	if err != nil {
 		if !sched.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sched)
+			return r.cleanupUnreachable(ctx, &sched, err)
 		}
 		if errors.Is(err, ErrTargetNotFound) {
 			r.setReady(&sched, metav1.ConditionFalse, "ClusterNotFound", "referenced Temporal target not found")
@@ -82,7 +86,7 @@ func (r *TemporalScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	sc, err := r.clientFactory()(ctx, target.Address, target.TLSConfig)
 	if err != nil {
 		if !sched.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sched)
+			return r.cleanupUnreachable(ctx, &sched, err)
 		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}
@@ -214,6 +218,28 @@ func (r *TemporalScheduleReconciler) removeFinalizerAndForget(ctx context.Contex
 	return nil
 }
 
+// cleanupUnreachable applies the cleanup deadline when the target cannot be
+// reached during deletion.
+func (r *TemporalScheduleReconciler) cleanupUnreachable(ctx context.Context, sched *temporalv1alpha1.TemporalSchedule, cause error) (ctrl.Result, error) {
+	action, after := decideCleanup(sched, cause, time.Now())
+	switch action {
+	case cleanupForget:
+		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, sched)
+	case cleanupRetry:
+		metrics.TargetUnreachable.WithLabelValues("TemporalSchedule", sched.Namespace).Inc()
+		status.Set(sched, temporalv1alpha1.ConditionProgressing, metav1.ConditionTrue,
+			temporalv1alpha1.ReasonCleanupPending,
+			fmt.Sprintf("waiting for the target to become reachable before cleaning up: %v", cause))
+		return ctrl.Result{RequeueAfter: after}, r.statusUpdate(ctx, sched)
+	default:
+		message := fmt.Sprintf("abandoned cleanup of temporal schedule %q in namespace %q after %s: %v",
+			sched.Spec.ScheduleID, sched.Spec.Namespace, cleanupDeadline, cause)
+		r.Events.Warning(sched, temporalv1alpha1.ReasonCleanupAbandoned, message)
+		metrics.CleanupAbandoned.WithLabelValues("TemporalSchedule", sched.Namespace).Inc()
+		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, sched)
+	}
+}
+
 func (r *TemporalScheduleReconciler) clientFactory() temporal.ScheduleClientFactory {
 	if r.ClientFactory != nil {
 		return r.ClientFactory
@@ -221,19 +247,12 @@ func (r *TemporalScheduleReconciler) clientFactory() temporal.ScheduleClientFact
 	return temporal.NewScheduleClient
 }
 
-func (r *TemporalScheduleReconciler) setReady(sched *temporalv1alpha1.TemporalSchedule, status metav1.ConditionStatus, reason, message string) {
-	sched.Status.ObservedGeneration = sched.Generation
-	meta.SetStatusCondition(&sched.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: sched.Generation,
-	})
+func (r *TemporalScheduleReconciler) setReady(sched *temporalv1alpha1.TemporalSchedule, s metav1.ConditionStatus, reason, message string) {
+	status.Set(sched, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalScheduleReconciler) statusUpdate(ctx context.Context, sched *temporalv1alpha1.TemporalSchedule) error {
-	return client.IgnoreNotFound(r.Status().Update(ctx, sched))
+	return status.Update(ctx, r.Client, sched)
 }
 
 // mapClusterToSchedules enqueues every TemporalSchedule in the changed target's

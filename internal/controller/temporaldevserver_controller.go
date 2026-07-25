@@ -22,7 +22,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,7 +30,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
 	"github.com/bmorton/temporal-operator/internal/resources"
+	"github.com/bmorton/temporal-operator/internal/status"
 )
 
 const devServerFieldOwner = client.FieldOwner("temporal-operator/devserver")
@@ -41,6 +42,8 @@ const devServerFieldOwner = client.FieldOwner("temporal-operator/devserver")
 type TemporalDevServerReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporaldevservers,verbs=get;list;watch;create;update;patch;delete
@@ -118,24 +121,12 @@ func (r *TemporalDevServerReconciler) deploymentReady(ctx context.Context, dev *
 	return deploy.Status.ReadyReplicas >= 1, nil
 }
 
-func (r *TemporalDevServerReconciler) setReady(dev *temporalv1alpha1.TemporalDevServer, status metav1.ConditionStatus, reason, message string) {
-	meta.SetStatusCondition(&dev.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: dev.Generation,
-	})
+func (r *TemporalDevServerReconciler) setReady(dev *temporalv1alpha1.TemporalDevServer, s metav1.ConditionStatus, reason, message string) {
+	status.Set(dev, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalDevServerReconciler) statusUpdate(ctx context.Context, dev *temporalv1alpha1.TemporalDevServer) error {
-	if err := r.Status().Update(ctx, dev); err != nil {
-		if apierrors.IsConflict(err) {
-			return nil
-		}
-		return client.IgnoreNotFound(err)
-	}
-	return nil
+	return status.Update(ctx, r.Client, dev)
 }
 
 // SetupWithManager sets up the controller with the Manager.

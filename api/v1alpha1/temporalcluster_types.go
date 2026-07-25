@@ -246,6 +246,17 @@ type UpgradeStatus struct {
 	Rollbackable bool `json:"rollbackable,omitempty"`
 	// +optional
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
+	// PhaseStartedAt is when the current phase was entered. It is the basis for
+	// stall detection.
+	// +optional
+	PhaseStartedAt *metav1.Time `json:"phaseStartedAt,omitempty"`
+	// StalledService names the service whose rollout has exceeded the phase
+	// timeout, or is empty when the upgrade is progressing normally.
+	// +optional
+	StalledService string `json:"stalledService,omitempty"`
+	// Message explains why the upgrade is not progressing, when it is not.
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 // +kubebuilder:object:root=true

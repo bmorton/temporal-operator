@@ -18,9 +18,25 @@ package controller
 
 import (
 	"context"
+	"testing"
+
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/persistence"
+)
+
+// Package-level test constants shared across controller test files.
+const (
+	// testNamespace is the default Kubernetes namespace used in unit tests.
+	testNamespace = "default"
+	// testFromVersion and testToVersion are the source/target versions used in
+	// upgrade-focused unit tests (TestAdvanceRollingPhase*, TestStallClears*).
+	testFromVersion = "1.30.4"
+	testToVersion   = "1.31.1"
 )
 
 // fakeBackend is a test double for persistence.Backend.
@@ -52,6 +68,27 @@ func backendKind(store temporalv1alpha1.DatastoreSpec) string {
 	default:
 		return "sql"
 	}
+}
+
+// testScheme builds a runtime.Scheme with the types needed by unit tests that
+// use the fake client (appsv1 for Deployments, batchv1 for Jobs, corev1 for
+// Secrets, and the Temporal API types).
+func testScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+	s := runtime.NewScheme()
+	if err := temporalv1alpha1.AddToScheme(s); err != nil {
+		t.Fatalf("adding temporal scheme: %v", err)
+	}
+	if err := appsv1.AddToScheme(s); err != nil {
+		t.Fatalf("adding apps scheme: %v", err)
+	}
+	if err := batchv1.AddToScheme(s); err != nil {
+		t.Fatalf("adding batch scheme: %v", err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatalf("adding core scheme: %v", err)
+	}
+	return s
 }
 
 // fakeBackendFactory builds backends whose probe returns probeErr and whose

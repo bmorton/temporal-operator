@@ -1,6 +1,7 @@
 package temporal
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,6 +10,54 @@ import (
 	replicationpb "go.temporal.io/api/replication/v1"
 	workflowservice "go.temporal.io/api/workflowservice/v1"
 )
+
+func TestDialContextAppliesTimeout(t *testing.T) {
+	orig := DialTimeout
+	DialTimeout = 40 * time.Millisecond
+	defer func() { DialTimeout = orig }()
+
+	ctx, cancel := DialContext(context.Background())
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("DialContext returned a context with no deadline")
+	}
+	if until := time.Until(deadline); until > 50*time.Millisecond {
+		t.Errorf("deadline is %v away, want <= 50ms", until)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("context expired immediately")
+	default:
+	}
+
+	time.Sleep(60 * time.Millisecond)
+	if ctx.Err() == nil {
+		t.Error("context did not expire after the timeout elapsed")
+	}
+}
+
+func TestDialContextPreservesShorterParentDeadline(t *testing.T) {
+	orig := DialTimeout
+	DialTimeout = time.Hour
+	defer func() { DialTimeout = orig }()
+
+	parent, cancelParent := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancelParent()
+
+	ctx, cancel := DialContext(parent)
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("no deadline on the derived context")
+	}
+	if time.Until(deadline) > time.Minute {
+		t.Error("the parent's shorter deadline was discarded")
+	}
+}
 
 func TestNamespaceParamsIsGlobal(t *testing.T) {
 	params := NamespaceParams{

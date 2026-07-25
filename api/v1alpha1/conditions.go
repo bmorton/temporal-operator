@@ -87,4 +87,21 @@ const (
 	// ReasonFrontendUnavailable indicates the Temporal frontend is reachable
 	// but not yet accepting RPCs (transient startup window).
 	ReasonFrontendUnavailable = "FrontendUnavailable"
+	// ReasonUpgradeStalled indicates an upgrade phase exceeded its timeout.
+	ReasonUpgradeStalled = "UpgradeStalled"
+	// ReasonRolloutStalled indicates a service Deployment did not roll out in time.
+	ReasonRolloutStalled = "RolloutStalled"
+	// ReasonUpgradeProgressing indicates an upgrade is advancing normally.
+	ReasonUpgradeProgressing = "UpgradeProgressing"
+	// ReasonSchemaMigrationFailed indicates schema migration failed and the
+	// retry budget is exhausted.
+	ReasonSchemaMigrationFailed = "SchemaMigrationFailed"
+	// ReasonSchemaMigrationRetrying indicates a failed schema migration will be retried.
+	ReasonSchemaMigrationRetrying = "SchemaMigrationRetrying"
+	// ReasonCleanupAbandoned indicates remote cleanup was abandoned after the
+	// cleanup deadline elapsed with the target unreachable.
+	ReasonCleanupAbandoned = "CleanupAbandoned"
+	// ReasonCleanupPending indicates remote cleanup is being retried while
+	// waiting for the target to become reachable.
+	ReasonCleanupPending = "CleanupPending"
 )

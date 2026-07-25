@@ -6340,6 +6340,31 @@ spec:
                     description: Reachable indicates whether the datastores were reachable
                       at last reconcile.
                     type: boolean
+                  schemaAttempts:
+                    additionalProperties:
+                      description: |-
+                        SchemaAttemptStatus counts consecutive failed schema-migration attempts for a
+                        single store.
+                      properties:
+                        count:
+                          description: Count is the number of attempts that have failed.
+                          format: int32
+                          type: integer
+                        firstFailedAt:
+                          description: FirstFailedAt is when the first of the current
+                            run of failures occurred.
+                          format: date-time
+                          type: string
+                        lastError:
+                          description: LastError is the failure reason reported by
+                            the most recent Job.
+                          type: string
+                      type: object
+                    description: |-
+                      SchemaAttempts records failed schema-migration attempts per store, so
+                      recreation is bounded across operator restarts and leader-election
+                      failover. Entries are removed when a store's migration succeeds.
+                    type: object
                   schemaVersions:
                     additionalProperties:
                       type: string
@@ -6373,13 +6398,28 @@ spec:
                 properties:
                   fromVersion:
                     type: string
+                  message:
+                    description: Message explains why the upgrade is not progressing,
+                      when it is not.
+                    type: string
                   phase:
+                    type: string
+                  phaseStartedAt:
+                    description: |-
+                      PhaseStartedAt is when the current phase was entered. It is the basis for
+                      stall detection.
+                    format: date-time
                     type: string
                   rollbackable:
                     description: |-
                       Rollbackable is true until schema migration begins, after which a
                       rollback is no longer safe.
                     type: boolean
+                  stalledService:
+                    description: |-
+                      StalledService names the service whose rollout has exceeded the phase
+                      timeout, or is empty when the upgrade is progressing normally.
+                    type: string
                   startedAt:
                     format: date-time
                     type: string

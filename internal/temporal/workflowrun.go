@@ -95,6 +95,8 @@ func NewWorkflowRunClient(_ context.Context, address string, tlsConfig *tls.Conf
 }
 
 func (c *grpcWorkflowRunClient) Start(ctx context.Context, namespace, requestID string, p StartWorkflowParams) (string, error) {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	reuse, ok := reusePolicies[p.IDReusePolicy]
 	if !ok {
 		return "", fmt.Errorf("unknown workflow id reuse policy %q", p.IDReusePolicy)
@@ -142,6 +144,8 @@ func (c *grpcWorkflowRunClient) Start(ctx context.Context, namespace, requestID 
 }
 
 func (c *grpcWorkflowRunClient) Describe(ctx context.Context, namespace, workflowID, runID string) (*WorkflowExecutionInfo, error) {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	resp, err := c.workflow.DescribeWorkflowExecution(ctx, &workflowservice.DescribeWorkflowExecutionRequest{
 		Namespace: namespace,
 		Execution: &commonpb.WorkflowExecution{WorkflowId: workflowID, RunId: runID},
@@ -194,6 +198,8 @@ func (c *grpcWorkflowRunClient) closeFailure(ctx context.Context, namespace, wor
 }
 
 func (c *grpcWorkflowRunClient) Cancel(ctx context.Context, namespace, workflowID, runID, reason string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.workflow.RequestCancelWorkflowExecution(ctx, &workflowservice.RequestCancelWorkflowExecutionRequest{
 		Namespace:         namespace,
 		WorkflowExecution: &commonpb.WorkflowExecution{WorkflowId: workflowID, RunId: runID},
@@ -208,6 +214,8 @@ func (c *grpcWorkflowRunClient) Cancel(ctx context.Context, namespace, workflowI
 }
 
 func (c *grpcWorkflowRunClient) Terminate(ctx context.Context, namespace, workflowID, runID, reason string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.workflow.TerminateWorkflowExecution(ctx, &workflowservice.TerminateWorkflowExecutionRequest{
 		Namespace:         namespace,
 		WorkflowExecution: &commonpb.WorkflowExecution{WorkflowId: workflowID, RunId: runID},

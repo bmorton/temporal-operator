@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -122,7 +126,7 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("reports SchemaReady=False when a schema job fails", func() {
+	It("reports SchemaReady=False when a schema job fails on the first attempt", func() {
 		c := newCluster()
 		// First pass creates the setup job.
 		reconcileWith(c, nil, map[string]string{})
@@ -144,7 +148,7 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 
 		cond := conditionStatus(c.Name, temporalv1alpha1.ConditionSchemaReady)
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal("SchemaMigrationFailed"))
+		Expect(cond.Reason).To(Equal(temporalv1alpha1.ReasonSchemaMigrationRetrying))
 	})
 
 	It("deletes the stale inspector Job after schema jobs complete so the next probe is fresh", func() {
@@ -418,3 +422,112 @@ var _ = Describe("TemporalCluster Azure Workload Identity integration", func() {
 		Expect(volumeNames).To(ContainElement(resources.AzureTokenVolumeName))
 	})
 })
+
+// clusterWithSQLPersistence returns an in-memory TemporalCluster backed by SQL
+// (Postgres) for both the default and visibility stores. Used by standalone
+// Go tests that drive handleFailedSchemaJob directly without envtest.
+func clusterWithSQLPersistence() *temporalv1alpha1.TemporalCluster {
+	return &temporalv1alpha1.TemporalCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: testNamespace,
+		},
+		Spec: validClusterSpec("1.31.1"),
+	}
+}
+
+// failedSchemaJob builds a Job in the state classifyJob reports as jobFailed.
+func failedSchemaJob(cluster *temporalv1alpha1.TemporalCluster, store resources.SchemaStore, action resources.SchemaAction) *batchv1.Job {
+	job := &batchv1.Job{}
+	job.Name = resources.SchemaJobName(cluster.Name, store, action)
+	job.Namespace = cluster.Namespace
+	job.Status.Failed = 4
+	job.Status.Conditions = []batchv1.JobCondition{{
+		Type:    batchv1.JobFailed,
+		Status:  corev1.ConditionTrue,
+		Reason:  "BackoffLimitExceeded",
+		Message: "Job has reached the specified backoff limit",
+	}}
+	return job
+}
+
+func TestHandleFailedSchemaJobRecreatesWithinBudget(t *testing.T) {
+	cluster := clusterWithSQLPersistence()
+	failed := failedSchemaJob(cluster, resources.StoreDefault, resources.ActionUpdate)
+
+	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(cluster, failed).Build()
+	r := &TemporalClusterReconciler{Client: c, Scheme: c.Scheme()}
+
+	target := schemaTarget{store: resources.StoreDefault}
+	res, err := r.handleFailedSchemaJob(context.Background(), cluster, target, resources.ActionUpdate)
+	if err != nil {
+		t.Fatalf("handleFailedSchemaJob returned %v, want nil", err)
+	}
+	if res.failed {
+		t.Error("result marked terminal on the first failure, want a retry")
+	}
+	if res.requeueAfter != time.Minute {
+		t.Errorf("requeueAfter = %v, want 1m for the first attempt", res.requeueAfter)
+	}
+
+	attempts := cluster.Status.Persistence.SchemaAttempts[string(resources.StoreDefault)]
+	if attempts.Count != 1 {
+		t.Errorf("attempt count = %d, want 1", attempts.Count)
+	}
+	if attempts.FirstFailedAt == nil {
+		t.Error("firstFailedAt was not recorded")
+	}
+
+	var job batchv1.Job
+	err = c.Get(context.Background(), client.ObjectKeyFromObject(failed), &job)
+	if !apierrors.IsNotFound(err) {
+		t.Errorf("failed Job still exists (err=%v), want it deleted so the next reconcile recreates it", err)
+	}
+}
+
+func TestHandleFailedSchemaJobGivesUpAfterBudget(t *testing.T) {
+	cluster := clusterWithSQLPersistence()
+	first := metav1.NewTime(time.Now().Add(-time.Hour))
+	cluster.Status.Persistence.SchemaAttempts = map[string]temporalv1alpha1.SchemaAttemptStatus{
+		string(resources.StoreDefault): {Count: 3, FirstFailedAt: &first},
+	}
+	failed := failedSchemaJob(cluster, resources.StoreDefault, resources.ActionUpdate)
+
+	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(cluster, failed).Build()
+	r := &TemporalClusterReconciler{Client: c, Scheme: c.Scheme()}
+
+	target := schemaTarget{store: resources.StoreDefault}
+	res, err := r.handleFailedSchemaJob(context.Background(), cluster, target, resources.ActionUpdate)
+	if err != nil {
+		t.Fatalf("handleFailedSchemaJob returned %v, want nil", err)
+	}
+	if !res.failed {
+		t.Error("result is not terminal after the attempt budget is exhausted")
+	}
+	if res.requeueAfter != 0 {
+		t.Errorf("requeueAfter = %v, want 0 once given up", res.requeueAfter)
+	}
+	if !meta.IsStatusConditionTrue(cluster.Status.Conditions, temporalv1alpha1.ConditionDegraded) {
+		t.Error("Degraded condition is not True after giving up")
+	}
+
+	// The Job is retained on give-up so its pod logs remain inspectable.
+	var job batchv1.Job
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(failed), &job); err != nil {
+		t.Errorf("failed Job was deleted on give-up (%v), want it retained for debugging", err)
+	}
+}
+
+func TestSchemaAttemptsResetOnSuccess(t *testing.T) {
+	cluster := clusterWithSQLPersistence()
+	first := metav1.NewTime(time.Now())
+	cluster.Status.Persistence.SchemaAttempts = map[string]temporalv1alpha1.SchemaAttemptStatus{
+		string(resources.StoreDefault): {Count: 2, FirstFailedAt: &first},
+	}
+
+	resetSchemaAttempts(cluster, resources.StoreDefault)
+
+	if _, present := cluster.Status.Persistence.SchemaAttempts[string(resources.StoreDefault)]; present {
+		t.Error("attempt record survived a success, want it cleared")
+	}
+}

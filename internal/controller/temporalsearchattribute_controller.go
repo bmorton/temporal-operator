@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,6 +34,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
+	"github.com/bmorton/temporal-operator/internal/metrics"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -47,6 +49,8 @@ type TemporalSearchAttributeReconciler struct {
 
 	// ClientFactory builds the Temporal search-attribute client; injectable for tests.
 	ClientFactory temporal.SearchAttributeClientFactory
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalsearchattributes,verbs=get;list;watch;create;update;patch;delete
@@ -63,7 +67,7 @@ func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req c
 	target, err := resolveTarget(ctx, r.Client, sa.Namespace, sa.Spec.ClusterRef)
 	if err != nil {
 		if !sa.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sa)
+			return r.cleanupUnreachable(ctx, &sa, err)
 		}
 		if errors.Is(err, ErrTargetNotFound) {
 			r.setReady(&sa, metav1.ConditionFalse, "ClusterNotFound", "referenced Temporal target not found")
@@ -75,7 +79,7 @@ func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req c
 	sac, err := r.clientFactory()(ctx, target.Address, target.TLSConfig)
 	if err != nil {
 		if !sa.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sa)
+			return r.cleanupUnreachable(ctx, &sa, err)
 		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}
@@ -183,6 +187,28 @@ func (r *TemporalSearchAttributeReconciler) removeFinalizerAndForget(ctx context
 	return nil
 }
 
+// cleanupUnreachable applies the cleanup deadline when the target cannot be
+// reached during deletion.
+func (r *TemporalSearchAttributeReconciler) cleanupUnreachable(ctx context.Context, sa *temporalv1alpha1.TemporalSearchAttribute, cause error) (ctrl.Result, error) {
+	action, after := decideCleanup(sa, cause, time.Now())
+	switch action {
+	case cleanupForget:
+		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, sa)
+	case cleanupRetry:
+		metrics.TargetUnreachable.WithLabelValues("TemporalSearchAttribute", sa.Namespace).Inc()
+		status.Set(sa, temporalv1alpha1.ConditionProgressing, metav1.ConditionTrue,
+			temporalv1alpha1.ReasonCleanupPending,
+			fmt.Sprintf("waiting for the target to become reachable before cleaning up: %v", cause))
+		return ctrl.Result{RequeueAfter: after}, r.statusUpdate(ctx, sa)
+	default:
+		message := fmt.Sprintf("abandoned cleanup of search attribute %q in namespace %q after %s: %v",
+			sa.Spec.Name, sa.Spec.Namespace, cleanupDeadline, cause)
+		r.Events.Warning(sa, temporalv1alpha1.ReasonCleanupAbandoned, message)
+		metrics.CleanupAbandoned.WithLabelValues("TemporalSearchAttribute", sa.Namespace).Inc()
+		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, sa)
+	}
+}
+
 func (r *TemporalSearchAttributeReconciler) clientFactory() temporal.SearchAttributeClientFactory {
 	if r.ClientFactory != nil {
 		return r.ClientFactory
@@ -190,19 +216,12 @@ func (r *TemporalSearchAttributeReconciler) clientFactory() temporal.SearchAttri
 	return temporal.NewSearchAttributeClient
 }
 
-func (r *TemporalSearchAttributeReconciler) setReady(sa *temporalv1alpha1.TemporalSearchAttribute, status metav1.ConditionStatus, reason, message string) {
-	sa.Status.ObservedGeneration = sa.Generation
-	meta.SetStatusCondition(&sa.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: sa.Generation,
-	})
+func (r *TemporalSearchAttributeReconciler) setReady(sa *temporalv1alpha1.TemporalSearchAttribute, s metav1.ConditionStatus, reason, message string) {
+	status.Set(sa, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalSearchAttributeReconciler) statusUpdate(ctx context.Context, sa *temporalv1alpha1.TemporalSearchAttribute) error {
-	return client.IgnoreNotFound(r.Status().Update(ctx, sa))
+	return status.Update(ctx, r.Client, sa)
 }
 
 // mapClusterToSearchAttributes enqueues every TemporalSearchAttribute in the

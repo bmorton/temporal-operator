@@ -36,6 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -54,6 +56,8 @@ type TemporalWorkflowRunReconciler struct {
 
 	// ClientFactory builds the Temporal workflow-run client; injectable for tests.
 	ClientFactory temporal.WorkflowRunClientFactory
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalworkflowruns,verbs=get;list;watch;create;update;patch;delete
@@ -254,16 +258,12 @@ func (r *TemporalWorkflowRunReconciler) clientFactory() temporal.WorkflowRunClie
 	return temporal.NewWorkflowRunClient
 }
 
-func (r *TemporalWorkflowRunReconciler) setReady(run *temporalv1alpha1.TemporalWorkflowRun, status metav1.ConditionStatus, reason, message string) {
-	run.Status.ObservedGeneration = run.Generation
-	meta.SetStatusCondition(&run.Status.Conditions, metav1.Condition{
-		Type: temporalv1alpha1.ConditionReady, Status: status,
-		Reason: reason, Message: message, ObservedGeneration: run.Generation,
-	})
+func (r *TemporalWorkflowRunReconciler) setReady(run *temporalv1alpha1.TemporalWorkflowRun, s metav1.ConditionStatus, reason, message string) {
+	status.Set(run, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalWorkflowRunReconciler) statusUpdate(ctx context.Context, run *temporalv1alpha1.TemporalWorkflowRun) error {
-	return client.IgnoreNotFound(r.Status().Update(ctx, run))
+	return status.Update(ctx, r.Client, run)
 }
 
 // mapClusterToWorkflowRuns enqueues every TemporalWorkflowRun in the changed

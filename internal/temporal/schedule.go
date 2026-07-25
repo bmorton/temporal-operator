@@ -352,6 +352,8 @@ func NewScheduleClient(_ context.Context, address string, tlsConfig *tls.Config)
 }
 
 func (c *grpcScheduleClient) Describe(ctx context.Context, namespace, scheduleID string) (*ScheduleInfo, error) {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	resp, err := c.workflow.DescribeSchedule(ctx, &workflowservice.DescribeScheduleRequest{
 		Namespace:  namespace,
 		ScheduleId: scheduleID,
@@ -374,6 +376,8 @@ func (c *grpcScheduleClient) Describe(ctx context.Context, namespace, scheduleID
 }
 
 func (c *grpcScheduleClient) Create(ctx context.Context, params ScheduleParams) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	sched, err := toProtoSchedule(params)
 	if err != nil {
 		return err
@@ -389,6 +393,8 @@ func (c *grpcScheduleClient) Create(ctx context.Context, params ScheduleParams) 
 }
 
 func (c *grpcScheduleClient) Update(ctx context.Context, params ScheduleParams) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	sched, err := toProtoSchedule(params)
 	if err != nil {
 		return err
@@ -404,10 +410,14 @@ func (c *grpcScheduleClient) Update(ctx context.Context, params ScheduleParams) 
 }
 
 func (c *grpcScheduleClient) Pause(ctx context.Context, namespace, scheduleID, notes string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	return c.patch(ctx, namespace, scheduleID, &schedulepb.SchedulePatch{Pause: pauseNotes(notes, "paused by temporal-operator")})
 }
 
 func (c *grpcScheduleClient) Unpause(ctx context.Context, namespace, scheduleID, notes string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	return c.patch(ctx, namespace, scheduleID, &schedulepb.SchedulePatch{Unpause: pauseNotes(notes, "unpaused by temporal-operator")})
 }
 
@@ -422,6 +432,8 @@ func (c *grpcScheduleClient) patch(ctx context.Context, namespace, scheduleID st
 }
 
 func (c *grpcScheduleClient) Delete(ctx context.Context, namespace, scheduleID string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.workflow.DeleteSchedule(ctx, &workflowservice.DeleteScheduleRequest{
 		Namespace:  namespace,
 		ScheduleId: scheduleID,

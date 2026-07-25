@@ -39,6 +39,25 @@ The `TemporalCluster` reconciler runs a sequence of sub-reconcilers:
 (and `MTLSReady` when mTLS is enabled). `status.phase` reports
 `Pending → ProvisioningSchema → DeployingServices → Ready` (or `Upgrading`).
 
+### Failure handling
+
+Every sub-reconciler reports failures through conditions rather than logs alone:
+
+- A rolling upgrade phase that exceeds `--upgrade-phase-timeout` sets
+  `UpgradeBlocked` and `Degraded`, names the stalled service in
+  `status.upgrade.stalledService`, and stops advancing. It resumes automatically
+  when the rollout completes — the condition is a report, not a latch.
+- A schema Job that exhausts its `BackoffLimit` is deleted and recreated on a
+  bounded schedule (after 1m, 5m, and 15m) before the operator gives up.
+  Recreation is safe because the schema tools run without `--overwrite`.
+- Deleting a satellite resource whose cluster is unreachable retries for five
+  minutes (`cleanupDeadline`) before releasing the finalizer, so a transient
+  outage does not orphan the Temporal-side object. A cluster that no longer
+  exists is forgotten immediately, since there is nothing left to clean up.
+
+Every one of these states is exported as `temporal_operator_resource_condition`
+and covered by a shipped alert rule.
+
 ## Version matrix
 
 Supported Temporal versions and their schema/UI requirements live in
