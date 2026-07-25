@@ -1,0 +1,99 @@
+# Chainsaw upgrade-stall test: bring up a cluster at 1.30.4, start an upgrade
+# that cannot roll out (unpullable image), assert the operator reports
+# UpgradeBlocked rather than hanging silently, then revert spec.version and
+# assert the cluster recovers. Requires the CNPG operator and a manager started
+# with --upgrade-phase-timeout=1m.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: upgrade-stall
+spec:
+  timeouts:
+    apply: 1m
+    assert: 10m
+  steps:
+    - name: provision-postgres
+      try:
+        - apply:
+            file: ../postgres/01-fixtures-cnpg.yaml
+        - assert:
+            resource:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: temporal-pg
+              status:
+                readyInstances: 1
+        - apply:
+            file: ../postgres/02-secrets.yaml
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: create-visibility-db
+              status:
+                succeeded: 1
+    - name: deploy-healthy-cluster
+      try:
+        - apply:
+            file: 01-temporalcluster.yaml
+        - assert:
+            file: 01-assert.yaml
+    - name: start-upgrade-that-cannot-roll-out
+      try:
+        - apply:
+            file: 02-temporalcluster-broken.yaml
+        - assert:
+            file: 02-assert-stalled.yaml
+        - script:
+            content: |
+              set -euo pipefail
+              # The stall must be reported as an event, not only a condition.
+              kubectl -n $NAMESPACE get events \
+                --field-selector reason=UpgradeStalled \
+                -o jsonpath='{.items[0].message}' | grep -q 'frontend'
+    - name: reject-retarget-while-stalled
+      try:
+        - script:
+            content: |
+              set -euo pipefail
+              # A third version must be rejected by the webhook.
+              if kubectl -n $NAMESPACE patch temporalcluster stall-test \
+                   --type=merge -p '{"spec":{"version":"1.31.2"}}' 2>/dev/null; then
+                echo "webhook accepted a third version mid-upgrade" >&2
+                exit 1
+              fi
+    - name: revert-and-recover
+      try:
+        - apply:
+            file: 03-temporalcluster-repaired.yaml
+        - assert:
+            file: 03-assert-recovered.yaml
+  # Runs on ANY step failure, before Chainsaw tears down the ephemeral
+  # namespace, so the operator-managed pods/jobs/logs are still available.
+  catch:
+    - describe:
+        apiVersion: temporal.bmor10.com/v1alpha1
+        kind: TemporalCluster
+    - script:
+        env:
+          - name: NS
+            value: ($namespace)
+        content: |
+          set +e
+          echo "===== PODS ====="
+          kubectl -n "$NS" get pods -o wide
+          echo "===== JOBS ====="
+          kubectl -n "$NS" get jobs
+          echo "===== DEPLOYMENTS ====="
+          kubectl -n "$NS" get deploy
+          echo "===== DESCRIBE PODS ====="
+          kubectl -n "$NS" describe pods
+          echo "===== EVENTS ====="
+          kubectl -n "$NS" get events --sort-by=.lastTimestamp | tail -60
+          echo "===== POD LOGS ====="
+          for p in $(kubectl -n "$NS" get pods -o name); do
+            echo "----- $p -----"
+            kubectl -n "$NS" logs "$p" --all-containers --tail=100
+          done

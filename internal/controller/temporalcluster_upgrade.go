@@ -72,6 +72,10 @@ var serviceUpgradeOrder = []string{
 // reported as stalled. It is a var so tests can shorten it.
 var upgradePhaseTimeout = 15 * time.Minute
 
+// SetUpgradePhaseTimeout overrides the stall threshold. Called once from main
+// before the manager starts.
+func SetUpgradePhaseTimeout(d time.Duration) { upgradePhaseTimeout = d }
+
 // upgradeStallRecheck is how often a stalled upgrade is re-examined. An
 // explicit requeue is required because a stall whose cause is external (an
 // unreachable registry, a pending PVC) may produce no watched-object event at

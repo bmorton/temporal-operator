@@ -102,12 +102,16 @@ func main() {
 	flag.StringVar(&uiBasePath, "ui-base-path", "/", "URL base path the UI is served under.")
 	flag.BoolVar(&uiRequireAuth, "ui-require-auth", false,
 		"Require a trusted forward-auth user header; return 401 when absent.")
+	var upgradePhaseTimeout time.Duration
+	flag.DurationVar(&upgradePhaseTimeout, "upgrade-phase-timeout", 15*time.Minute,
+		"How long a single upgrade phase may run before it is reported as stalled.")
 	opts := zap.Options{
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
+	controller.SetUpgradePhaseTimeout(upgradePhaseTimeout)
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled

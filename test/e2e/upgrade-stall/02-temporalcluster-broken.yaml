@@ -1,0 +1,33 @@
+# Upgrade stall fixture: same cluster at 1.31.1 with an image that cannot be
+# pulled. This produces an ImagePullBackOff on the frontend Deployment, which
+# the stall-detection loop will catch once the phase timeout (1m in e2e)
+# elapses.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: stall-test
+spec:
+  version: "1.31.1"
+  image: ghcr.io/bmorton/temporal-operator-e2e/does-not-exist:0.0.0
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password

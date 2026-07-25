@@ -10,7 +10,7 @@ on:
       suite:
         description: Which suite(s) to run
         type: choice
-        options: [default, devserver, workflowrun, mtls, upgrade, opensearch, cassandra, multicluster, all]
+        options: [default, devserver, workflowrun, mtls, upgrade, upgrade-stall, opensearch, cassandra, multicluster, all]
         default: default
 
 permissions:
@@ -35,21 +35,23 @@ jobs:
           workflowrun='{"suite":"workflowrun"}'
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
           upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
+          upgradestall='{"temporal":"1.30.4","persistence":"upgrade","suite":"upgrade-stall"}'
           opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
           cassandra='{"temporal":"1.31.1","persistence":"cassandra","suite":"cassandra"}'
           multicluster='{"temporal":"1.31.1","persistence":"multicluster","suite":"multicluster"}'
           if [ "$EVENT" = "schedule" ]; then
-            echo "combos=[$postgres,$devserver,$workflowrun,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres,$devserver,$workflowrun,$mtls,$upgrade,$upgradestall,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             case "$SUITE" in
               devserver)    echo "combos=[$devserver]" >> "$GITHUB_OUTPUT" ;;
               workflowrun)  echo "combos=[$workflowrun]" >> "$GITHUB_OUTPUT" ;;
               mtls)         echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
               upgrade)      echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
+              upgrade-stall) echo "combos=[$upgradestall]" >> "$GITHUB_OUTPUT" ;;
               opensearch)   echo "combos=[$opensearch]" >> "$GITHUB_OUTPUT" ;;
               cassandra)    echo "combos=[$cassandra]" >> "$GITHUB_OUTPUT" ;;
               multicluster) echo "combos=[$multicluster]" >> "$GITHUB_OUTPUT" ;;
-              all)          echo "combos=[$postgres,$devserver,$workflowrun,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT" ;;
+              all)          echo "combos=[$postgres,$devserver,$workflowrun,$mtls,$upgrade,$upgradestall,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT" ;;
               *)            echo "combos=[$postgres,$devserver]" >> "$GITHUB_OUTPUT" ;;
             esac
           else
@@ -95,11 +97,16 @@ jobs:
 
       - name: Install the operator via Helm
         run: |
+          extra_args=""
+          if [ "${{ matrix.combo.suite }}" = "upgrade-stall" ]; then
+            extra_args="--set-string manager.args[0]=--leader-elect --set-string manager.args[1]=--upgrade-phase-timeout=1m"
+          fi
           helm install temporal-operator dist/chart \
             --namespace temporal-system --create-namespace \
             --set manager.image.repository=temporal-operator \
             --set manager.image.tag=e2e \
-            --set manager.image.pullPolicy=Never
+            --set manager.image.pullPolicy=Never \
+            $extra_args
           kubectl -n temporal-system rollout status deploy/temporal-operator-controller-manager --timeout=180s
 
       # Pre-pull the Temporal images on the runner and side-load them into the
