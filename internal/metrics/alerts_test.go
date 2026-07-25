@@ -93,3 +93,65 @@ func TestAlertsReferenceRealMetrics(t *testing.T) {
 		}
 	}
 }
+
+// TestConditionAlertComparisons guards the gauge semantics of
+// temporal_operator_resource_condition: the metric emits one series per
+// condition with the condition status as a label and the gauge VALUE set to 1
+// only when status is True. Consequently:
+//   - an expr matching status="True"  must compare == 1  (True series carry value 1)
+//   - an expr matching status="False" must compare == 0  (False series always carry value 0)
+//
+// A comparison like status="False" == 1 can never match and will silently
+// never fire, even for a critical condition.
+func TestConditionAlertComparisons(t *testing.T) {
+	raw, err := os.ReadFile("../../config/prometheus/alerts.yaml")
+	if err != nil {
+		t.Fatalf("reading alerts: %v", err)
+	}
+
+	var rule struct {
+		Spec struct {
+			Groups []struct {
+				Rules []struct {
+					Alert string `json:"alert"`
+					Expr  string `json:"expr"`
+				} `json:"rules"`
+			} `json:"groups"`
+		} `json:"spec"`
+	}
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		t.Fatalf("parsing alerts: %v", err)
+	}
+
+	const metric = "temporal_operator_resource_condition"
+
+	for _, group := range rule.Spec.Groups {
+		for _, r := range group.Rules {
+			expr := r.Expr
+			if !strings.Contains(expr, metric) {
+				continue
+			}
+
+			hasTrue := strings.Contains(expr, `status="True"`)
+			hasFalse := strings.Contains(expr, `status="False"`)
+
+			if hasTrue && !strings.Contains(expr, "== 1") {
+				t.Errorf(
+					"alert %q: expr matches status=\"True\" but does not compare == 1.\n"+
+						"  The %s gauge is 1 when the condition is True; use == 1.\n"+
+						"  expr: %s",
+					r.Alert, metric, expr,
+				)
+			}
+			if hasFalse && !strings.Contains(expr, "== 0") {
+				t.Errorf(
+					"alert %q: expr matches status=\"False\" but does not compare == 0.\n"+
+						"  The %s gauge is 0 when the condition is False (value 1 is only set for True).\n"+
+						"  A comparison like == 1 with status=\"False\" can never match and will never fire.\n"+
+						"  expr: %s",
+					r.Alert, metric, expr,
+				)
+			}
+		}
+	}
+}

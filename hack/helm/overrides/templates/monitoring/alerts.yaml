@@ -23,7 +23,10 @@ spec:
               cluster is running mixed server versions. Inspect
               status.upgrade.message for the failing service.
         - alert: TemporalSchemaMigrationFailed
-          expr: temporal_operator_resource_condition{kind="TemporalCluster",type="SchemaReady",status="False",reason="SchemaMigrationFailed"} == 1
+          # The condition metric emits one series per condition with status as a label and
+          # value 1 only when the condition is True. A False condition therefore has value 0,
+          # so this alert correctly matches status="False" with == 0 (not == 1).
+          expr: temporal_operator_resource_condition{kind="TemporalCluster",type="SchemaReady",status="False",reason="SchemaMigrationFailed"} == 0
           for: 1m
           labels:
             severity: critical
