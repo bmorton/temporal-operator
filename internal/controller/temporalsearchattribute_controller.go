@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
 	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
@@ -47,6 +48,8 @@ type TemporalSearchAttributeReconciler struct {
 
 	// ClientFactory builds the Temporal search-attribute client; injectable for tests.
 	ClientFactory temporal.SearchAttributeClientFactory
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalsearchattributes,verbs=get;list;watch;create;update;patch;delete
@@ -63,7 +66,7 @@ func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req c
 	target, err := resolveTarget(ctx, r.Client, sa.Namespace, sa.Spec.ClusterRef)
 	if err != nil {
 		if !sa.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sa)
+			return r.cleanupUnreachable(ctx, &sa, err)
 		}
 		if errors.Is(err, ErrTargetNotFound) {
 			r.setReady(&sa, metav1.ConditionFalse, "ClusterNotFound", "referenced Temporal target not found")
@@ -75,7 +78,7 @@ func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req c
 	sac, err := r.clientFactory()(ctx, target.Address, target.TLSConfig)
 	if err != nil {
 		if !sa.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &sa)
+			return r.cleanupUnreachable(ctx, &sa, err)
 		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}
@@ -181,6 +184,27 @@ func (r *TemporalSearchAttributeReconciler) removeFinalizerAndForget(ctx context
 		}
 	}
 	return nil
+}
+
+// cleanupUnreachable applies the cleanup deadline when the target cannot be
+// reached during deletion.
+func (r *TemporalSearchAttributeReconciler) cleanupUnreachable(ctx context.Context, sa *temporalv1alpha1.TemporalSearchAttribute, cause error) (ctrl.Result, error) {
+	action, after := decideCleanup(sa, cause, time.Now())
+	switch action {
+	case cleanupForget:
+		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, sa)
+	case cleanupRetry:
+		status.Set(sa, temporalv1alpha1.ConditionProgressing, metav1.ConditionTrue,
+			temporalv1alpha1.ReasonCleanupPending,
+			fmt.Sprintf("waiting for the target to become reachable before cleaning up: %v", cause))
+		return ctrl.Result{RequeueAfter: after}, r.statusUpdate(ctx, sa)
+	default:
+		message := fmt.Sprintf("abandoned cleanup of search attribute %q in namespace %q after %s: %v",
+			sa.Spec.Name, sa.Spec.Namespace, cleanupDeadline, cause)
+		r.Events.Warning(sa, temporalv1alpha1.ReasonCleanupAbandoned, message)
+		// Task 13 adds the metrics.CleanupAbandoned counter increment here.
+		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, sa)
+	}
 }
 
 func (r *TemporalSearchAttributeReconciler) clientFactory() temporal.SearchAttributeClientFactory {

@@ -98,4 +98,10 @@ const (
 	ReasonSchemaMigrationFailed = "SchemaMigrationFailed"
 	// ReasonSchemaMigrationRetrying indicates a failed schema migration will be retried.
 	ReasonSchemaMigrationRetrying = "SchemaMigrationRetrying"
+	// ReasonCleanupAbandoned indicates remote cleanup was abandoned after the
+	// cleanup deadline elapsed with the target unreachable.
+	ReasonCleanupAbandoned = "CleanupAbandoned"
+	// ReasonCleanupPending indicates remote cleanup is being retried while
+	// waiting for the target to become reachable.
+	ReasonCleanupPending = "CleanupPending"
 )

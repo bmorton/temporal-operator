@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
 	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
@@ -51,6 +53,8 @@ type TemporalClusterConnectionReconciler struct {
 
 	// ClientFactory builds the Temporal remote-cluster client; injectable for tests.
 	ClientFactory temporal.RemoteClusterClientFactory
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // resolvedPeer is a peer resolved to a connectable frontend.
@@ -96,7 +100,7 @@ func (r *TemporalClusterConnectionReconciler) Reconcile(ctx context.Context, req
 
 	// Handle deletion: best-effort de-registration, then unblock GC.
 	if !conn.DeletionTimestamp.IsZero() {
-		return ctrl.Result{}, r.reconcileDelete(ctx, &conn, peers)
+		return r.reconcileDelete(ctx, &conn, peers)
 	}
 
 	if !controllerutil.ContainsFinalizer(&conn, clusterConnectionFinalizer) {
@@ -358,13 +362,20 @@ func peerConnected(p resolvedPeer, peers []resolvedPeer, locals map[string]*loca
 // reconcileDelete best-effort removes this connection's peers as remote
 // clusters from every reachable local peer, then removes the finalizer. If
 // peers are unreachable, the finalizer is still removed to unblock GC.
-func (r *TemporalClusterConnectionReconciler) reconcileDelete(ctx context.Context, conn *temporalv1alpha1.TemporalClusterConnection, peers []resolvedPeer) error {
+func (r *TemporalClusterConnectionReconciler) reconcileDelete(ctx context.Context, conn *temporalv1alpha1.TemporalClusterConnection, peers []resolvedPeer) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	if !controllerutil.ContainsFinalizer(conn, clusterConnectionFinalizer) {
-		return nil
+		return ctrl.Result{}, nil
 	}
 
 	locals := r.dialLocals(ctx, peers)
+	defer func() {
+		for _, l := range locals {
+			_ = l.client.Close()
+		}
+	}()
+
+	var removeErr error
 	for name, l := range locals {
 		for _, other := range peers {
 			if other.name == name {
@@ -372,13 +383,25 @@ func (r *TemporalClusterConnectionReconciler) reconcileDelete(ctx context.Contex
 			}
 			if err := l.client.RemoveRemoteCluster(ctx, other.name); err != nil {
 				log.Error(err, "removing remote cluster", "on", name, "remote", other.name)
+				removeErr = errors.Join(removeErr, fmt.Errorf("%s on %s: %w", other.name, name, err))
 			}
 		}
-		_ = l.client.Close()
+	}
+
+	if removeErr != nil {
+		action, after := decideCleanup(conn, removeErr, time.Now())
+		switch action {
+		case cleanupRetry:
+			return ctrl.Result{RequeueAfter: after}, nil
+		case cleanupAbandon:
+			message := fmt.Sprintf("abandoned removal of remote cluster registrations after %s: %v", cleanupDeadline, removeErr)
+			r.Events.Warning(conn, temporalv1alpha1.ReasonCleanupAbandoned, message)
+			// Task 13 adds the metrics.CleanupAbandoned counter increment here.
+		}
 	}
 
 	controllerutil.RemoveFinalizer(conn, clusterConnectionFinalizer)
-	return r.Update(ctx, conn)
+	return ctrl.Result{}, r.Update(ctx, conn)
 }
 
 func (r *TemporalClusterConnectionReconciler) clientFactory() temporal.RemoteClusterClientFactory {
