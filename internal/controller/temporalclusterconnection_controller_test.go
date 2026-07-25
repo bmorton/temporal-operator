@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -248,10 +249,25 @@ var _ = Describe("TemporalClusterConnection reconciler", func() {
 		Expect(localStatus.Connected).To(BeTrue())
 	})
 
-	It("removes the finalizer on deletion even when a peer cannot be resolved", func() {
+	It("retries cleanup while a peer cannot be resolved, then abandons after the deadline", func() {
 		// A local peer whose TLS material cannot be resolved (mTLS enabled but
 		// the internode cert secret is absent) makes resolveTarget fail with a
-		// non-NotFound error. Deletion must still proceed.
+		// non-NotFound error. This is a transient-but-present failure: the
+		// cluster exists, so deletion must retry against the cleanup deadline
+		// rather than immediately removing the finalizer (which would silently
+		// orphan remote-cluster registrations on surviving peers).
+		origDeadline := cleanupDeadline
+		origInterval := cleanupRetryInterval
+		// Use a generous deadline so the first reconcile is reliably within it.
+		// Kubernetes DeletionTimestamp has second-level granularity, so
+		// sub-second deadlines are unreliable in envtest.
+		cleanupDeadline = 5 * time.Minute
+		cleanupRetryInterval = 15 * time.Second
+		defer func() {
+			cleanupDeadline = origDeadline
+			cleanupRetryInterval = origInterval
+		}()
+
 		counter++
 		clusterName := fmt.Sprintf("conn-cluster-%d", counter)
 		spec := validClusterSpec("1.31.1")
@@ -281,14 +297,31 @@ var _ = Describe("TemporalClusterConnection reconciler", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, conn)).To(Succeed())
-
-		// Trigger deletion: the finalizer keeps the object alive.
 		Expect(k8sClient.Delete(ctx, conn)).To(Succeed())
 
-		reconcileConn(connName) // must remove the finalizer without erroring
+		theReconciler := &TemporalClusterConnectionReconciler{
+			Client:        k8sClient,
+			Scheme:        k8sClient.Scheme(),
+			ClientFactory: factory,
+		}
+		key := types.NamespacedName{Name: connName, Namespace: "default"}
 
+		// Within the deadline: the finalizer is retained and a retry is scheduled.
+		res, err := theReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(BeNumerically(">", 0))
 		got := &temporalv1alpha1.TemporalClusterConnection{}
-		err := k8sClient.Get(ctx, types.NamespacedName{Name: connName, Namespace: "default"}, got)
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(k8sClient.Get(ctx, key, got)).To(Succeed())
+		Expect(got.Finalizers).To(ContainElement(clusterConnectionFinalizer))
+
+		// Collapse the deadline to zero so the next reconcile sees it as
+		// exceeded, triggering the abandon path. This avoids relying on
+		// time.Sleep with a DeletionTimestamp that has second-level granularity.
+		cleanupDeadline = 0
+		_, err = theReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() bool {
+			return apierrors.IsNotFound(k8sClient.Get(ctx, key, got))
+		}, time.Second, 20*time.Millisecond).Should(BeTrue())
 	})
 })
