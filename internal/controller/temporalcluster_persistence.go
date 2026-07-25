@@ -34,6 +34,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/metrics"
 	"github.com/bmorton/temporal-operator/internal/persistence"
 	"github.com/bmorton/temporal-operator/internal/recovery"
 	"github.com/bmorton/temporal-operator/internal/resources"
@@ -325,6 +326,9 @@ func (r *TemporalClusterReconciler) handleFailedSchemaJob(ctx context.Context, c
 	attempt.Count++
 	attempt.LastError = detail
 	cluster.Status.Persistence.SchemaAttempts[key] = attempt
+	metrics.SchemaJobAttempts.
+		WithLabelValues(cluster.Namespace, cluster.Name, string(t.store)).
+		Set(float64(attempt.Count))
 
 	// Delete the failed Job so the next reconcile recreates it from scratch.
 	// Safe to re-run: the schema tools are invoked without --overwrite.
@@ -364,6 +368,7 @@ func (r *TemporalClusterReconciler) schemaJobFailureDetail(ctx context.Context, 
 // migration, so a later unrelated failure gets a full retry budget.
 func resetSchemaAttempts(cluster *temporalv1alpha1.TemporalCluster, store resources.SchemaStore) {
 	delete(cluster.Status.Persistence.SchemaAttempts, string(store))
+	metrics.SchemaJobAttempts.DeleteLabelValues(cluster.Namespace, cluster.Name, string(store))
 }
 
 // minRequeue returns the soonest non-zero requeue among results, or zero if none.

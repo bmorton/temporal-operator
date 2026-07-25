@@ -35,6 +35,7 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/events"
+	"github.com/bmorton/temporal-operator/internal/metrics"
 	"github.com/bmorton/temporal-operator/internal/resources"
 	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
@@ -240,6 +241,7 @@ func (r *TemporalNamespaceReconciler) cleanupUnreachable(ctx context.Context, ns
 	case cleanupForget:
 		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, ns)
 	case cleanupRetry:
+		metrics.TargetUnreachable.WithLabelValues("TemporalNamespace", ns.Namespace).Inc()
 		status.Set(ns, temporalv1alpha1.ConditionProgressing, metav1.ConditionTrue,
 			temporalv1alpha1.ReasonCleanupPending,
 			fmt.Sprintf("waiting for the target to become reachable before cleaning up: %v", cause))
@@ -248,7 +250,7 @@ func (r *TemporalNamespaceReconciler) cleanupUnreachable(ctx context.Context, ns
 		message := fmt.Sprintf("abandoned cleanup of temporal namespace %q after %s: %v",
 			namespaceParams(ns).Name, cleanupDeadline, cause)
 		r.Events.Warning(ns, temporalv1alpha1.ReasonCleanupAbandoned, message)
-		// Task 13 adds the metrics.CleanupAbandoned counter increment here.
+		metrics.CleanupAbandoned.WithLabelValues("TemporalNamespace", ns.Namespace).Inc()
 		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, ns)
 	}
 }

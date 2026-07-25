@@ -36,6 +36,7 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/events"
+	"github.com/bmorton/temporal-operator/internal/metrics"
 	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
@@ -392,11 +393,15 @@ func (r *TemporalClusterConnectionReconciler) reconcileDelete(ctx context.Contex
 		action, after := decideCleanup(conn, removeErr, time.Now())
 		switch action {
 		case cleanupRetry:
-			return ctrl.Result{RequeueAfter: after}, nil
+			metrics.TargetUnreachable.WithLabelValues("TemporalClusterConnection", conn.Namespace).Inc()
+			status.Set(conn, temporalv1alpha1.ConditionProgressing, metav1.ConditionTrue,
+				temporalv1alpha1.ReasonCleanupPending,
+				fmt.Sprintf("waiting for the target to become reachable before cleaning up: %v", removeErr))
+			return ctrl.Result{RequeueAfter: after}, r.statusUpdate(ctx, conn)
 		case cleanupAbandon:
 			message := fmt.Sprintf("abandoned removal of remote cluster registrations after %s: %v", cleanupDeadline, removeErr)
 			r.Events.Warning(conn, temporalv1alpha1.ReasonCleanupAbandoned, message)
-			// Task 13 adds the metrics.CleanupAbandoned counter increment here.
+			metrics.CleanupAbandoned.WithLabelValues("TemporalClusterConnection", conn.Namespace).Inc()
 		}
 	}
 

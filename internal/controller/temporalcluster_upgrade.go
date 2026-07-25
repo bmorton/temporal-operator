@@ -27,7 +27,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/metrics"
 	"github.com/bmorton/temporal-operator/internal/recovery"
 	"github.com/bmorton/temporal-operator/internal/resources"
 	"github.com/bmorton/temporal-operator/internal/status"
@@ -78,6 +81,18 @@ var upgradeStallRecheck = 1 * time.Minute
 // reconcileUpgrade detects and advances a version upgrade. It returns the
 // per-service target version map the service reconciler should apply.
 func (r *TemporalClusterReconciler) reconcileUpgrade(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) map[string]string {
+	defer func() {
+		if up := cluster.Status.Upgrade; up != nil && up.PhaseStartedAt != nil {
+			metrics.UpgradePhaseSeconds.
+				WithLabelValues(cluster.Namespace, cluster.Name, up.Phase).
+				Set(time.Since(up.PhaseStartedAt.Time).Seconds())
+		} else {
+			metrics.UpgradePhaseSeconds.DeletePartialMatch(prometheus.Labels{
+				"namespace": cluster.Namespace, "name": cluster.Name,
+			})
+		}
+	}()
+
 	current := cluster.Status.Version
 	target := cluster.Spec.Version
 
