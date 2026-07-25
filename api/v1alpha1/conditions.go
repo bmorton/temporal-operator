@@ -93,4 +93,9 @@ const (
 	ReasonRolloutStalled = "RolloutStalled"
 	// ReasonUpgradeProgressing indicates an upgrade is advancing normally.
 	ReasonUpgradeProgressing = "UpgradeProgressing"
+	// ReasonSchemaMigrationFailed indicates schema migration failed and the
+	// retry budget is exhausted.
+	ReasonSchemaMigrationFailed = "SchemaMigrationFailed"
+	// ReasonSchemaMigrationRetrying indicates a failed schema migration will be retried.
+	ReasonSchemaMigrationRetrying = "SchemaMigrationRetrying"
 )

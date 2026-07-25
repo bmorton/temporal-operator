@@ -237,6 +237,12 @@ type PersistenceStatus struct {
 	// Reachable indicates whether the datastores were reachable at last reconcile.
 	// +optional
 	Reachable bool `json:"reachable,omitempty"`
+
+	// SchemaAttempts records failed schema-migration attempts per store, so
+	// recreation is bounded across operator restarts and leader-election
+	// failover. Entries are removed when a store's migration succeeds.
+	// +optional
+	SchemaAttempts map[string]SchemaAttemptStatus `json:"schemaAttempts,omitempty"`
 }
 
 // SchemaUpgradeRecord records a single schema migration.
@@ -245,4 +251,18 @@ type SchemaUpgradeRecord struct {
 	FromVersion string      `json:"fromVersion"`
 	ToVersion   string      `json:"toVersion"`
 	Time        metav1.Time `json:"time"`
+}
+
+// SchemaAttemptStatus counts consecutive failed schema-migration attempts for a
+// single store.
+type SchemaAttemptStatus struct {
+	// Count is the number of attempts that have failed.
+	// +optional
+	Count int32 `json:"count,omitempty"`
+	// FirstFailedAt is when the first of the current run of failures occurred.
+	// +optional
+	FirstFailedAt *metav1.Time `json:"firstFailedAt,omitempty"`
+	// LastError is the failure reason reported by the most recent Job.
+	// +optional
+	LastError string `json:"lastError,omitempty"`
 }

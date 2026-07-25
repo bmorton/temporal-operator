@@ -23,6 +23,7 @@ import (
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +35,9 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/persistence"
+	"github.com/bmorton/temporal-operator/internal/recovery"
 	"github.com/bmorton/temporal-operator/internal/resources"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -145,6 +148,7 @@ func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cl
 	}
 
 	migrating := false
+	storeResults := make([]storeResult, 0, len(targets))
 	for _, t := range targets {
 		res, err := r.reconcileStoreSchema(ctx, cluster, t, minSchemaFor(info, t.backend.Kind()))
 		if err != nil {
@@ -155,9 +159,10 @@ func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cl
 			}
 			return ctrl.Result{}, err
 		}
+		storeResults = append(storeResults, res)
 		switch {
 		case res.failed:
-			r.setSchemaReady(cluster, metav1.ConditionFalse, "SchemaMigrationFailed", res.message)
+			r.setSchemaReady(cluster, metav1.ConditionFalse, temporalv1alpha1.ReasonSchemaMigrationFailed, res.message)
 			return ctrl.Result{}, nil
 		case !res.done:
 			migrating = true
@@ -165,8 +170,14 @@ func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cl
 	}
 
 	if migrating {
-		r.setSchemaReady(cluster, metav1.ConditionFalse, temporalv1alpha1.ReasonSchemaMigrating, "schema migration in progress")
-		return ctrl.Result{RequeueAfter: persistenceRequeueAfter}, nil
+		requeue := minRequeue(storeResults...)
+		if requeue == 0 {
+			// Normal migration in progress (no retry-after-failure pending).
+			r.setSchemaReady(cluster, metav1.ConditionFalse, temporalv1alpha1.ReasonSchemaMigrating, "schema migration in progress")
+			requeue = persistenceRequeueAfter
+		}
+		// When requeue > 0, handleFailedSchemaJob already set SchemaMigrationRetrying.
+		return ctrl.Result{RequeueAfter: requeue}, nil
 	}
 
 	r.setSchemaReady(cluster, metav1.ConditionTrue, "SchemaReady", "all schemas are at the required version")
@@ -208,9 +219,10 @@ func (r *TemporalClusterReconciler) buildSchemaTargets(ctx context.Context, clus
 }
 
 type storeResult struct {
-	done    bool
-	failed  bool
-	message string
+	done         bool
+	failed       bool
+	message      string
+	requeueAfter time.Duration
 }
 
 // reconcileStoreSchema ensures a single store's schema reaches minSchema.
@@ -248,7 +260,7 @@ func (r *TemporalClusterReconciler) reconcileJobSchema(ctx context.Context, clus
 			return storeResult{}, err
 		}
 		if setup == jobFailed {
-			return storeResult{failed: true, message: fmt.Sprintf("%s setup-schema job failed", t.store)}, nil
+			return r.handleFailedSchemaJob(ctx, cluster, t, resources.ActionSetup)
 		}
 		if setup != jobSucceeded {
 			return storeResult{}, nil
@@ -260,9 +272,10 @@ func (r *TemporalClusterReconciler) reconcileJobSchema(ctx context.Context, clus
 		return storeResult{}, err
 	}
 	if update == jobFailed {
-		return storeResult{failed: true, message: fmt.Sprintf("%s update-schema job failed", t.store)}, nil
+		return r.handleFailedSchemaJob(ctx, cluster, t, resources.ActionUpdate)
 	}
 	if update == jobSucceeded {
+		resetSchemaAttempts(cluster, t.store)
 		// The setup/update Jobs have finished, so the schema version is now current.
 		// The schema version we read this pass came from an inspector Job that ran
 		// before migration and reports the old (often empty) version. Delete that
@@ -273,6 +286,98 @@ func (r *TemporalClusterReconciler) reconcileJobSchema(ctx context.Context, clus
 		}
 	}
 	return storeResult{}, nil
+}
+
+// handleFailedSchemaJob applies the bounded recreation policy to a schema Job
+// that has exhausted its own BackoffLimit.
+//
+// The Job's BackoffLimit retries the pod within seconds, which does not cover
+// the most common real failure: the Job was created while the database was
+// still starting. Recreating the Job at minute-scale intervals covers that,
+// while the attempt budget stops a genuinely broken migration from retrying
+// forever.
+func (r *TemporalClusterReconciler) handleFailedSchemaJob(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, t schemaTarget, action resources.SchemaAction) (storeResult, error) {
+	key := string(t.store)
+	if cluster.Status.Persistence.SchemaAttempts == nil {
+		cluster.Status.Persistence.SchemaAttempts = map[string]temporalv1alpha1.SchemaAttemptStatus{}
+	}
+	attempt := cluster.Status.Persistence.SchemaAttempts[key]
+
+	name := resources.SchemaJobName(cluster.Name, t.store, action)
+	detail := r.schemaJobFailureDetail(ctx, cluster, name)
+
+	decision := recovery.SchemaJobPolicy.Next(int(attempt.Count))
+	if !decision.Retry {
+		message := fmt.Sprintf("%s %s-schema job failed %d times and will not be retried: %s. The failed Job %q is retained; inspect its pod logs with: kubectl -n %s logs job/%s",
+			t.store, action, attempt.Count, detail, name, cluster.Namespace, name)
+		status.Set(cluster, temporalv1alpha1.ConditionSchemaReady, metav1.ConditionFalse,
+			temporalv1alpha1.ReasonSchemaMigrationFailed, message)
+		status.Set(cluster, temporalv1alpha1.ConditionDegraded, metav1.ConditionTrue,
+			temporalv1alpha1.ReasonSchemaMigrationFailed, message)
+		r.warnEvent(cluster, temporalv1alpha1.ReasonSchemaMigrationFailed, message)
+		return storeResult{failed: true, message: message}, nil
+	}
+
+	now := metav1.Now()
+	if attempt.FirstFailedAt == nil {
+		attempt.FirstFailedAt = &now
+	}
+	attempt.Count++
+	attempt.LastError = detail
+	cluster.Status.Persistence.SchemaAttempts[key] = attempt
+
+	// Delete the failed Job so the next reconcile recreates it from scratch.
+	// Safe to re-run: the schema tools are invoked without --overwrite.
+	job := &batchv1.Job{}
+	job.Name = name
+	job.Namespace = cluster.Namespace
+	policy := metav1.DeletePropagationBackground
+	if err := r.Delete(ctx, job, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil && !apierrors.IsNotFound(err) {
+		return storeResult{}, fmt.Errorf("deleting failed %s job: %w", action, err)
+	}
+
+	message := fmt.Sprintf("%s %s-schema job failed (attempt %d of %d): %s; retrying in %s",
+		t.store, action, attempt.Count, len(recovery.SchemaJobPolicy.Delays), detail, decision.After)
+	status.Set(cluster, temporalv1alpha1.ConditionSchemaReady, metav1.ConditionFalse,
+		temporalv1alpha1.ReasonSchemaMigrationRetrying, message)
+	r.warnEvent(cluster, temporalv1alpha1.ReasonSchemaMigrationRetrying, message)
+
+	return storeResult{requeueAfter: decision.After}, nil
+}
+
+// schemaJobFailureDetail reports the Job's own failure reason, so the condition
+// message names the cause rather than just the fact of failure.
+func (r *TemporalClusterReconciler) schemaJobFailureDetail(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, name string) string {
+	var job batchv1.Job
+	if err := r.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, &job); err != nil {
+		return "job not found"
+	}
+	for _, c := range job.Status.Conditions {
+		if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue {
+			return fmt.Sprintf("%s: %s", c.Reason, c.Message)
+		}
+	}
+	return fmt.Sprintf("%d failed pods", job.Status.Failed)
+}
+
+// resetSchemaAttempts clears the failure record for a store after a successful
+// migration, so a later unrelated failure gets a full retry budget.
+func resetSchemaAttempts(cluster *temporalv1alpha1.TemporalCluster, store resources.SchemaStore) {
+	delete(cluster.Status.Persistence.SchemaAttempts, string(store))
+}
+
+// minRequeue returns the soonest non-zero requeue among results, or zero if none.
+func minRequeue(results ...storeResult) time.Duration {
+	var out time.Duration
+	for _, res := range results {
+		if res.requeueAfter == 0 {
+			continue
+		}
+		if out == 0 || res.requeueAfter < out {
+			out = res.requeueAfter
+		}
+	}
+	return out
 }
 
 type jobPhase int
@@ -407,26 +512,26 @@ func classifyJob(job *batchv1.Job) jobPhase {
 }
 
 func (r *TemporalClusterReconciler) setReachable(cluster *temporalv1alpha1.TemporalCluster, reachable bool, message string) {
-	status := metav1.ConditionTrue
+	condStatus := metav1.ConditionTrue
 	reason := "Reachable"
 	if !reachable {
-		status = metav1.ConditionFalse
+		condStatus = metav1.ConditionFalse
 		reason = temporalv1alpha1.ReasonPersistenceUnreachable
 	}
 	cluster.Status.Persistence.Reachable = reachable
 	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:               temporalv1alpha1.ConditionPersistenceReachable,
-		Status:             status,
+		Status:             condStatus,
 		Reason:             reason,
 		Message:            message,
 		ObservedGeneration: cluster.Generation,
 	})
 }
 
-func (r *TemporalClusterReconciler) setSchemaReady(cluster *temporalv1alpha1.TemporalCluster, status metav1.ConditionStatus, reason, message string) {
+func (r *TemporalClusterReconciler) setSchemaReady(cluster *temporalv1alpha1.TemporalCluster, condStatus metav1.ConditionStatus, reason, message string) {
 	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:               temporalv1alpha1.ConditionSchemaReady,
-		Status:             status,
+		Status:             condStatus,
 		Reason:             reason,
 		Message:            message,
 		ObservedGeneration: cluster.Generation,
