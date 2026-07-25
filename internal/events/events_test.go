@@ -121,7 +121,50 @@ func TestForgetAllowsReEmission(t *testing.T) {
 	}
 }
 
+func TestForgetIsolationPreventsPrefixCollisions(t *testing.T) {
+	// This test verifies that Forget(A) does not accidentally delete entries for
+	// object B when A's UID is a leading substring of B's UID.
+	// The dedupe key format is "<uid>|<eventtype>|<reason>", so using the
+	// separator in the prefix match (key+"|" rather than bare key) prevents this.
+	f := &fakeRecorder{}
+	r := opevents.New(f)
+
+	// Create two objects whose UIDs have a substring relationship.
+	// newNamespace(name) constructs UID as name+"-uid".
+	// So "a-uid" and "a-uid-extra" give us the substring case we're testing.
+	a := newNamespace("a")           // UID = "a-uid"
+	b := newNamespace("a-uid-extra") // UID = "a-uid-extra-uid"
+
+	// Emit the same reason+message for both, so both get dedupe entries.
+	const msg = "same message"
+	r.Warning(a, "Event", msg)
+	r.Warning(b, "Event", msg)
+
+	if len(f.got) != 2 {
+		t.Fatalf("initial emit: got %d events, want 2", len(f.got))
+	}
+
+	// Forget the shorter-UID object (a).
+	r.Forget(a)
+
+	// The shorter-UID object should emit again (its dedupe state was cleared).
+	r.Warning(a, "Event", msg)
+	if len(f.got) != 3 {
+		t.Fatalf("after Forget(a): got %d events, want 3 (a should re-emit)", len(f.got))
+	}
+
+	// The longer-UID object should still deduplicate (its dedupe state was NOT cleared).
+	r.Warning(b, "Event", msg)
+	if len(f.got) != 3 {
+		t.Fatalf("after Forget(a) + duplicate b: got %d events, want 3 (b should deduplicate)", len(f.got))
+	}
+}
+
 func TestNilRecorderIsSafe(t *testing.T) {
 	var r *opevents.Recorder
-	r.Normal(newNamespace("a"), "Registered", "ok") // must not panic
+	r.Normal(newNamespace("a"), "Registered", "ok")    // must not panic
+	r.Warning(newNamespace("a"), "Warning", "warning") // must not panic
+	r.Forget(newNamespace("a"))                        // must not panic
+	r.Warning(newNamespace("a"), "Warning", "warning") // must not panic
+	r.Forget(newNamespace("a"))                        // must not panic
 }

@@ -97,6 +97,8 @@ func (r *Recorder) emit(obj runtime.Object, eventtype, reason, message string) {
 		r.last[dedupeKey] = message
 		r.mu.Unlock()
 	}
+	// Objects without a usable key (those not implementing client.Object) always
+	// emit rather than being silently dropped, which is a safe fallback.
 	// The events.k8s.io recorder requires an action verb; reuse the reason,
 	// which already reads as a machine-readable verb for our events.
 	r.inner.Eventf(obj, nil, eventtype, reason, reason, message)
