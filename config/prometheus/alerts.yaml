@@ -1,0 +1,57 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/name: temporal-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: temporal-operator-alerts
+  namespace: system
+spec:
+  groups:
+    - name: temporal-operator
+      rules:
+        - alert: TemporalClusterUpgradeStalled
+          expr: temporal_operator_resource_condition{kind="TemporalCluster",type="UpgradeBlocked",status="True"} == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Temporal cluster upgrade is stalled
+            description: >-
+              The upgrade of TemporalCluster {{ $labels.namespace }}/{{ $labels.name }}
+              has been blocked for more than 5 minutes ({{ $labels.reason }}). The
+              cluster is running mixed server versions. Inspect
+              status.upgrade.message for the failing service.
+        - alert: TemporalSchemaMigrationFailed
+          expr: temporal_operator_resource_condition{kind="TemporalCluster",type="SchemaReady",status="False",reason="SchemaMigrationFailed"} == 1
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: Temporal schema migration failed permanently
+            description: >-
+              Schema migration for TemporalCluster {{ $labels.namespace }}/{{ $labels.name }}
+              exhausted its retry budget. The cluster cannot start until this is
+              resolved. The failed Job is retained; check its pod logs.
+        - alert: TemporalResourceDegraded
+          expr: temporal_operator_resource_condition{type="Degraded",status="True"} == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: Temporal resource is degraded
+            description: >-
+              {{ $labels.kind }} {{ $labels.namespace }}/{{ $labels.name }} has
+              been Degraded for 15 minutes ({{ $labels.reason }}).
+        - alert: TemporalCleanupAbandoned
+          expr: increase(temporal_operator_cleanup_abandoned_total[1h]) > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: Temporal remote cleanup was abandoned
+            description: >-
+              The operator gave up cleaning up a {{ $labels.kind }} in namespace
+              {{ $labels.namespace }} because its target stayed unreachable past
+              the cleanup deadline. A Temporal-side object was orphaned and needs
+              manual removal.
