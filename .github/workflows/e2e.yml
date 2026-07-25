@@ -97,16 +97,19 @@ jobs:
 
       - name: Install the operator via Helm
         run: |
-          extra_args=""
+          extra_args=()
           if [ "${{ matrix.combo.suite }}" = "upgrade-stall" ]; then
-            extra_args="--set-string manager.args[0]=--leader-elect --set-string manager.args[1]=--upgrade-phase-timeout=1m"
+            extra_args=(
+              --set-string 'manager.args[0]=--leader-elect'
+              --set-string 'manager.args[1]=--upgrade-phase-timeout=1m'
+            )
           fi
           helm install temporal-operator dist/chart \
             --namespace temporal-system --create-namespace \
             --set manager.image.repository=temporal-operator \
             --set manager.image.tag=e2e \
             --set manager.image.pullPolicy=Never \
-            $extra_args
+            "${extra_args[@]}"
           kubectl -n temporal-system rollout status deploy/temporal-operator-controller-manager --timeout=180s
 
       # Pre-pull the Temporal images on the runner and side-load them into the

@@ -59,11 +59,17 @@ spec:
             content: |
               set -euo pipefail
               # A third version must be rejected by the webhook.
-              if kubectl -n $NAMESPACE patch temporalcluster stall-test \
-                   --type=merge -p '{"spec":{"version":"1.31.2"}}' 2>/dev/null; then
-                echo "webhook accepted a third version mid-upgrade" >&2
+              out=$(kubectl -n $NAMESPACE patch temporalcluster stall-test \
+                      --type=merge -p '{"spec":{"version":"1.31.2"}}' 2>&1) && rc=0 || rc=$?
+              if [ "$rc" -eq 0 ]; then
+                echo "webhook accepted a third version mid-upgrade: $out" >&2
                 exit 1
               fi
+              if ! echo "$out" | grep -qi 'admission\|denied\|webhook\|upgrade in progress'; then
+                echo "patch failed, but not due to webhook rejection: $out" >&2
+                exit 1
+              fi
+              echo "webhook correctly rejected the retarget: $out"
     - name: revert-and-recover
       try:
         - apply:
