@@ -51,11 +51,6 @@ func Set(obj Object, condType string, s metav1.ConditionStatus, reason, message 
 	})
 }
 
-// IsTrue reports whether the named condition is currently True.
-func IsTrue(obj Object, condType string) bool {
-	return meta.IsStatusConditionTrue(*obj.GetConditions(), condType)
-}
-
 // Update persists the status subresource, retrying on conflict.
 //
 // On conflict we refresh only the resourceVersion from the API server and retry
