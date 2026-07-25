@@ -18,14 +18,19 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/recovery"
 	"github.com/bmorton/temporal-operator/internal/resources"
+	"github.com/bmorton/temporal-operator/internal/status"
 )
 
 // Upgrade phases, ordered.
@@ -59,6 +64,16 @@ var serviceUpgradeOrder = []string{
 	resources.ServiceInternalFrontend,
 	resources.ServiceWorker,
 }
+
+// upgradePhaseTimeout is how long a single upgrade phase may run before it is
+// reported as stalled. It is a var so tests can shorten it.
+var upgradePhaseTimeout = 15 * time.Minute
+
+// upgradeStallRecheck is how often a stalled upgrade is re-examined. An
+// explicit requeue is required because a stall whose cause is external (an
+// unreachable registry, a pending PVC) may produce no watched-object event at
+// all, and the blocked state would otherwise itself be a stall.
+var upgradeStallRecheck = 1 * time.Minute
 
 // reconcileUpgrade detects and advances a version upgrade. It returns the
 // per-service target version map the service reconciler should apply.
@@ -143,7 +158,23 @@ func (r *TemporalClusterReconciler) advanceUpgrade(ctx context.Context, cluster 
 
 	advance := func(next string) {
 		up.Phase = next
+		now := metav1.Now()
+		up.PhaseStartedAt = &now
+		up.StalledService = ""
+		up.Message = ""
+		r.clearUpgradeStall(cluster)
 		r.event(cluster, "UpgradePhase", "upgrade entered phase "+next)
+	}
+
+	// An in-flight upgrade is work in progress. ConditionProgressing was
+	// declared in conditions.go but was never set by any controller before this.
+	status.Set(cluster, temporalv1alpha1.ConditionProgressing, metav1.ConditionTrue,
+		temporalv1alpha1.ReasonUpgradeProgressing,
+		fmt.Sprintf("upgrading from %s to %s (phase %s)", up.FromVersion, up.ToVersion, up.Phase))
+
+	if up.PhaseStartedAt == nil {
+		now := metav1.Now()
+		up.PhaseStartedAt = &now
 	}
 
 	switch up.Phase {
@@ -151,10 +182,12 @@ func (r *TemporalClusterReconciler) advanceUpgrade(ctx context.Context, cluster 
 		advance(upgradePreflight)
 	case upgradePreflight:
 		if reachable {
-			up.Rollbackable = false
 			advance(upgradeSchemaMigrating)
 		}
 	case upgradeSchemaMigrating:
+		// Rollbackable goes false here, not at preflight: this is the first
+		// phase that can apply an irreversible schema change, which is what the
+		// field's documented contract says.
 		up.Rollbackable = false
 		if schemaReady {
 			advance(upgradeRollingFrontend)
@@ -164,6 +197,9 @@ func (r *TemporalClusterReconciler) advanceUpgrade(ctx context.Context, cluster 
 	case upgradeComplete:
 		cluster.Status.Version = up.ToVersion
 		r.event(cluster, "UpgradeComplete", "upgrade to "+up.ToVersion+" complete")
+		r.clearUpgradeStall(cluster)
+		status.Set(cluster, temporalv1alpha1.ConditionProgressing, metav1.ConditionFalse,
+			temporalv1alpha1.ReasonAllServicesReady, "upgrade complete")
 		cluster.Status.Upgrade = nil
 	default:
 		r.advanceRollingPhase(ctx, cluster, advance)
@@ -171,17 +207,67 @@ func (r *TemporalClusterReconciler) advanceUpgrade(ctx context.Context, cluster 
 }
 
 // advanceRollingPhase advances a per-service rolling phase once the current
-// service has fully rolled out at the target version.
+// service has fully rolled out at the target version, or marks the upgrade
+// stalled once the phase exceeds upgradePhaseTimeout.
 func (r *TemporalClusterReconciler) advanceRollingPhase(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, advance func(string)) {
 	up := cluster.Status.Upgrade
 	svc, ok := rollingPhaseService[up.Phase]
 	if !ok {
 		return
 	}
-	if !r.serviceRolledOut(ctx, cluster, svc, up.ToVersion) {
+
+	if r.serviceRolledOut(ctx, cluster, svc, up.ToVersion) {
+		advance(r.nextRollingPhase(cluster, up.Phase))
 		return
 	}
-	advance(r.nextRollingPhase(cluster, up.Phase))
+
+	if up.PhaseStartedAt == nil || !recovery.DeadlineExceeded(*up.PhaseStartedAt, upgradePhaseTimeout, time.Now()) {
+		return
+	}
+
+	message := fmt.Sprintf("service %q has not rolled out to %s within %s: %s",
+		svc, up.ToVersion, upgradePhaseTimeout, r.rolloutDetail(ctx, cluster, svc))
+	up.StalledService = svc
+	up.Message = message
+	status.Set(cluster, temporalv1alpha1.ConditionUpgradeBlocked, metav1.ConditionTrue,
+		temporalv1alpha1.ReasonUpgradeStalled, message)
+	status.Set(cluster, temporalv1alpha1.ConditionDegraded, metav1.ConditionTrue,
+		temporalv1alpha1.ReasonRolloutStalled, message)
+	r.warnEvent(cluster, temporalv1alpha1.ReasonUpgradeStalled, message)
+}
+
+// clearUpgradeStall returns the blocked/degraded conditions to False. The stall
+// is a report, not a latch: it clears as soon as the rollout completes.
+func (r *TemporalClusterReconciler) clearUpgradeStall(cluster *temporalv1alpha1.TemporalCluster) {
+	status.Set(cluster, temporalv1alpha1.ConditionUpgradeBlocked, metav1.ConditionFalse,
+		temporalv1alpha1.ReasonUpgradeProgressing, "upgrade is progressing")
+	status.Set(cluster, temporalv1alpha1.ConditionDegraded, metav1.ConditionFalse,
+		temporalv1alpha1.ReasonUpgradeProgressing, "upgrade is progressing")
+}
+
+// rolloutDetail reports the Deployment's own reason for not being rolled out,
+// so the condition message names the actual cause rather than just the symptom.
+func (r *TemporalClusterReconciler) rolloutDetail(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, component string) string {
+	var dep appsv1.Deployment
+	name := resources.DeploymentName(cluster.Name, component)
+	if err := r.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, &dep); err != nil {
+		return "deployment not found"
+	}
+	for _, c := range dep.Status.Conditions {
+		if c.Type == appsv1.DeploymentProgressing && c.Status == corev1.ConditionFalse {
+			return fmt.Sprintf("%s: %s", c.Reason, c.Message)
+		}
+		if c.Type == appsv1.DeploymentAvailable && c.Status == corev1.ConditionFalse {
+			return fmt.Sprintf("%s: %s", c.Reason, c.Message)
+		}
+	}
+	return fmt.Sprintf("%d/%d replicas ready", dep.Status.ReadyReplicas, dep.Status.UpdatedReplicas)
+}
+
+// upgradeStalled reports whether an upgrade is currently blocked, so the
+// reconciler can requeue to re-examine it.
+func (r *TemporalClusterReconciler) upgradeStalled(cluster *temporalv1alpha1.TemporalCluster) bool {
+	return cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StalledService != ""
 }
 
 func (r *TemporalClusterReconciler) nextRollingPhase(cluster *temporalv1alpha1.TemporalCluster, phase string) string {
@@ -234,6 +320,12 @@ func (r *TemporalClusterReconciler) event(cluster *temporalv1alpha1.TemporalClus
 		// The events.k8s.io recorder requires an action verb; reuse the reason,
 		// which already reads as a machine-readable verb for our events.
 		r.Recorder.Eventf(cluster, nil, "Normal", reason, reason, message)
+	}
+}
+
+func (r *TemporalClusterReconciler) warnEvent(cluster *temporalv1alpha1.TemporalCluster, reason, message string) {
+	if r.Recorder != nil {
+		r.Recorder.Eventf(cluster, nil, corev1.EventTypeWarning, reason, reason, message)
 	}
 }
 

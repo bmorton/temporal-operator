@@ -114,6 +114,10 @@ func (r *TemporalClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
+	if r.upgradeStalled(&cluster) {
+		return ctrl.Result{RequeueAfter: upgradeStallRecheck}, nil
+	}
+
 	return result, nil
 }
 

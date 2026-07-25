@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,10 +29,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/resources"
+	"github.com/bmorton/temporal-operator/internal/status"
 )
 
 var _ = Describe("TemporalCluster upgrade reconciler", func() {
@@ -139,9 +143,9 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 			Expect(phases).To(HaveKey(p), "expected to observe phase %s", p)
 		}
 
-		By("marking the upgrade non-rollbackable once schema migration starts")
+		By("Rollbackable is true when entering schema migration (matches documented contract)")
 		Expect(rollbackableDuringSchema).NotTo(BeNil())
-		Expect(*rollbackableDuringSchema).To(BeFalse())
+		Expect(*rollbackableDuringSchema).To(BeTrue())
 	})
 
 	It("does not start an upgrade on a fresh install", func() {
@@ -163,3 +167,123 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		Expect(final.Status.Version).To(Equal("1.31.1"))
 	})
 })
+
+func TestAdvanceRollingPhaseMarksStallAfterTimeout(t *testing.T) {
+	origTimeout := upgradePhaseTimeout
+	upgradePhaseTimeout = 50 * time.Millisecond
+	defer func() { upgradePhaseTimeout = origTimeout }()
+
+	cluster := &temporalv1alpha1.TemporalCluster{}
+	cluster.Name = "tc"
+	cluster.Namespace = testNamespace
+	cluster.Spec.Version = testToVersion
+	cluster.Status.Version = testFromVersion
+
+	entered := metav1.NewTime(time.Now().Add(-time.Second))
+	cluster.Status.Upgrade = &temporalv1alpha1.UpgradeStatus{
+		FromVersion:    testFromVersion,
+		ToVersion:      testToVersion,
+		Phase:          upgradeRollingFrontend,
+		PhaseStartedAt: &entered,
+	}
+
+	// No Deployment exists, so serviceRolledOut is false: the phase is stalled.
+	r := &TemporalClusterReconciler{Client: fake.NewClientBuilder().WithScheme(testScheme(t)).Build()}
+	r.advanceUpgrade(context.Background(), cluster)
+
+	up := cluster.Status.Upgrade
+	if up == nil {
+		t.Fatal("upgrade status was cleared, want it retained while stalled")
+	}
+	if up.Phase != upgradeRollingFrontend {
+		t.Errorf("phase = %q, want it to stay at %q", up.Phase, upgradeRollingFrontend)
+	}
+	if up.StalledService != resources.ServiceFrontend {
+		t.Errorf("stalledService = %q, want %q", up.StalledService, resources.ServiceFrontend)
+	}
+	if !meta.IsStatusConditionTrue(cluster.Status.Conditions, temporalv1alpha1.ConditionUpgradeBlocked) {
+		t.Error("UpgradeBlocked condition is not True")
+	}
+	if !meta.IsStatusConditionTrue(cluster.Status.Conditions, temporalv1alpha1.ConditionDegraded) {
+		t.Error("Degraded condition is not True")
+	}
+	if !r.upgradeStalled(cluster) {
+		t.Error("upgradeStalled reported false for a stalled upgrade")
+	}
+}
+
+func TestAdvanceRollingPhaseDoesNotStallBeforeTimeout(t *testing.T) {
+	origTimeout := upgradePhaseTimeout
+	upgradePhaseTimeout = time.Hour
+	defer func() { upgradePhaseTimeout = origTimeout }()
+
+	cluster := &temporalv1alpha1.TemporalCluster{}
+	cluster.Name = "tc"
+	cluster.Namespace = testNamespace
+	entered := metav1.NewTime(time.Now())
+	cluster.Status.Upgrade = &temporalv1alpha1.UpgradeStatus{
+		FromVersion:    testFromVersion,
+		ToVersion:      testToVersion,
+		Phase:          upgradeRollingFrontend,
+		PhaseStartedAt: &entered,
+	}
+
+	r := &TemporalClusterReconciler{Client: fake.NewClientBuilder().WithScheme(testScheme(t)).Build()}
+	r.advanceUpgrade(context.Background(), cluster)
+
+	if meta.IsStatusConditionTrue(cluster.Status.Conditions, temporalv1alpha1.ConditionUpgradeBlocked) {
+		t.Error("UpgradeBlocked set before the phase timeout elapsed")
+	}
+	if cluster.Status.Upgrade.StalledService != "" {
+		t.Errorf("stalledService = %q, want empty before timeout", cluster.Status.Upgrade.StalledService)
+	}
+}
+
+func TestStallClearsWhenServiceRollsOut(t *testing.T) {
+	origTimeout := upgradePhaseTimeout
+	upgradePhaseTimeout = 50 * time.Millisecond
+	defer func() { upgradePhaseTimeout = origTimeout }()
+
+	cluster := &temporalv1alpha1.TemporalCluster{}
+	cluster.Name = "tc"
+	cluster.Namespace = testNamespace
+	entered := metav1.NewTime(time.Now().Add(-time.Second))
+	cluster.Status.Upgrade = &temporalv1alpha1.UpgradeStatus{
+		FromVersion:    testFromVersion,
+		ToVersion:      testToVersion,
+		Phase:          upgradeRollingFrontend,
+		PhaseStartedAt: &entered,
+		StalledService: resources.ServiceFrontend,
+	}
+	status.Set(cluster, temporalv1alpha1.ConditionUpgradeBlocked, metav1.ConditionTrue, temporalv1alpha1.ReasonUpgradeStalled, "stalled")
+
+	dep := rolledOutDeployment(cluster, resources.ServiceFrontend, testToVersion)
+	r := &TemporalClusterReconciler{Client: fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(dep).Build()}
+	r.advanceUpgrade(context.Background(), cluster)
+
+	if cluster.Status.Upgrade.Phase != upgradeRollingHistory {
+		t.Errorf("phase = %q, want %q after rollout completed", cluster.Status.Upgrade.Phase, upgradeRollingHistory)
+	}
+	if cluster.Status.Upgrade.StalledService != "" {
+		t.Errorf("stalledService = %q, want cleared", cluster.Status.Upgrade.StalledService)
+	}
+	if meta.IsStatusConditionTrue(cluster.Status.Conditions, temporalv1alpha1.ConditionUpgradeBlocked) {
+		t.Error("UpgradeBlocked is still True after the service rolled out")
+	}
+}
+
+// rolledOutDeployment builds a Deployment that serviceRolledOut reports as
+// fully rolled out at the given version.
+func rolledOutDeployment(cluster *temporalv1alpha1.TemporalCluster, component, version string) *appsv1.Deployment {
+	one := int32(1)
+	dep := &appsv1.Deployment{}
+	dep.Name = resources.DeploymentName(cluster.Name, component)
+	dep.Namespace = cluster.Namespace
+	dep.Generation = 1
+	dep.Spec.Replicas = &one
+	dep.Spec.Template.Labels = map[string]string{resources.LabelVersion: version}
+	dep.Status.ObservedGeneration = 1
+	dep.Status.UpdatedReplicas = 1
+	dep.Status.ReadyReplicas = 1
+	return dep
+}

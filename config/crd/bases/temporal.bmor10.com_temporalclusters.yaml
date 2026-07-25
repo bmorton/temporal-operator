@@ -6373,13 +6373,28 @@ spec:
                 properties:
                   fromVersion:
                     type: string
+                  message:
+                    description: Message explains why the upgrade is not progressing,
+                      when it is not.
+                    type: string
                   phase:
+                    type: string
+                  phaseStartedAt:
+                    description: |-
+                      PhaseStartedAt is when the current phase was entered. It is the basis for
+                      stall detection.
+                    format: date-time
                     type: string
                   rollbackable:
                     description: |-
                       Rollbackable is true until schema migration begins, after which a
                       rollback is no longer safe.
                     type: boolean
+                  stalledService:
+                    description: |-
+                      StalledService names the service whose rollout has exceeded the phase
+                      timeout, or is empty when the upgrade is progressing normally.
+                    type: string
                   startedAt:
                     format: date-time
                     type: string

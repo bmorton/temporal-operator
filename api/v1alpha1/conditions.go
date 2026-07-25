@@ -87,4 +87,10 @@ const (
 	// ReasonFrontendUnavailable indicates the Temporal frontend is reachable
 	// but not yet accepting RPCs (transient startup window).
 	ReasonFrontendUnavailable = "FrontendUnavailable"
+	// ReasonUpgradeStalled indicates an upgrade phase exceeded its timeout.
+	ReasonUpgradeStalled = "UpgradeStalled"
+	// ReasonRolloutStalled indicates a service Deployment did not roll out in time.
+	ReasonRolloutStalled = "RolloutStalled"
+	// ReasonUpgradeProgressing indicates an upgrade is advancing normally.
+	ReasonUpgradeProgressing = "UpgradeProgressing"
 )
