@@ -18,12 +18,20 @@ package v1alpha1
 
 import (
 	"context"
+	"strings"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+)
+
+const (
+	testFromVersion = "1.30.4"
+	testToVersion   = "1.31.1"
 )
 
 func validCluster() *temporalv1alpha1.TemporalCluster {
@@ -39,7 +47,7 @@ func validCluster() *temporalv1alpha1.TemporalCluster {
 	}
 	return &temporalv1alpha1.TemporalCluster{
 		Spec: temporalv1alpha1.TemporalClusterSpec{
-			Version:          "1.31.1",
+			Version:          testToVersion,
 			NumHistoryShards: 512,
 			Persistence: temporalv1alpha1.PersistenceSpec{
 				DefaultStore:    temporalv1alpha1.DatastoreSpec{SQL: sql("temporal")},
@@ -71,7 +79,7 @@ var _ = Describe("TemporalCluster Webhook", func() {
 			obj.Spec.Image = ""
 			Expect(defaulter.Default(ctx, obj)).To(Succeed())
 
-			Expect(obj.Spec.Image).To(Equal("temporalio/server:1.31.1"))
+			Expect(obj.Spec.Image).To(Equal("temporalio/server:" + testToVersion))
 			Expect(obj.Spec.Services.Frontend.Replicas).To(HaveValue(Equal(int32(2))))
 			Expect(obj.Spec.Services.History.Replicas).To(HaveValue(Equal(int32(3))))
 			Expect(obj.Spec.Services.Matching.Replicas).To(HaveValue(Equal(int32(2))))
@@ -179,7 +187,7 @@ var _ = Describe("TemporalCluster Webhook", func() {
 
 		It("admits a patch-level version bump within the same minor", func() {
 			oldObj.Spec.Version = "1.31.0"
-			obj.Spec.Version = "1.31.1"
+			obj.Spec.Version = testToVersion
 			_, err := validator.ValidateUpdate(ctx, oldObj, obj)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -394,3 +402,92 @@ var _ = Describe("TemporalCluster Webhook", func() {
 		})
 	})
 })
+
+// upgradingCluster returns a cluster that is mid-upgrade from testFromVersion
+// to testToVersion, with the specified rollbackable flag.
+func upgradingCluster(rollbackable bool) *temporalv1alpha1.TemporalCluster {
+	c := validCluster()
+	c.Spec.Version = testToVersion
+	c.Status.Version = testFromVersion
+	c.Status.Upgrade = &temporalv1alpha1.UpgradeStatus{
+		FromVersion:  testFromVersion,
+		ToVersion:    testToVersion,
+		Phase:        "RollingFrontend",
+		Rollbackable: rollbackable,
+	}
+	return c
+}
+
+func TestValidateUpdateRejectsThirdVersionMidUpgrade(t *testing.T) {
+	oldCluster := upgradingCluster(false)
+	newCluster := oldCluster.DeepCopy()
+	newCluster.Spec.Version = "1.31.2"
+
+	v := &TemporalClusterCustomValidator{}
+	_, err := v.ValidateUpdate(context.Background(), oldCluster, newCluster)
+	if err == nil {
+		t.Fatal("ValidateUpdate accepted a third version mid-upgrade, want rejection")
+	}
+	if !strings.Contains(err.Error(), "upgrade in progress") {
+		t.Errorf("error = %q, want it to mention the in-progress upgrade", err.Error())
+	}
+}
+
+func TestValidateUpdateAllowsRevertToFromVersion(t *testing.T) {
+	oldCluster := upgradingCluster(true)
+	newCluster := oldCluster.DeepCopy()
+	newCluster.Spec.Version = testFromVersion
+
+	v := &TemporalClusterCustomValidator{}
+	warnings, err := v.ValidateUpdate(context.Background(), oldCluster, newCluster)
+	if err != nil {
+		t.Fatalf("ValidateUpdate rejected a revert to fromVersion: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("got warnings %v, want none while still rollbackable", warnings)
+	}
+}
+
+func TestValidateUpdateWarnsOnRevertAfterSchemaMigration(t *testing.T) {
+	oldCluster := upgradingCluster(false)
+	newCluster := oldCluster.DeepCopy()
+	newCluster.Spec.Version = testFromVersion
+
+	v := &TemporalClusterCustomValidator{}
+	warnings, err := v.ValidateUpdate(context.Background(), oldCluster, newCluster)
+	if err != nil {
+		t.Fatalf("ValidateUpdate rejected the documented escape hatch: %v", err)
+	}
+	if len(warnings) == 0 {
+		t.Fatal("got no warnings, want one about the migrated schema")
+	}
+	if !strings.Contains(warnings[0], "schema") {
+		t.Errorf("warning = %q, want it to mention the migrated schema", warnings[0])
+	}
+}
+
+func TestValidateUpgradePathUsesFromVersionMidUpgrade(t *testing.T) {
+	// A cluster mid-upgrade from testFromVersion to testToVersion. Reverting is
+	// validated against fromVersion, not against spec.Version (already testToVersion).
+	oldCluster := upgradingCluster(true)
+	newCluster := oldCluster.DeepCopy()
+	newCluster.Spec.Version = testFromVersion
+
+	errs := validateUpgradePath(oldCluster, newCluster, field.NewPath("spec"))
+	if len(errs) != 0 {
+		t.Errorf("validateUpgradePath returned %v for a revert to fromVersion, want none", errs)
+	}
+}
+
+func TestValidateUpdateAllowsVersionChangeWhenNotUpgrading(t *testing.T) {
+	oldCluster := validCluster()
+	oldCluster.Spec.Version = testFromVersion
+	oldCluster.Status.Version = testFromVersion
+	newCluster := oldCluster.DeepCopy()
+	newCluster.Spec.Version = testToVersion
+
+	v := &TemporalClusterCustomValidator{}
+	if _, err := v.ValidateUpdate(context.Background(), oldCluster, newCluster); err != nil {
+		t.Fatalf("ValidateUpdate rejected a normal upgrade start: %v", err)
+	}
+}

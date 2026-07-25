@@ -277,6 +277,7 @@ func (v *TemporalClusterCustomValidator) ValidateUpdate(_ context.Context, oldCl
 	specPath := field.NewPath("spec")
 
 	errs = append(errs, validateShardCountImmutable(oldCluster, newCluster, specPath)...)
+	errs = append(errs, validateVersionChangeDuringUpgrade(oldCluster, newCluster, specPath)...)
 	errs = append(errs, validateUpgradePath(oldCluster, newCluster, specPath)...)
 	errs = append(errs, validateStoreDriverImmutable(oldCluster, newCluster, specPath)...)
 	errs = append(errs, validateClusterMetadataImmutable(oldCluster, newCluster, specPath)...)
@@ -284,7 +285,7 @@ func (v *TemporalClusterCustomValidator) ValidateUpdate(_ context.Context, oldCl
 	if len(errs) > 0 {
 		return nil, errs.ToAggregate()
 	}
-	return nil, nil
+	return upgradeRevertWarnings(oldCluster, newCluster), nil
 }
 
 func validateShardCountImmutable(oldCluster, newCluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
@@ -301,15 +302,57 @@ func validateShardCountImmutable(oldCluster, newCluster *temporalv1alpha1.Tempor
 	return nil
 }
 
+// upgradeBaseline is the version the cluster's oldest services are actually
+// running. Mid-upgrade that is status.upgrade.fromVersion, not spec.version —
+// spec.version is already the target, so validating from it would check a path
+// the cluster is not taking.
+func upgradeBaseline(oldCluster *temporalv1alpha1.TemporalCluster) string {
+	if up := oldCluster.Status.Upgrade; up != nil && up.FromVersion != "" {
+		return up.FromVersion
+	}
+	return oldCluster.Spec.Version
+}
+
 func validateUpgradePath(oldCluster, newCluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
-	if newCluster.Spec.Version != oldCluster.Spec.Version {
-		allowed, err := temporal.CanUpgrade(oldCluster.Spec.Version, newCluster.Spec.Version)
-		if err != nil || !allowed {
-			return field.ErrorList{field.Invalid(specPath.Child("version"), newCluster.Spec.Version,
-				fmt.Sprintf("%s: cannot upgrade from %s to %s", temporalv1alpha1.ReasonUpgradePathInvalid, oldCluster.Spec.Version, newCluster.Spec.Version))}
-		}
+	baseline := upgradeBaseline(oldCluster)
+	if newCluster.Spec.Version == baseline || newCluster.Spec.Version == oldCluster.Spec.Version {
+		return nil
+	}
+	allowed, err := temporal.CanUpgrade(baseline, newCluster.Spec.Version)
+	if err != nil || !allowed {
+		return field.ErrorList{field.Invalid(specPath.Child("version"), newCluster.Spec.Version,
+			fmt.Sprintf("%s: cannot upgrade from %s to %s", temporalv1alpha1.ReasonUpgradePathInvalid, baseline, newCluster.Spec.Version))}
 	}
 	return nil
+}
+
+// validateVersionChangeDuringUpgrade rejects retargeting an in-flight upgrade.
+// The single exception is a revert to status.upgrade.fromVersion, which cancels
+// the upgrade and is the documented way out of a stalled one.
+func validateVersionChangeDuringUpgrade(oldCluster, newCluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
+	up := oldCluster.Status.Upgrade
+	if up == nil || newCluster.Spec.Version == oldCluster.Spec.Version {
+		return nil
+	}
+	if newCluster.Spec.Version == up.FromVersion {
+		return nil
+	}
+	return field.ErrorList{field.Invalid(specPath.Child("version"), newCluster.Spec.Version,
+		fmt.Sprintf("%s: upgrade in progress from %s to %s (phase %s); set spec.version back to %s to cancel it, or wait for the upgrade to finish",
+			temporalv1alpha1.ReasonUpgradePathInvalid, up.FromVersion, up.ToVersion, up.Phase, up.FromVersion))}
+}
+
+// upgradeRevertWarnings warns when a revert is accepted after the schema has
+// already migrated. The revert is still allowed: it is a human decision made
+// with information the operator does not have.
+func upgradeRevertWarnings(oldCluster, newCluster *temporalv1alpha1.TemporalCluster) admission.Warnings {
+	up := oldCluster.Status.Upgrade
+	if up == nil || up.Rollbackable || newCluster.Spec.Version != up.FromVersion {
+		return nil
+	}
+	return admission.Warnings{fmt.Sprintf(
+		"reverting to %s after the persistence schema has already migrated for %s: Temporal schema migrations are forward-only, so the older server binaries will run against the newer schema; verify compatibility before proceeding",
+		up.FromVersion, up.ToVersion)}
 }
 
 func validateStoreDriverImmutable(oldCluster, newCluster *temporalv1alpha1.TemporalCluster, specPath *field.Path) field.ErrorList {
