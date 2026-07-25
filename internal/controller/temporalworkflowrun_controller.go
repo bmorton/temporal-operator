@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
 	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
@@ -55,6 +56,8 @@ type TemporalWorkflowRunReconciler struct {
 
 	// ClientFactory builds the Temporal workflow-run client; injectable for tests.
 	ClientFactory temporal.WorkflowRunClientFactory
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalworkflowruns,verbs=get;list;watch;create;update;patch;delete

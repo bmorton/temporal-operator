@@ -32,6 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
 	"github.com/bmorton/temporal-operator/internal/resources"
 	"github.com/bmorton/temporal-operator/internal/status"
 )
@@ -43,6 +44,8 @@ const clientFieldOwner = client.FieldOwner("temporal-operator/client")
 type TemporalClusterClientReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalclusterclients,verbs=get;list;watch;create;update;patch;delete

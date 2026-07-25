@@ -38,10 +38,13 @@ import (
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/controller"
+	opevents "github.com/bmorton/temporal-operator/internal/events"
+	"github.com/bmorton/temporal-operator/internal/metrics"
 	"github.com/bmorton/temporal-operator/internal/ui"
 	webhookv1alpha1 "github.com/bmorton/temporal-operator/internal/webhook/v1alpha1"
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -198,10 +201,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	metrics.Register()
+	ctrlmetrics.Registry.MustRegister(metrics.NewConditionCollector(mgr.GetClient()))
+
 	if err := (&controller.TemporalClusterReconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
 		Recorder:      mgr.GetEventRecorder("temporalcluster-controller"),
+		Events:        opevents.New(mgr.GetEventRecorder("temporalcluster-controller")),
 		OperatorImage: os.Getenv("OPERATOR_IMAGE"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalCluster")
@@ -210,6 +217,7 @@ func main() {
 	if err := (&controller.TemporalClusterClientReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Events: opevents.New(mgr.GetEventRecorder("temporalclusterclient-controller")),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalClusterClient")
 		os.Exit(1)
@@ -217,6 +225,7 @@ func main() {
 	if err := (&controller.TemporalNamespaceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Events: opevents.New(mgr.GetEventRecorder("temporalnamespace-controller")),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalNamespace")
 		os.Exit(1)
@@ -224,6 +233,7 @@ func main() {
 	if err := (&controller.TemporalSearchAttributeReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Events: opevents.New(mgr.GetEventRecorder("temporalsearchattribute-controller")),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalSearchAttribute")
 		os.Exit(1)
@@ -231,6 +241,7 @@ func main() {
 	if err := (&controller.TemporalScheduleReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Events: opevents.New(mgr.GetEventRecorder("temporalschedule-controller")),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalSchedule")
 		os.Exit(1)
@@ -238,6 +249,7 @@ func main() {
 	if err := (&controller.TemporalDevServerReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Events: opevents.New(mgr.GetEventRecorder("temporaldevserver-controller")),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalDevServer")
 		os.Exit(1)
@@ -245,6 +257,7 @@ func main() {
 	if err := (&controller.TemporalClusterConnectionReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Events: opevents.New(mgr.GetEventRecorder("temporalclusterconnection-controller")),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalClusterConnection")
 		os.Exit(1)
@@ -252,6 +265,7 @@ func main() {
 	if err := (&controller.TemporalWorkflowRunReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Events: opevents.New(mgr.GetEventRecorder("temporalworkflowrun-controller")),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalWorkflowRun")
 		os.Exit(1)

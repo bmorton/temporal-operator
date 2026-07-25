@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/events"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	opevents "github.com/bmorton/temporal-operator/internal/events"
 	"github.com/bmorton/temporal-operator/internal/persistence"
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 )
@@ -42,6 +43,8 @@ type TemporalClusterReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder events.EventRecorder
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *opevents.Recorder
 
 	// BackendFactory builds datastore backends and is injectable for testing;
 	// when nil the default real implementation is used.
