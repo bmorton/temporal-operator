@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/bmorton/temporal-operator/compare/v0.11.0...v0.11.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* stop the schema inspector stalling a cluster forever ([#154](https://github.com/bmorton/temporal-operator/issues/154)) ([c58e2fe](https://github.com/bmorton/temporal-operator/commit/c58e2fe3775f7720b02f487b14cb7a453bf19dfd))
+
 ## [0.11.0](https://github.com/bmorton/temporal-operator/compare/v0.10.1...v0.11.0) (2026-07-24)
 
 
