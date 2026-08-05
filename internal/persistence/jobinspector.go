@@ -24,6 +24,8 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -88,7 +90,37 @@ func (b *JobInspectorBackend) inspectOnce(ctx context.Context) (InspectResult, e
 		}
 	}
 
+	// No pod answered. If the Job has reached a terminal state it never will:
+	// it is built with backoffLimit 0, so it will not create another pod, and a
+	// completed Job's pod is garbage-collected by TTLSecondsAfterFinished. Left
+	// in place, such a Job reads as "still inspecting" on every reconcile and
+	// the cluster waits forever with nothing to wait for.
+	//
+	// Deleting it is what makes this self-healing: the controller creates the
+	// inspector Job when it is absent, so the next pass starts a fresh one.
+	if jobIsTerminal(job) {
+		policy := metav1.DeletePropagationBackground
+		if err := b.client.Delete(ctx, job, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil &&
+			!apierrors.IsNotFound(err) {
+			return InspectResult{}, fmt.Errorf("deleting spent inspector job %s: %w", job.Name, err)
+		}
+	}
+
 	return InspectResult{}, ErrInspecting
+}
+
+// jobIsTerminal reports whether a Job has finished, successfully or not, and so
+// cannot produce any further result.
+func jobIsTerminal(job *batchv1.Job) bool {
+	for _, c := range job.Status.Conditions {
+		if c.Status != corev1.ConditionTrue {
+			continue
+		}
+		if c.Type == batchv1.JobComplete || c.Type == batchv1.JobFailed {
+			return true
+		}
+	}
+	return false
 }
 
 // Probe verifies the datastore is reachable.

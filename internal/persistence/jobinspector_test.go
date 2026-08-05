@@ -23,8 +23,10 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -237,4 +239,106 @@ func containsSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// A failed inspector Job can never produce a termination message, and the Job
+// is built with backoffLimit 0 so it will never create another pod. Reporting
+// "still inspecting" therefore stalls the cluster permanently: this is the
+// shape of a stall seen three times in benchmarking, where a TemporalCluster
+// sat at "inspection in progress" indefinitely with no pod left to wait for.
+//
+// The backend must instead clear the dead Job away, so the controller's next
+// pass creates a fresh one.
+func TestJobInspectorBackend_FailedJobIsRetried(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: "inspector-job", Namespace: "test-ns"},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{
+				{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded"},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
+	b := NewJobInspectorBackend(fakeClient, "temporal", func(ctx context.Context) (*batchv1.Job, error) {
+		return job, nil
+	})
+
+	err := b.Probe(context.Background())
+	if !errors.Is(err, ErrInspecting) {
+		t.Fatalf("expected ErrInspecting so the controller requeues, got %v", err)
+	}
+
+	var remaining batchv1.Job
+	getErr := fakeClient.Get(context.Background(),
+		types.NamespacedName{Namespace: "test-ns", Name: "inspector-job"}, &remaining)
+	if !apierrors.IsNotFound(getErr) {
+		t.Fatalf("failed Job must be deleted so a fresh one is created; Get returned %v", getErr)
+	}
+}
+
+// A Job that completed but whose pod has since been garbage-collected -- the
+// inspector Job sets TTLSecondsAfterFinished, so this is routine -- is equally
+// unable to answer, and equally will not create another pod.
+func TestJobInspectorBackend_CompletedJobWithNoPodIsRetried(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: "inspector-job", Namespace: "test-ns"},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{
+				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
+	b := NewJobInspectorBackend(fakeClient, "temporal", func(ctx context.Context) (*batchv1.Job, error) {
+		return job, nil
+	})
+
+	if err := b.Probe(context.Background()); !errors.Is(err, ErrInspecting) {
+		t.Fatalf("expected ErrInspecting, got %v", err)
+	}
+
+	var remaining batchv1.Job
+	getErr := fakeClient.Get(context.Background(),
+		types.NamespacedName{Namespace: "test-ns", Name: "inspector-job"}, &remaining)
+	if !apierrors.IsNotFound(getErr) {
+		t.Fatalf("completed Job with no pod must be deleted so a fresh one runs; Get returned %v", getErr)
+	}
+}
+
+// A Job that is still running must be left alone: deleting it would restart
+// the inspection on every reconcile and it would never finish.
+func TestJobInspectorBackend_RunningJobIsNotDeleted(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: "inspector-job", Namespace: "test-ns"},
+		Status:     batchv1.JobStatus{Active: 1},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
+	b := NewJobInspectorBackend(fakeClient, "temporal", func(ctx context.Context) (*batchv1.Job, error) {
+		return job, nil
+	})
+
+	if err := b.Probe(context.Background()); !errors.Is(err, ErrInspecting) {
+		t.Fatalf("expected ErrInspecting, got %v", err)
+	}
+
+	var remaining batchv1.Job
+	if getErr := fakeClient.Get(context.Background(),
+		types.NamespacedName{Namespace: "test-ns", Name: "inspector-job"}, &remaining); getErr != nil {
+		t.Fatalf("a running Job must be left in place, got %v", getErr)
+	}
 }

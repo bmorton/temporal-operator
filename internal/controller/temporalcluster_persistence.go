@@ -355,13 +355,28 @@ func (r *TemporalClusterReconciler) ensureInspectorJob(ctx context.Context, clus
 		if err := controllerutil.SetControllerReference(cluster, built, r.Scheme); err != nil {
 			return nil, err
 		}
-		if err := r.Create(ctx, built); err != nil && !apierrors.IsAlreadyExists(err) {
-			return nil, err
+		if err := r.Create(ctx, built); err != nil {
+			if !apierrors.IsAlreadyExists(err) {
+				return nil, err
+			}
+			// The Job was absent to our read and present to our write, which is
+			// the window while a previous one is still being garbage-collected.
+			// Returning `built` here would hand back an object the API has never
+			// seen -- no UID, no status -- and the inspector would then wait on
+			// a Job that does not exist as far as the cluster is concerned.
+			// Requeue instead and read the real object next pass.
+			return nil, persistence.ErrInspecting
 		}
 		return built, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	// A Job on its way out cannot be waited on: it will not run again and its
+	// pods are being removed. Treating it as usable is one way the inspector
+	// ends up waiting for an answer that can never arrive.
+	if !job.DeletionTimestamp.IsZero() {
+		return nil, persistence.ErrInspecting
 	}
 	return &job, nil
 }
