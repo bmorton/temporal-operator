@@ -4,7 +4,7 @@
   "description": "Build-time CSS tooling for the Hugo docs site (Tailwind + daisyUI).",
   "devDependencies": {
     "@tailwindcss/cli": "4.3.3",
-    "daisyui": "5.7.4",
+    "daisyui": "5.7.7",
     "tailwindcss": "4.3.3"
   }
 }
