@@ -1,5 +1,5 @@
 module github.com/bmorton/temporal-operator/docs
 
-go 1.26.5
+go 1.26.6
 
 require github.com/imfing/hextra v0.12.3 // indirect
