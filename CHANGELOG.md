@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/bmorton/temporal-operator/compare/v0.11.1...v0.11.2) (2026-08-16)
+
+
+### Bug Fixes
+
+* bump Go to 1.26.6 for govulncheck ([#164](https://github.com/bmorton/temporal-operator/issues/164)) ([467f798](https://github.com/bmorton/temporal-operator/commit/467f798ef140335d7e65735127a9ffff44823404))
+
 ## [0.11.1](https://github.com/bmorton/temporal-operator/compare/v0.11.0...v0.11.1) (2026-08-05)
 
 
