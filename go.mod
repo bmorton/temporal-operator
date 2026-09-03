@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/onsi/ginkgo/v2 v2.32.1
-	github.com/onsi/gomega v1.42.1
+	github.com/onsi/gomega v1.43.0
 	go.temporal.io/api v1.63.5
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
