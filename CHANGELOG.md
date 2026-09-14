@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/bmorton/temporal-operator/compare/v0.11.2...v0.12.0) (2026-09-14)
+
+
+### Features
+
+* add Temporal 1.32 upgrade path ([#185](https://github.com/bmorton/temporal-operator/issues/185)) ([9252008](https://github.com/bmorton/temporal-operator/commit/9252008cb0e86f39a5dd0939a66ffafa824bc7b8))
+
 ## [0.11.2](https://github.com/bmorton/temporal-operator/compare/v0.11.1...v0.11.2) (2026-08-16)
 
 
