@@ -51,7 +51,7 @@ jobs:
           # file or directory"). Revisit when the GoReleaser signing config is
           # migrated to the bundle format.
           cosign-release: "v2.6.3"
-      - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
