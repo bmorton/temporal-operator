@@ -53,7 +53,7 @@ func baseCluster() *temporalv1alpha1.TemporalCluster {
 	return &temporalv1alpha1.TemporalCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 		Spec: temporalv1alpha1.TemporalClusterSpec{
-			Version:          "1.31.1",
+			Version:          "1.32.0",
 			NumHistoryShards: 512,
 			Persistence: temporalv1alpha1.PersistenceSpec{
 				DefaultStore:    temporalv1alpha1.DatastoreSpec{SQL: sqlStore("temporal")},
@@ -143,7 +143,7 @@ func TestRenderConfigGolden(t *testing.T) {
 				t.Fatalf("rendered config is not valid YAML: %v\n%s", err, out)
 			}
 
-			golden := filepath.Join("testdata", "golden", "1.31", name+".yaml")
+			golden := filepath.Join("testdata", "golden", "1.32", name+".yaml")
 			if *update {
 				if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
 					t.Fatal(err)

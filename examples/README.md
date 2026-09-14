@@ -19,4 +19,4 @@ services/secrets exist.
 | [`cluster-azure-postgres-flexible`](./cluster-azure-postgres-flexible) | Azure Database for PostgreSQL Flexible Server (password auth). |
 | [`cluster-azure-aks-ingress`](./cluster-azure-aks-ingress) | Temporal UI on AKS via Application Gateway (AGIC). |
 | [`cluster-azure-workload-identity`](./cluster-azure-workload-identity) | **Preview:** passwordless Flexible Server via Azure Workload Identity. |
-| [`cluster-upgrade`](./cluster-upgrade) | Version upgrade walkthrough (1.30 → 1.31). |
+| [`cluster-upgrade`](./cluster-upgrade) | Version upgrade walkthrough (1.31 → 1.32). |

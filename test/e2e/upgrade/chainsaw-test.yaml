@@ -1,4 +1,4 @@
-# Chainsaw upgrade test: bring up a cluster at 1.30.4, upgrade to 1.31.1, and
+# Chainsaw upgrade test: bring up a cluster at 1.31.2, upgrade to 1.32.0, and
 # assert the upgrade phase machine completes. Requires the CNPG operator.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
@@ -34,13 +34,13 @@ spec:
     - name: deploy-old-version
       try:
         - apply:
-            file: 01-temporalcluster-1.30.yaml
+            file: 01-temporalcluster-1.31.yaml
         - assert:
             file: 01-assert.yaml
     - name: upgrade-to-new-version
       try:
         - apply:
-            file: 02-temporalcluster-1.31.yaml
+            file: 02-temporalcluster-1.32.yaml
         - assert:
             file: 02-assert.yaml
   # Runs on ANY step failure, before Chainsaw tears down the ephemeral

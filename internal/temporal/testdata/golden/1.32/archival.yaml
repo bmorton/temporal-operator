@@ -1,0 +1,104 @@
+log:
+    stdout: true
+    level: info
+
+persistence:
+    numHistoryShards: 512
+    defaultStore: default
+    visibilityStore: visibility
+    datastores:
+        default:
+            sql:
+                pluginName: "postgres12"
+                databaseName: "temporal"
+                connectAddr: "postgres.default.svc:5432"
+                connectProtocol: "tcp"
+                user: "temporal"
+                password: "default-pw"
+                maxConns: 20
+                maxIdleConns: 20
+                maxConnLifetime: "1h"
+        visibility:
+            sql:
+                pluginName: "postgres12"
+                databaseName: "temporal_visibility"
+                connectAddr: "postgres.default.svc:5432"
+                connectProtocol: "tcp"
+                user: "temporal"
+                password: "visibility-pw"
+                maxConns: 20
+                maxIdleConns: 20
+                maxConnLifetime: "1h"
+
+global:
+    membership:
+        maxJoinDuration: 30s
+        broadcastAddress: "10.0.0.1"
+    pprof:
+        port: 0
+    metrics:
+        prometheus:
+            timerType: histogram
+            listenAddress: "0.0.0.0:9090"
+
+services:
+    frontend:
+        rpc:
+            grpcPort: 7233
+            membershipPort: 6933
+            bindOnIP: "0.0.0.0"
+            httpPort: 7243
+    matching:
+        rpc:
+            grpcPort: 7235
+            membershipPort: 6935
+            bindOnIP: "0.0.0.0"
+    history:
+        rpc:
+            grpcPort: 7234
+            membershipPort: 6934
+            bindOnIP: "0.0.0.0"
+    worker:
+        rpc:
+            grpcPort: 7239
+            membershipPort: 6939
+            bindOnIP: "0.0.0.0"
+
+clusterMetadata:
+    enableGlobalNamespace: false
+    failoverVersionIncrement: 10
+    masterClusterName: "active"
+    currentClusterName: "active"
+    clusterInformation:
+        active:
+            enabled: true
+            initialFailoverVersion: 1
+            rpcName: "frontend"
+            rpcAddress: "127.0.0.1:7233"
+            httpAddress: "127.0.0.1:7243"
+
+dcRedirectionPolicy:
+    policy: "noop"
+
+archival:
+    history:
+        state: "enabled"
+        enableRead: true
+        provider:
+            filestore:
+                fileMode: "0666"
+                dirMode: "0766"
+    visibility:
+        state: "enabled"
+        enableRead: true
+        provider:
+            filestore:
+                fileMode: "0666"
+                dirMode: "0766"
+
+publicClient:
+    hostPort: "127.0.0.1:7233"
+
+dynamicConfigClient:
+    filepath: "/etc/temporal/dynamicconfig/dynamic_config.yaml"
+    pollInterval: "60s"

@@ -3,6 +3,6 @@ kind: TemporalCluster
 metadata:
   name: temporal-upgrade
 status:
-  version: "1.31.1"
+  version: "1.32.0"
   phase: Ready
   (conditions[?type == 'Ready'].status | [0]): "True"
