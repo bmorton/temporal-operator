@@ -75,4 +75,18 @@ var supportedVersions = []VersionInfo{
 		RemovedDynamicConfig:         nil,
 		AddedDynamicConfig:           nil,
 	},
+	{
+		Version:                      "1.32",
+		PatchVersions:                []string{"1.32.0"},
+		MinSchemaSQL:                 "v1.12",
+		MinSchemaCassandra:           "v1.9",
+		MinSchemaES:                  "v7",
+		AllowedFromVersions:          []string{"1.31"},
+		UISeries:                     "2.54",
+		DefaultUIVersion:             "2.54.1",
+		DevServerCLIVersion:          "1.8.3-server-1.32.0-162.0",
+		CassandraVisibilitySupported: false,
+		RemovedDynamicConfig:         []string{"matching.enableMigration", "nexusoperation.useSystemCallbackURL", "component.nexusoperations.useSystemCallbackURL", "component.callbacks.allowedAddresses"},
+		AddedDynamicConfig:           nil,
+	},
 }
