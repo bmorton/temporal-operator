@@ -11,9 +11,21 @@
 # A workflow file always triggers its own suite, so action bumps (e.g. from
 # Dependabot) are still exercised by the workflows that use them.
 #
+# Release PRs (HEAD_REF=release-please--*) always run everything: they only
+# touch the changelog and manifest, but they are the gate for the release and
+# e2e doesn't run on pushes to main, so they are the only e2e run against the
+# combined state being released.
+#
 # Usage:
-#   gh pr diff 123 --name-only | hack/ci-changes.sh
+#   gh pr diff 123 --name-only | HEAD_REF=my-branch hack/ci-changes.sh
 set -euo pipefail
+
+if [[ "${HEAD_REF:-}" == release-please--* ]]; then
+  cat >/dev/null
+  echo "go=true"
+  echo "e2e=true"
+  exit 0
+fi
 
 # Files that affect neither the Go build nor e2e.
 inert='^(docs/|examples/|\.claude/|\.devcontainer/)'
