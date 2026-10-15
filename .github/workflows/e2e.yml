@@ -18,18 +18,35 @@ permissions:
 
 jobs:
   # Determine the test matrix: a single fast combo on PRs, the full matrix on
-  # the nightly schedule.
+  # the nightly schedule, and nothing on PRs that can't affect e2e (see
+  # hack/ci-changes.sh).
   matrix:
     name: Compute matrix
     runs-on: namespace-profile-temporal-operator
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       combos: ${{ steps.set.outputs.combos }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: set
         env:
           EVENT: ${{ github.event_name }}
           SUITE: ${{ github.event.inputs.suite }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
+          if [ "$EVENT" = "pull_request" ] &&
+            files="$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')" &&
+            hack/ci-changes.sh <<<"$files" | grep -qx 'e2e=false'; then
+            echo "No changes affect e2e; skipping."
+            echo "combos=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           postgres='{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"}'
           devserver='{"suite":"devserver"}'
           workflowrun='{"suite":"workflowrun"}'
@@ -59,6 +76,7 @@ jobs:
   e2e:
     name: e2e (${{ matrix.combo.suite }})
     needs: matrix
+    if: needs.matrix.outputs.combos != '[]'
     runs-on: namespace-profile-temporal-operator
     strategy:
       fail-fast: false
@@ -187,13 +205,19 @@ jobs:
   e2e-result:
     name: E2E result
     if: always()
-    needs: e2e
+    needs: [matrix, e2e]
     runs-on: namespace-profile-temporal-operator
     steps:
       - name: Check matrix result
         env:
+          MATRIX_RESULT: ${{ needs.matrix.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
+          COMBOS: ${{ needs.matrix.outputs.combos }}
         run: |
+          if [ "$MATRIX_RESULT" = "success" ] && [ "$COMBOS" = "[]" ]; then
+            echo "e2e not needed for this change"
+            exit 0
+          fi
           if [ "$E2E_RESULT" != "success" ]; then
             echo "e2e matrix failed"
             exit 1
