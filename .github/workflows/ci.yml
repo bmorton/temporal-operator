@@ -10,8 +10,40 @@ permissions:
   contents: read
 
 jobs:
+  # Decide which suites this PR needs (see hack/ci-changes.sh). Pushes to main
+  # and anything that fails to resolve run everything.
+  changes:
+    name: Detect changes
+    runs-on: namespace-profile-temporal-operator
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      go: ${{ steps.classify.outputs.go }}
+      e2e: ${{ steps.classify.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENT" = "pull_request" ] &&
+            files="$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')"; then
+            printf '%s\n' "$files"
+            hack/ci-changes.sh <<<"$files" | tee -a "$GITHUB_OUTPUT"
+          else
+            printf 'go=true\ne2e=true\n' | tee -a "$GITHUB_OUTPUT"
+          fi
+
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: namespace-profile-temporal-operator
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,6 +64,8 @@ jobs:
 
   test:
     name: Test
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: namespace-profile-temporal-operator
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,6 +87,8 @@ jobs:
 
   build:
     name: Build image
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: namespace-profile-temporal-operator
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,6 +109,8 @@ jobs:
 
   govulncheck:
     name: govulncheck
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: namespace-profile-temporal-operator
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -88,6 +126,8 @@ jobs:
 
   verify-chart:
     name: Verify generated chart
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: namespace-profile-temporal-operator
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

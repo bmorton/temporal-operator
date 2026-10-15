@@ -12,6 +12,7 @@ on:
       - "internal/webhook/**"
       - "cmd/preview-wasm/**"
       - "api/**"
+      - ".github/workflows/docs.yml"
   pull_request:
     branches: ["main"]
     paths:
@@ -23,6 +24,7 @@ on:
       - "internal/webhook/**"
       - "cmd/preview-wasm/**"
       - "api/**"
+      - ".github/workflows/docs.yml"
 
 permissions:
   contents: read
