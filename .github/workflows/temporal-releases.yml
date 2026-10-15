@@ -1,0 +1,41 @@
+name: Temporal releases
+
+# Checks upstream Temporal server, UI, CLI, and s2s-proxy releases against the
+# operator's version matrix and opens one issue per unsupported release (label
+# `temporal-release`). Issues point at the version-bump playbook so they can be
+# assigned straight to an agent. See hack/check-temporal-releases.sh.
+
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only report; don't open issues"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: temporal-releases
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check for new Temporal releases
+    runs-on: namespace-profile-temporal-operator
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check releases and open issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: hack/check-temporal-releases.sh
