@@ -80,10 +80,20 @@ checks that must pass. Read each release's notes before editing anything. If
 they mention schema changes, removed dynamic config, or breaking changes, apply
 what the playbook says for that case and summarize it in the PR description.
 
-Work the tasks in order. When several patch releases for the same minor are
-listed, supporting the newest is enough; tick the older ones too. One PR may
-cover all tasks; tick each task as it is done and reference this issue with
-\`Closes #<n>\` so the next release opens a fresh issue.
+Handle all tasks in one PR. When several patch releases for the same minor
+are listed, supporting the newest is enough. Tick the older ones too.
+
+**Before opening the PR**, complete the playbook's "Before you open the PR"
+checklist:
+
+- PR title is a Conventional Commit, e.g.
+  \`feat(versions): support Temporal 1.32.1, UI 2.56.0\`. PRs are squash-merged,
+  so the title is what release-please reads.
+- PR description follows the playbook's template: a releases table with
+  release-note links, the release-note review, skipped releases, and the
+  validation you ran.
+- Every task below is ticked.
+- \`Closes #<this issue>\` is in the PR description.
 
 _Maintained automatically by \`.github/workflows/temporal-releases.yml\`; new
 releases are appended below while this issue is open._
