@@ -14,8 +14,47 @@ New releases are tracked as checklist tasks on a single open issue labeled
 `temporal-release`, maintained by `.github/workflows/temporal-releases.yml`
 (script: `hack/check-temporal-releases.sh`). Each task names the component,
 the version, and the release notes link. When working that issue, handle
-every task (one PR is fine), tick each task as it's done, and put
-`Closes #<n>` in the PR so the next release opens a fresh issue.
+every task in one PR, tick each task as it's done, and put `Closes #<n>`
+in the PR so the next release opens a fresh issue.
+
+## Before you open the PR
+
+These steps are as much a part of the task as the code. Do every one; reviewers
+check them.
+
+1. **PR title is a Conventional Commit.** PRs are squash-merged and the PR title
+   becomes the commit message that `release-please` reads. A title without a
+   type is left out of the changelog and the release. Set the PR title
+   yourself; don't rely on the commit messages. Format:
+   `feat(versions): support Temporal <server versions>, UI <v>, CLI <v>`
+   (use `fix(versions):` only when *every* change is a `patchVersions`
+   addition).
+2. **The PR description uses this template:**
+
+   ```markdown
+   ## Releases
+   | Component | Version | Matrix change | Release notes |
+   |---|---|---|---|
+   | Temporal server | 1.32.1 | added to 1.32 `patchVersions` | <link> |
+   | Temporal UI | 2.56.0 | 1.32 `defaultUIVersion` 2.54.1 → 2.56.0 | <link> |
+
+   ## Release-note review
+   Schema changes, removed/added dynamic config, breaking changes, and CVEs
+   found in each release, or "none" per release. For the CLI, which server
+   version it bundles and how you checked.
+
+   ## Skipped
+   Releases from the issue you deliberately didn't apply (e.g. older patches
+   superseded by a newer one), and why.
+
+   ## Validation
+   The commands you ran and their result (`make test`, `make lint`, ...).
+
+   Closes #<issue>
+   ```
+3. **Tick every task in the tracking issue** that this PR handles. That
+   includes superseded patches you skipped on purpose.
+4. **Commits are signed off** (`git commit -s`).
 
 ## Ground rules
 
@@ -28,13 +67,11 @@ every task (one PR is fine), tick each task as it's done, and put
 - **Verify images exist** before referencing them:
   `curl -fsS https://hub.docker.com/v2/namespaces/temporalio/repositories/<repo>/tags/<tag>`.
   The server needs both `server:<v>` and `admin-tools:<v>`.
-- **Keep one release per PR.** Don't also refactor or bump unrelated deps.
+- **Stay in scope.** Handle only the releases in the issue (all of them in
+  one PR). Don't also refactor or bump unrelated deps.
 - Follow `AGENTS.md`: Conventional Commits, `git commit -s` (DCO is enforced),
   and run `make helm-chart` only if API types/RBAC changed (a version bump
   normally does not).
-- Commit type: use `feat(versions):` for a new minor version or a new default
-  UI/CLI/proxy version, and `fix(versions):` for a patch release that only adds
-  `patchVersions` entries. If unsure, use `feat(versions):`.
 
 ## Patch release (e.g. server 1.31.3 → 1.31.4)
 
@@ -160,6 +197,5 @@ Then confirm:
 - `git grep -n '<new version>'` shows the matrix, `versions_gen.go`, and
   (for minors) tests, golden files, e2e, nightly, and examples. Nothing else
   should be missing.
-- The PR description lists: the version(s) added, links to the upstream release
-  notes, any schema / dynamic-config / breaking notes, and which validation
-  you ran. Reference the issue with `Closes #<n>`.
+- You've done everything in "Before you open the PR" (title, description
+  template, ticked tasks, sign-off).
