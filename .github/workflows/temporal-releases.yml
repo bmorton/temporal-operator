@@ -1,9 +1,10 @@
 name: Temporal releases
 
 # Checks upstream Temporal server, UI, CLI, and s2s-proxy releases against the
-# operator's version matrix and opens one issue per unsupported release (label
-# `temporal-release`). Issues point at the version-bump playbook so they can be
-# assigned straight to an agent. See hack/check-temporal-releases.sh.
+# operator's version matrix and tracks unsupported releases as checklist tasks
+# on a single open `temporal-release` issue (appending to it, or opening a new
+# one if none is open). The issue points at the version-bump playbook so it can
+# be assigned straight to an agent. See hack/check-temporal-releases.sh.
 
 on:
   schedule:
