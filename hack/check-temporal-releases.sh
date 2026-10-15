@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 # check-temporal-releases reports upstream Temporal releases the operator does
-# not yet support, and (unless DRY_RUN=1) opens one GitHub issue per release so
-# it can be assigned to an agent. The issue body points at the version-bump
-# playbook in .claude/skills/temporal-version-bump/SKILL.md.
+# not yet support and (unless DRY_RUN=1) tracks them as checklist tasks on a
+# single GitHub issue that can be assigned to an agent:
+#
+#   - If an open issue titled "$title" with label "$label" exists, any
+#     releases it doesn't already list are appended as new tasks.
+#   - Otherwise (e.g. the previous one was closed by a merged PR), a new
+#     tracking issue is opened.
+#
+# The issue body points at the version-bump playbook in
+# .claude/skills/temporal-version-bump/SKILL.md.
 #
 # Tracked components and where the operator's current version comes from:
 #
@@ -11,11 +18,11 @@
 #   cli        temporalio/cli        hack/version-matrix.yaml devServerCLIVersion
 #   s2s-proxy  temporalio/s2s-proxy  DefaultClusterProxyImage in internal/resources
 #
-# A release only counts once its container image(s) are on Docker Hub, so an
-# issue is never opened for a version that cannot be pulled yet.
+# A release only counts once its container image(s) are on Docker Hub, so a
+# task is never added for a version that cannot be pulled yet.
 #
 # Usage:
-#   DRY_RUN=1 hack/check-temporal-releases.sh   # print, don't open issues
+#   DRY_RUN=1 hack/check-temporal-releases.sh   # print, don't touch issues
 #   GH_TOKEN=... hack/check-temporal-releases.sh
 set -euo pipefail
 
@@ -23,6 +30,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 matrix="$root/hack/version-matrix.yaml"
 playbook=".claude/skills/temporal-version-bump/SKILL.md"
 label="temporal-release"
+title="Support new upstream Temporal releases"
 dry_run="${DRY_RUN:-0}"
 
 # stable_releases <repo> prints X.Y.Z for non-draft, non-prerelease releases
@@ -49,43 +57,70 @@ matrix_values() {
   grep -E "^\s+$1:" "$matrix" | sed -E 's/.*"([^"]+)".*/\1/'
 }
 
-found=0
+# Each task is one checklist line. Its "**<component> <version>**" prefix is
+# the dedup key when merging into an existing issue.
+tasks=()
 
 # report <component> <version> <release-url> <images> <guidance>
 report() {
   local component="$1" version="$2" url="$3" images="$4" guidance="$5"
-  local title="Support ${component} ${version}"
-  found=$((found + 1))
-  echo "new: ${title} (${url})"
-  [ "$dry_run" = "1" ] && return 0
+  echo "new: ${component} ${version} (${url})"
+  tasks+=("- [ ] **${component} ${version}**: ${guidance} [Release notes](${url}). Images: ${images}.")
+}
 
-  if gh issue list --state all --label "$label" --search "\"${title}\" in:title" \
-    --json title --jq '.[].title' | grep -Fxq "$title"; then
-    echo "  issue already exists, skipping"
+# issue_header prints the static part of a new tracking issue's body.
+issue_header() {
+  cat <<EOF
+Upstream Temporal has published releases that temporal-operator does not
+support yet. Each task below is one release.
+
+Follow the version-bump playbook in [\`${playbook}\`](../blob/main/${playbook})
+for each task. It lists every file to change, the generators to run, and the
+checks that must pass. Read each release's notes before editing anything. If
+they mention schema changes, removed dynamic config, or breaking changes, apply
+what the playbook says for that case and summarize it in the PR description.
+
+Work the tasks in order. When several patch releases for the same minor are
+listed, supporting the newest is enough; tick the older ones too. One PR may
+cover all tasks; tick each task as it is done and reference this issue with
+\`Closes #<n>\` so the next release opens a fresh issue.
+
+_Maintained automatically by \`.github/workflows/temporal-releases.yml\`; new
+releases are appended below while this issue is open._
+
+## Releases
+
+EOF
+}
+
+# sync_issue appends unlisted tasks to the open tracking issue, or opens one.
+sync_issue() {
+  gh label create "$label" --color 5319e7 \
+    --description "New upstream Temporal release to support" 2>/dev/null || true
+
+  local number body added=() task key
+  number="$(gh issue list --state open --label "$label" --search "\"${title}\" in:title" \
+    --json number,title --jq "[.[] | select(.title == \"${title}\")] | sort_by(.number) | .[0].number // empty")"
+
+  if [ -z "$number" ]; then
+    body="$(issue_header)"$'\n\n'"$(printf '%s\n' "${tasks[@]}")"
+    gh issue create --label "$label" --title "$title" --body "$body"
     return 0
   fi
 
-  gh issue create --label "$label" --title "$title" --body "$(cat <<EOF
-A new upstream release is available that temporal-operator does not support yet.
-
-- **Component:** ${component}
-- **Version:** \`${version}\`
-- **Release notes:** ${url}
-- **Images (verified on Docker Hub):** ${images}
-
-## What to do
-
-${guidance}
-
-Follow the version-bump playbook in [\`${playbook}\`](../blob/main/${playbook}).
-It lists every file to change, the generators to run, and the checks that must
-pass. Read the upstream release notes before editing anything. If they mention
-schema changes, removed dynamic config, or breaking changes, apply what the
-playbook says for that case and summarize it in the PR description.
-
-_Opened automatically by \`.github/workflows/temporal-releases.yml\`._
-EOF
-)"
+  body="$(gh issue view "$number" --json body --jq .body)"
+  for task in "${tasks[@]}"; do
+    key="${task#- \[ \] }"
+    key="${key%%: *}"
+    grep -Fq -- "$key" <<<"$body" || added+=("$task")
+  done
+  if [ "${#added[@]}" -eq 0 ]; then
+    echo "issue #${number} already lists every release"
+    return 0
+  fi
+  body="${body%$'\n'}"$'\n'"$(printf '%s\n' "${added[@]}")"
+  gh issue edit "$number" --body "$body"
+  gh issue comment "$number" --body "Added ${#added[@]} new release(s) to the checklist:"$'\n\n'"$(printf '%s\n' "${added[@]}" | sed 's/^- \[ \] /- /')"
 }
 
 check_server() {
@@ -164,14 +199,12 @@ check_s2s_proxy() {
     "The operator currently defaults to s2s-proxy v${current}. Update the default proxy image (see \"s2s-proxy release\" in the playbook)."
 }
 
-if [ "$dry_run" != "1" ]; then
-  gh label create "$label" --color 5319e7 \
-    --description "New upstream Temporal release to support" 2>/dev/null || true
-fi
-
 check_server
 check_ui
 check_cli
 check_s2s_proxy
 
-echo "${found} unsupported release(s) found"
+echo "${#tasks[@]} unsupported release(s) found"
+if [ "${#tasks[@]}" -gt 0 ] && [ "$dry_run" != "1" ]; then
+  sync_issue
+fi

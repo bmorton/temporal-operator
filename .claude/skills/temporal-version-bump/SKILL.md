@@ -10,10 +10,12 @@ bumps change just a few lines. Getting one wrong ships a default image that
 can't be pulled, or allows an upgrade path Temporal doesn't support. So check
 every value against upstream and never guess one.
 
-Issues labeled `temporal-release` are opened by
-`.github/workflows/temporal-releases.yml` (script:
-`hack/check-temporal-releases.sh`). The issue names the component, the version,
-and the release notes link. Use them.
+New releases are tracked as checklist tasks on a single open issue labeled
+`temporal-release`, maintained by `.github/workflows/temporal-releases.yml`
+(script: `hack/check-temporal-releases.sh`). Each task names the component,
+the version, and the release notes link. When working that issue, handle
+every task (one PR is fine), tick each task as it's done, and put
+`Closes #<n>` in the PR so the next release opens a fresh issue.
 
 ## Ground rules
 

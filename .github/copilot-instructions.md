@@ -67,9 +67,9 @@ RBAC markers, or chart overrides. Because the manager Deployment template is han
 Adding support for a new Temporal server, UI, CLI (dev server), or s2s-proxy
 release is a recurring task with a dedicated playbook:
 [`.claude/skills/temporal-version-bump/SKILL.md`](../.claude/skills/temporal-version-bump/SKILL.md).
-Read it before editing `hack/version-matrix.yaml`. Issues labeled
-`temporal-release` are opened automatically by
-`.github/workflows/temporal-releases.yml` when upstream publishes a release.
+Read it before editing `hack/version-matrix.yaml`. New upstream releases are
+tracked as checklist tasks on a single open `temporal-release` issue,
+maintained by `.github/workflows/temporal-releases.yml`.
 
 ## Releases
 
