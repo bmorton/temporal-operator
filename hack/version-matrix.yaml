@@ -41,7 +41,7 @@ versions:
     cassandraVisibilitySupported: false
 
   - version: "1.30"
-    patchVersions: ["1.30.4", "1.30.5", "1.30.6"]
+    patchVersions: ["1.30.4", "1.30.5", "1.30.6", "1.30.8"]
     minSchemaSQL: "v1.12"
     minSchemaCassandra: "v1.9"
     minSchemaES: "v7"
@@ -52,7 +52,7 @@ versions:
     cassandraVisibilitySupported: false
 
   - version: "1.31"
-    patchVersions: ["1.31.0", "1.31.1", "1.31.2"]
+    patchVersions: ["1.31.0", "1.31.1", "1.31.2", "1.31.4"]
     minSchemaSQL: "v1.12"
     minSchemaCassandra: "v1.9"
     minSchemaES: "v7"
@@ -63,14 +63,14 @@ versions:
     cassandraVisibilitySupported: false
 
   - version: "1.32"
-    patchVersions: ["1.32.0"]
+    patchVersions: ["1.32.0", "1.32.1"]
     minSchemaSQL: "v1.12"
     minSchemaCassandra: "v1.9"
     minSchemaES: "v7"
     allowedFromVersions: ["1.31"]
-    uiSeries: "2.54"
-    defaultUIVersion: "2.54.1"
-    devServerCLIVersion: "1.8.3-server-1.32.0-162.0"
+    uiSeries: "2.56"
+    defaultUIVersion: "2.56.0"
+    devServerCLIVersion: "1.9.1"
     cassandraVisibilitySupported: false
     removedDynamicConfig:
       - "matching.enableMigration"

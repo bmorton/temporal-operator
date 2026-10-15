@@ -81,7 +81,7 @@ func TestSupportedVersionsAndGet(t *testing.T) {
 
 func TestDevServerCLIVersion(t *testing.T) {
 	cases := map[string]string{
-		"1.32.0": "1.8.3-server-1.32.0-162.0",
+		"1.32.0": "1.9.1",
 		"1.31.1": "1.7.2",
 		"1.31":   "1.7.2",
 		"1.30.4": "1.6.2",
