@@ -36,7 +36,10 @@ type TemporalClusterSpec struct {
 	// +kubebuilder:default=512
 	NumHistoryShards int32 `json:"numHistoryShards"`
 
-	// Image is the Temporal server image. Default: temporalio/server:<Version>.
+	// Image overrides the Temporal server image, e.g. to pull from a private
+	// registry or run a custom build. When unset, temporalio/server:<Version>
+	// is used and follows spec.version across upgrades. Setting it to a
+	// temporalio/server:<semver> tag is equivalent to leaving it unset.
 	// +optional
 	Image string `json:"image,omitempty"`
 

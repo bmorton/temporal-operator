@@ -253,7 +253,23 @@ func LatestSupportedVersion() string {
 
 // ServerImage returns the default Temporal server image for a version.
 func ServerImage(version string) string {
-	return "temporalio/server:" + version
+	return serverImageRepo + ":" + version
+}
+
+const serverImageRepo = "temporalio/server"
+
+// IsDefaultServerImage reports whether image is of the form ServerImage(v) for
+// some semver v, i.e. it spells out what the operator would derive from
+// spec.version anyway. v need not be in the support matrix: a value persisted
+// by an older operator may name a version that has since been dropped. Digest
+// pins and other repositories are never considered default.
+func IsDefaultServerImage(image string) bool {
+	tag, ok := strings.CutPrefix(image, serverImageRepo+":")
+	if !ok {
+		return false
+	}
+	_, err := parseSemver(tag)
+	return err == nil
 }
 
 // AdminToolsImage returns the Temporal admin-tools image for a version, used to

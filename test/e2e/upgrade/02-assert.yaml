@@ -6,3 +6,50 @@ status:
   version: "1.32.0"
   phase: Ready
   (conditions[?type == 'Ready'].status | [0]): "True"
+---
+# The upgrade is only real if the Deployments actually run the new image: the
+# phase machine once declared success after relabeling pods that still ran the
+# old binary (#223).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-upgrade-frontend
+spec:
+  template:
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/server:1.32.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-upgrade-history
+spec:
+  template:
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/server:1.32.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-upgrade-matching
+spec:
+  template:
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/server:1.32.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-upgrade-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/server:1.32.0
