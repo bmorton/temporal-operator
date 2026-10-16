@@ -32,7 +32,7 @@ inert='^(docs/|examples/|\.claude/|\.devcontainer/)'
 inert+='|\.md$'
 inert+='|^(LICENSE|\.gitignore|release-please-config\.json|\.release-please-manifest\.json)$'
 inert+='|^\.github/(ISSUE_TEMPLATE/|CODEOWNERS$|PULL_REQUEST_TEMPLATE\.md$|copilot-instructions\.md$|dependabot\.yml$)'
-inert+='|^hack/check-temporal-releases\.sh$'
+inert+='|^hack/(check-temporal-releases|github-settings)\.sh$'
 
 # Workflow files are inert except for the suite they define.
 go_self='^\.github/workflows/ci\.yml$'

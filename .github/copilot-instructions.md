@@ -20,11 +20,15 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 Common types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
 `build`, `ci`, `chore`, `revert`.
 
-- The commitlint CI check is **non-blocking** — it reports suggestions but never
-  fails the build, so do not over-rotate on formatting.
-- Still follow the convention: `release-please` uses the `type:` prefix to build
-  the changelog and pick the next version (`feat:` → minor, `fix:` → patch;
-  breaking changes stay within `0.x` while pre-1.0).
+- **The PR title must be a Conventional Commit.** PRs are squash-merged and the
+  PR title becomes the commit message on `main`. The `PR title` check is
+  required to merge; a title without a type (e.g. "Fix zizmor reference")
+  blocks the PR.
+- The commitlint check on individual commits is **non-blocking** — it reports
+  suggestions but never fails the build, so do not over-rotate on formatting.
+- `release-please` uses the `type:` prefix to build the changelog and pick the
+  next version (`feat:` → minor, `fix:` → patch; breaking changes stay within
+  `0.x` while pre-1.0).
 
 ## Sign-off (DCO)
 
