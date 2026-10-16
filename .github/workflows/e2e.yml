@@ -35,6 +35,7 @@ jobs:
       - id: set
         env:
           EVENT: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
           SUITE: ${{ github.event.inputs.suite }}
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
