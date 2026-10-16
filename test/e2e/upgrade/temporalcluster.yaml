@@ -3,13 +3,14 @@
 # A bare "temporal-pg-rw" would resolve against temporal-system (where the
 # service does not exist) and fail with PersistenceUnreachable. Chainsaw
 # templating (enabled by default) substitutes the ephemeral test namespace via
-# the built-in $namespace binding.
+# the built-in $namespace binding, and $version via the step bindings in
+# chainsaw-test.yaml.
 apiVersion: temporal.bmor10.com/v1alpha1
 kind: TemporalCluster
 metadata:
   name: temporal-upgrade
 spec:
-  version: "1.31.2"
+  version: ($version)
   numHistoryShards: 512
   persistence:
     defaultStore:

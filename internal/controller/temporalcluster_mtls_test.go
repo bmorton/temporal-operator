@@ -49,8 +49,8 @@ var _ = Describe("TemporalCluster mTLS reconciler", func() {
 	var counter int
 
 	readyVersions := map[string]string{
-		"temporal":            "1.12",
-		"temporal_visibility": "1.12",
+		"temporal":            "1.19",
+		"temporal_visibility": "1.14",
 	}
 
 	BeforeEach(func() {

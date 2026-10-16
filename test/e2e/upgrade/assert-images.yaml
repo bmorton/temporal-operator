@@ -1,15 +1,7 @@
-apiVersion: temporal.bmor10.com/v1alpha1
-kind: TemporalCluster
-metadata:
-  name: temporal-upgrade
-status:
-  version: "1.32.0"
-  phase: Ready
-  (conditions[?type == 'Ready'].status | [0]): "True"
+# Ready is only meaningful if the Deployments actually run the image for
+# $version: the phase machine once declared an upgrade complete after
+# relabeling pods that still ran the old binary (#223).
 ---
-# The upgrade is only real if the Deployments actually run the new image: the
-# phase machine once declared success after relabeling pods that still ran the
-# old binary (#223).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,7 +11,7 @@ spec:
     spec:
       containers:
         - name: temporal
-          image: temporalio/server:1.32.0
+          image: (join(':', ['temporalio/server', $version]))
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -30,7 +22,7 @@ spec:
     spec:
       containers:
         - name: temporal
-          image: temporalio/server:1.32.0
+          image: (join(':', ['temporalio/server', $version]))
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -41,7 +33,7 @@ spec:
     spec:
       containers:
         - name: temporal
-          image: temporalio/server:1.32.0
+          image: (join(':', ['temporalio/server', $version]))
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -52,4 +44,4 @@ spec:
     spec:
       containers:
         - name: temporal
-          image: temporalio/server:1.32.0
+          image: (join(':', ['temporalio/server', $version]))

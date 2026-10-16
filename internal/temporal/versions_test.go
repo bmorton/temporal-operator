@@ -132,3 +132,25 @@ func TestIsDefaultServerImage(t *testing.T) {
 		}
 	}
 }
+
+func TestSchemaRequirementsAreSetAndFromUpstream(t *testing.T) {
+	// Spot-check against upstream schema/postgresql/v12/version.go and
+	// schema/cassandra/version.go at the release tags (#222). The default and
+	// visibility SQL stores have independent version lines.
+	want := map[string][3]string{ // minor -> sql, sql visibility, cassandra
+		"1.27": {"v1.15", "v1.9", "v1.11"},
+		"1.30": {"v1.18", "v1.13", "v1.13"},
+		"1.32": {"v1.19", "v1.14", "v1.13"},
+	}
+	for _, v := range supportedVersions {
+		if v.MinSchemaSQL == "" || v.MinSchemaSQLVisibility == "" || v.MinSchemaCassandra == "" {
+			t.Errorf("%s: every minor must set minSchemaSQL, minSchemaSQLVisibility and minSchemaCassandra", v.Version)
+		}
+		if w, ok := want[v.Version]; ok {
+			got := [3]string{v.MinSchemaSQL, v.MinSchemaSQLVisibility, v.MinSchemaCassandra}
+			if got != w {
+				t.Errorf("%s: schema requirements = %v, want %v", v.Version, got, w)
+			}
+		}
+	}
+}

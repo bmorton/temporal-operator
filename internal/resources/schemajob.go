@@ -50,6 +50,9 @@ const (
 	ActionUpdate SchemaAction = "update"
 )
 
+// SchemaContainerName is the name of the schema-tool container in schema Jobs.
+const SchemaContainerName = "schema"
+
 // PostgresSchemaDir is the on-image schema directory for the postgres12 plugin
 // (used as the BuildSchemaJob SchemaVersionDir for SQL postgres stores).
 const PostgresSchemaDir = "v12"
@@ -261,7 +264,7 @@ func BuildSchemaJob(p SchemaJobParams) (*batchv1.Job, error) {
 			ImagePullSecrets: p.Cluster.Spec.ImagePullSecrets,
 			Containers: []corev1.Container{
 				{
-					Name:    "schema",
+					Name:    SchemaContainerName,
 					Image:   temporal.AdminToolsImage(p.Cluster.Spec.Version),
 					Command: command,
 					Args:    args,

@@ -35,6 +35,7 @@ type versionInfo struct {
 	Version                      string   `json:"version"`
 	PatchVersions                []string `json:"patchVersions"`
 	MinSchemaSQL                 string   `json:"minSchemaSQL"`
+	MinSchemaSQLVisibility       string   `json:"minSchemaSQLVisibility"`
 	MinSchemaCassandra           string   `json:"minSchemaCassandra"`
 	MinSchemaES                  string   `json:"minSchemaES"`
 	AllowedFromVersions          []string `json:"allowedFromVersions"`
@@ -62,6 +63,7 @@ var supportedVersions = []VersionInfo{
 		Version:                      {{ printf "%q" .Version }},
 		PatchVersions:                {{ strSlice .PatchVersions }},
 		MinSchemaSQL:                 {{ printf "%q" .MinSchemaSQL }},
+		MinSchemaSQLVisibility:       {{ printf "%q" .MinSchemaSQLVisibility }},
 		MinSchemaCassandra:           {{ printf "%q" .MinSchemaCassandra }},
 		MinSchemaES:                  {{ printf "%q" .MinSchemaES }},
 		AllowedFromVersions:          {{ strSlice .AllowedFromVersions }},
