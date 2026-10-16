@@ -67,11 +67,35 @@ var _ = Describe("TemporalCluster Webhook", func() {
 	})
 
 	Context("Defaulting webhook", func() {
-		It("defaults image, replicas, metrics and the initial-shards annotation", func() {
+		It("does not persist a default image", func() {
 			obj.Spec.Image = ""
 			Expect(defaulter.Default(ctx, obj)).To(Succeed())
+			Expect(obj.Spec.Image).To(BeEmpty())
+		})
 
-			Expect(obj.Spec.Image).To(Equal("temporalio/server:1.31.1"))
+		It("clears a default-shaped image persisted by an older operator so it cannot pin an upgrade", func() {
+			// Stored by a pre-#223 webhook at creation (1.31.0); the user has
+			// since bumped spec.version to 1.31.1.
+			obj.Spec.Image = "temporalio/server:1.31.0"
+			Expect(defaulter.Default(ctx, obj)).To(Succeed())
+			Expect(obj.Spec.Image).To(BeEmpty())
+		})
+
+		It("keeps a custom image", func() {
+			for _, img := range []string{
+				"registry.example.com/temporal/server:1.31.1",
+				"temporalio/server:1.31.1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				"temporalio/server:my-build",
+			} {
+				obj.Spec.Image = img
+				Expect(defaulter.Default(ctx, obj)).To(Succeed())
+				Expect(obj.Spec.Image).To(Equal(img))
+			}
+		})
+
+		It("defaults replicas, metrics and the initial-shards annotation", func() {
+			Expect(defaulter.Default(ctx, obj)).To(Succeed())
+
 			Expect(obj.Spec.Services.Frontend.Replicas).To(HaveValue(Equal(int32(2))))
 			Expect(obj.Spec.Services.History.Replicas).To(HaveValue(Equal(int32(3))))
 			Expect(obj.Spec.Services.Matching.Replicas).To(HaveValue(Equal(int32(2))))

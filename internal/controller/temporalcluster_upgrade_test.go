@@ -33,6 +33,13 @@ import (
 	"github.com/bmorton/temporal-operator/internal/resources"
 )
 
+// Versions used by the upgrade scenarios: both are in the support matrix and
+// share a schema version, so the phase machine is exercised without Jobs.
+const (
+	upgradeFromVersion = "1.31.0"
+	upgradeToVersion   = "1.31.1"
+)
+
 var _ = Describe("TemporalCluster upgrade reconciler", func() {
 	ctx := context.Background()
 	var counter int
@@ -75,6 +82,16 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		}
 	}
 
+	// expectServerImages asserts every core Deployment templates the server
+	// container at image.
+	expectServerImages := func(name, image string) {
+		for _, svc := range coreServices {
+			dep := &appsv1.Deployment{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: resources.DeploymentName(name, svc), Namespace: "default"}, dep)).To(Succeed())
+			Expect(dep.Spec.Template.Spec.Containers[0].Image).To(Equal(image), "service %s", svc)
+		}
+	}
+
 	get := func(name string) *temporalv1alpha1.TemporalCluster {
 		c := &temporalv1alpha1.TemporalCluster{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, c)).To(Succeed())
@@ -93,21 +110,21 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		name := fmt.Sprintf("upg-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.0"),
+			Spec:       validClusterSpec(upgradeFromVersion),
 		}
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
 
 		By("bringing the cluster to Ready at 1.31.0")
 		reconcileOnce(name)
-		markReadyAtVersion(name, "1.31.0")
+		markReadyAtVersion(name, upgradeFromVersion)
 		reconcileOnce(name)
-		Expect(get(name).Status.Version).To(Equal("1.31.0"))
+		Expect(get(name).Status.Version).To(Equal(upgradeFromVersion))
 		Expect(meta.IsStatusConditionTrue(get(name).Status.Conditions, temporalv1alpha1.ConditionReady)).To(BeTrue())
 
 		By("requesting an upgrade to 1.31.1")
 		cur := get(name)
-		cur.Spec.Version = "1.31.1"
+		cur.Spec.Version = upgradeToVersion
 		Expect(k8sClient.Update(ctx, cur)).To(Succeed())
 
 		By("driving the upgrade phase machine to completion")
@@ -115,7 +132,7 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		var rollbackableDuringSchema *bool
 		for i := 0; i < 20; i++ {
 			reconcileOnce(name)
-			markReadyAtVersion(name, "1.31.1")
+			markReadyAtVersion(name, upgradeToVersion)
 
 			c := get(name)
 			if c.Status.Upgrade != nil {
@@ -125,13 +142,13 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 					rollbackableDuringSchema = &v
 				}
 			}
-			if c.Status.Version == "1.31.1" && c.Status.Upgrade == nil {
+			if c.Status.Version == upgradeToVersion && c.Status.Upgrade == nil {
 				break
 			}
 		}
 
 		final := get(name)
-		Expect(final.Status.Version).To(Equal("1.31.1"))
+		Expect(final.Status.Version).To(Equal(upgradeToVersion))
 		Expect(final.Status.Upgrade).To(BeNil())
 
 		By("having passed through the ordered rolling phases")
@@ -142,6 +159,75 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		By("marking the upgrade non-rollbackable once schema migration starts")
 		Expect(rollbackableDuringSchema).NotTo(BeNil())
 		Expect(*rollbackableDuringSchema).To(BeFalse())
+
+		By("running the new server image in every service")
+		expectServerImages(name, "temporalio/server:1.31.1")
+	})
+
+	It("does not let a persisted default spec.image pin the server image across an upgrade", func() {
+		counter++
+		name := fmt.Sprintf("pinned-%d", counter)
+		spec := validClusterSpec(upgradeFromVersion)
+		// What a pre-#223 defaulting webhook stored at creation time.
+		spec.Image = "temporalio/server:1.31.0"
+		c := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+			Spec:       spec,
+		}
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
+
+		reconcileOnce(name)
+		markReadyAtVersion(name, upgradeFromVersion)
+		reconcileOnce(name)
+		Expect(get(name).Status.Version).To(Equal(upgradeFromVersion))
+		expectServerImages(name, "temporalio/server:1.31.0")
+
+		cur := get(name)
+		cur.Spec.Version = upgradeToVersion
+		Expect(k8sClient.Update(ctx, cur)).To(Succeed())
+
+		for i := 0; i < 20; i++ {
+			reconcileOnce(name)
+			markReadyAtVersion(name, upgradeToVersion)
+			if c := get(name); c.Status.Version == upgradeToVersion && c.Status.Upgrade == nil {
+				break
+			}
+		}
+		Expect(get(name).Status.Version).To(Equal(upgradeToVersion))
+		expectServerImages(name, "temporalio/server:1.31.1")
+	})
+
+	It("does not advance a rolling phase while the service still runs the old image", func() {
+		counter++
+		name := fmt.Sprintf("stale-%d", counter)
+		c := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+			Spec:       validClusterSpec(upgradeFromVersion),
+		}
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
+
+		reconcileOnce(name)
+		markReadyAtVersion(name, upgradeFromVersion)
+		reconcileOnce(name)
+		Expect(get(name).Status.Version).To(Equal(upgradeFromVersion))
+
+		// Simulate the #223 failure mode directly: a frontend Deployment that
+		// carries the new version label but still templates the old image.
+		dep := &appsv1.Deployment{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: resources.DeploymentName(name, "frontend"), Namespace: "default"}, dep)).To(Succeed())
+		dep.Spec.Template.Labels[resources.LabelVersion] = upgradeToVersion
+		dep.Spec.Template.Spec.Containers[0].Image = "temporalio/server:1.31.0"
+		Expect(k8sClient.Update(ctx, dep)).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: dep.Name, Namespace: "default"}, dep)).To(Succeed())
+		dep.Status.ObservedGeneration = dep.Generation
+		dep.Status.Replicas = *dep.Spec.Replicas
+		dep.Status.UpdatedReplicas = *dep.Spec.Replicas
+		dep.Status.ReadyReplicas = *dep.Spec.Replicas
+		Expect(k8sClient.Status().Update(ctx, dep)).To(Succeed())
+
+		Expect(reconciler().serviceRolledOut(ctx, get(name), "frontend", upgradeToVersion)).To(BeFalse())
 	})
 
 	It("does not start an upgrade on a fresh install", func() {
@@ -149,17 +235,17 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		name := fmt.Sprintf("fresh-%d", counter)
 		c := &temporalv1alpha1.TemporalCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-			Spec:       validClusterSpec("1.31.1"),
+			Spec:       validClusterSpec(upgradeToVersion),
 		}
 		Expect(k8sClient.Create(ctx, c)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
 
 		reconcileOnce(name)
-		markReadyAtVersion(name, "1.31.1")
+		markReadyAtVersion(name, upgradeToVersion)
 		reconcileOnce(name)
 
 		final := get(name)
 		Expect(final.Status.Upgrade).To(BeNil())
-		Expect(final.Status.Version).To(Equal("1.31.1"))
+		Expect(final.Status.Version).To(Equal(upgradeToVersion))
 	})
 })

@@ -115,3 +115,20 @@ func TestLatestSupportedVersion(t *testing.T) {
 		t.Fatalf("LatestSupportedVersion()=%q is not supported", got)
 	}
 }
+
+func TestIsDefaultServerImage(t *testing.T) {
+	cases := map[string]bool{
+		ServerImage("1.31.1"):      true,
+		"temporalio/server:1.26.2": true, // dropped from the matrix, still default-shaped
+		"":                         false,
+		"temporalio/server:latest": false,
+		"temporalio/server:1.31.1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": false,
+		"registry.example.com/temporalio/server:1.31.1":                                                    false,
+		"temporalio/admin-tools:1.31.1":                                                                    false,
+	}
+	for image, want := range cases {
+		if got := IsDefaultServerImage(image); got != want {
+			t.Errorf("IsDefaultServerImage(%q) = %v, want %v", image, got, want)
+		}
+	}
+}

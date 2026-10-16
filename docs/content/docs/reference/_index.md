@@ -1131,7 +1131,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `version` _string_ | Version is the Temporal server version, e.g. "1.31.1". |  | Pattern: `^\d+\.\d+\.\d+$` <br /> |
 | `numHistoryShards` _integer_ | NumHistoryShards is the number of history shards. IMMUTABLE after creation.<br />Choose carefully: 512 small prod, 4096 large prod. | 512 | Maximum: 16384 <br />Minimum: 1 <br /> |
-| `image` _string_ | Image is the Temporal server image. Default: temporalio/server:<Version>. |  | Optional: \{\} <br /> |
+| `image` _string_ | Image overrides the Temporal server image, e.g. to pull from a private<br />registry or run a custom build. When unset, temporalio/server:<Version><br />is used and follows spec.version across upgrades. Setting it to a<br />temporalio/server:<semver> tag is equivalent to leaving it unset. |  | Optional: \{\} <br /> |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core) array_ | ImagePullSecrets references secrets for pulling the server image. |  | Optional: \{\} <br /> |
 | `services` _[ServicesSpec](#servicesspec)_ | Services configures each Temporal service. |  | Optional: \{\} <br /> |
 | `persistence` _[PersistenceSpec](#persistencespec)_ | Persistence configures the default and visibility datastores. Required. |  |  |
