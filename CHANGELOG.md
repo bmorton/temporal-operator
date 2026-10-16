@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/bmorton/temporal-operator/compare/v0.12.0...v0.13.0) (2026-10-16)
+
+
+### Features
+
+* **versions:** support Temporal 1.30.8, 1.31.4, 1.32.1, UI 2.56.0, CLI 1.9.1 ([#217](https://github.com/bmorton/temporal-operator/issues/217)) ([f7f5a55](https://github.com/bmorton/temporal-operator/commit/f7f5a55de395120f7682ea1cdf14ad5dd2c52ebc))
+
+
+### Bug Fixes
+
+* **deps:** patch Go 1.26.9, x/net, and otel vulnerabilities ([#207](https://github.com/bmorton/temporal-operator/issues/207)) ([eb403f7](https://github.com/bmorton/temporal-operator/commit/eb403f73469f7fcce28b5695bceaf96c8cf62ae1))
+
 ## [0.12.0](https://github.com/bmorton/temporal-operator/compare/v0.11.2...v0.12.0) (2026-09-14)
 
 
