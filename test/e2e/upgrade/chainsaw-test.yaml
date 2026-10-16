@@ -1,5 +1,12 @@
-# Chainsaw upgrade test: bring up a cluster at 1.31.2, upgrade to 1.32.0, and
-# assert the upgrade phase machine completes. Requires the CNPG operator.
+# Chainsaw upgrade test: bring up a cluster at $from, upgrade it to $to, and
+# assert that the upgrade phase machine completes, that every Deployment runs
+# the new image, and that both SQL schemas were migrated to what $to requires.
+# Requires the CNPG operator.
+#
+# UPGRADE_FROM / UPGRADE_TO select the versions; the Nightly's matrix sets them
+# (.github/workflows/nightly.yml). The defaults cross a SQL schema bump
+# (default 1.18 -> 1.19, visibility 1.13 -> 1.14) so that a plain run exercises
+# a real migration rather than a same-schema upgrade.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
@@ -8,6 +15,14 @@ spec:
   timeouts:
     apply: 1m
     assert: 10m
+    # check-schema.sh compiles hack/schema-min.go with `go run` and the catch
+    # block dumps diagnostics; both outlive Chainsaw's default exec timeout.
+    exec: 5m
+  bindings:
+    - name: from
+      value: (env('UPGRADE_FROM') || '1.30.8')
+    - name: to
+      value: (env('UPGRADE_TO') || '1.31.4')
   steps:
     - name: provision-postgres
       try:
@@ -32,17 +47,41 @@ spec:
               status:
                 succeeded: 1
     - name: deploy-old-version
+      bindings:
+        - name: version
+          value: ($from)
       try:
         - apply:
-            file: 01-temporalcluster-1.31.yaml
+            file: temporalcluster.yaml
         - assert:
-            file: 01-assert.yaml
+            file: assert-ready.yaml
+        - assert:
+            file: assert-images.yaml
+        - script:
+            env:
+              - name: NS
+                value: ($namespace)
+              - name: VERSION
+                value: ($version)
+            content: ./check-schema.sh "$NS" "$VERSION"
     - name: upgrade-to-new-version
+      bindings:
+        - name: version
+          value: ($to)
       try:
         - apply:
-            file: 02-temporalcluster-1.32.yaml
+            file: temporalcluster.yaml
         - assert:
-            file: 02-assert.yaml
+            file: assert-ready.yaml
+        - assert:
+            file: assert-images.yaml
+        - script:
+            env:
+              - name: NS
+                value: ($namespace)
+              - name: VERSION
+                value: ($version)
+            content: ./check-schema.sh "$NS" "$VERSION"
   # Runs on ANY step failure, before Chainsaw tears down the ephemeral
   # namespace, so the operator-managed pods/jobs/logs are still available.
   catch:
@@ -58,9 +97,14 @@ spec:
           echo "===== PODS ====="
           kubectl -n "$NS" get pods -o wide
           echo "===== JOBS ====="
-          kubectl -n "$NS" get jobs
+          kubectl -n "$NS" get jobs -o custom-columns='NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,SUCCEEDED:.status.succeeded,FAILED:.status.failed'
+          echo "===== SCHEMA VERSIONS ====="
+          for db in temporal temporal_visibility; do
+            echo "-- $db"
+            kubectl -n "$NS" exec temporal-pg-1 -c postgres -- psql -U postgres -d "$db" -Atc "SELECT db_name, curr_version FROM schema_version"
+          done
           echo "===== DEPLOYMENTS ====="
-          kubectl -n "$NS" get deploy
+          kubectl -n "$NS" get deploy -o custom-columns='NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,READY:.status.readyReplicas'
           echo "===== DESCRIBE PODS ====="
           kubectl -n "$NS" describe pods
           echo "===== EVENTS ====="

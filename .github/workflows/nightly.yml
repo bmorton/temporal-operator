@@ -16,14 +16,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Every pair crosses a schema bump except the last; see minSchema* in
+          # hack/version-matrix.yaml. The suite asserts the schema afterwards.
+          # 1.28.3 / 1.29.6 rather than the newest patches: Docker Hub has no
+          # temporalio/admin-tools:1.28.4 or :1.29.7, so their schema Jobs
+          # cannot run (see #226).
           - from: "1.27.0"
             to: "1.28.3"
           - from: "1.28.3"
             to: "1.29.6"
           - from: "1.29.6"
-            to: "1.30.4"
-          - from: "1.31.2"
-            to: "1.32.0"
+            to: "1.30.8"
+          - from: "1.30.8"
+            to: "1.31.4"
+          - from: "1.31.4"
+            to: "1.32.1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,17 +68,17 @@ jobs:
       # without hitting Docker Hub from inside the cluster. The upgrade test
       # provisions two Temporal versions, so both sets of images are needed.
       - name: Pre-pull and load Temporal images
+        env:
+          UPGRADE_FROM: ${{ matrix.from }}
+          UPGRADE_TO: ${{ matrix.to }}
         run: |
           set -euo pipefail
           root="test/e2e/upgrade"
-          # Temporal versions drive the derived server and admin-tools images.
-          # Scope to the 1.x line on purpose: the fixtures also carry unrelated
-          # "version:" fields that must not be turned into bogus
-          # temporalio/server:<x> pulls.
-          versions=$( { grep -rhoE 'version: *"?1\.[0-9]+\.[0-9]+' "$root" || true; } \
-            | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
+          # The upgrade fixtures take their versions from UPGRADE_FROM/UPGRADE_TO
+          # rather than literal "version:" fields, so derive the server and
+          # admin-tools images from the matrix values directly.
           images=""
-          for v in $versions; do
+          for v in "$UPGRADE_FROM" "$UPGRADE_TO"; do
             images="$images temporalio/server:$v temporalio/admin-tools:$v"
           done
           # Pick up any images referenced literally in the fixtures/scripts.

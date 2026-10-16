@@ -52,7 +52,7 @@ jobs:
           devserver='{"suite":"devserver"}'
           workflowrun='{"suite":"workflowrun"}'
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
-          upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
+          upgrade='{"from":"1.30.8","to":"1.31.4","persistence":"upgrade","suite":"upgrade"}'
           opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
           cassandra='{"temporal":"1.31.1","persistence":"cassandra","suite":"cassandra"}'
           multicluster='{"temporal":"1.31.1","persistence":"multicluster","suite":"multicluster"}'
@@ -138,6 +138,9 @@ jobs:
           # turned into bogus temporalio/server:<x> pulls.
           versions=$( { grep -rhoE 'version: *"?1\.[0-9]+\.[0-9]+' "$root" || true; } \
             | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
+          # The upgrade suite takes its versions from UPGRADE_FROM/UPGRADE_TO
+          # instead of literal "version:" fields.
+          versions="$versions ${{ matrix.combo.from }} ${{ matrix.combo.to }}"
           images=""
           for v in $versions; do
             if echo "${{ matrix.combo.suite }}" | grep -qE "^(devserver|workflowrun)"; then
@@ -180,6 +183,10 @@ jobs:
           done
 
       - name: Run Chainsaw suite
+        env:
+          # Only the upgrade suite reads these; empty for every other combo.
+          UPGRADE_FROM: ${{ matrix.combo.from }}
+          UPGRADE_TO: ${{ matrix.combo.to }}
         run: ./bin/chainsaw test --test-dir test/e2e/${{ matrix.combo.suite }} --config .chainsaw.yaml
 
       - name: Collect diagnostics

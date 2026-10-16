@@ -73,16 +73,37 @@ check them.
   and run `make helm-chart` only if API types/RBAC changed (a version bump
   normally does not).
 
+## Schema versions
+
+`minSchemaSQL`, `minSchemaSQLVisibility` and `minSchemaCassandra` are the
+schema versions a server release refuses to start without
+(`temporal/fx.go` `verifyPersistenceCompatibleVersion`). The operator runs
+`update-schema` until each store reaches its value, so these must match
+upstream exactly. Read them at the release tag; do not infer them from
+directory listings (GitHub sorts `v1.9` after `v1.19`):
+
+```sh
+V=1.33.0
+gh api "repos/temporalio/temporal/contents/schema/postgresql/v12/version.go?ref=v$V" --jq .content | base64 -d | grep Version
+#   const Version = "1.19"            -> minSchemaSQL: "v1.19"
+#   const VisibilityVersion = "1.14"  -> minSchemaSQLVisibility: "v1.14"
+gh api "repos/temporalio/temporal/contents/schema/cassandra/version.go?ref=v$V" --jq .content | base64 -d | grep Version
+#   const Version = "1.13"            -> minSchemaCassandra: "v1.13"
+```
+
+(MySQL `schema/mysql/v8/version.go` tracks the Postgres numbers.) Write the
+values with a `v` prefix like the existing entries.
+
 ## Patch release (e.g. server 1.31.3 → 1.31.4)
 
 1. In `hack/version-matrix.yaml`, append the version to that minor's
    `patchVersions` (keep them ascending). Keep existing patches unless the
    release notes say one is broken or unsafe, and if you drop one, say why in
    the PR.
-2. Leave the `minSchema*` values alone. If the release notes or a new
-   directory under upstream `schema/*/temporal/versioned/` show a schema
-   change in a patch release (rare), don't edit the values. Call it out in
-   the PR description for a human to review.
+2. Check the `minSchema*` values against upstream at the new tag (see "Schema
+   versions" below). They almost never change within a minor; if they do,
+   that minor's values must be raised to match, since the operator only runs
+   `update-schema` until a store reaches them. Mention it in the PR either way.
 3. `make gen-version-matrix`.
 4. If the nightly upgrade matrix (`.github/workflows/nightly.yml`) or
    `test/e2e/upgrade/` uses an older patch of this minor as an upgrade
@@ -102,11 +123,11 @@ reference implementation and mirror its shape.
 1. **Matrix entry**: add a new block to `hack/version-matrix.yaml` after the
    previous minor:
    - `version`, `patchVersions`
-   - `minSchemaSQL`, `minSchemaCassandra`, `minSchemaES`: copy from the
-     previous minor. If upstream added a new directory under
-     `schema/*/temporal/versioned/` between the two release tags, list it in
-     the PR description for human review instead of guessing new values.
-     (The operator's numbering doesn't map 1:1 to upstream directory names.)
+   - `minSchemaSQL`, `minSchemaSQLVisibility`, `minSchemaCassandra`: read them
+     from upstream at the release tag (see "Schema versions" above). Never
+     copy them from the previous minor: too-low values make the operator skip
+     `update-schema` on upgrade and the new server then refuses to start
+     (#222). `minSchemaES` stays `"v7"`.
    - `allowedFromVersions`: normally just the previous minor (Temporal only
      supports upgrading one minor at a time)
    - `uiSeries` / `defaultUIVersion`: the UI release paired with this server

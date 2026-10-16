@@ -35,9 +35,15 @@ type VersionInfo struct {
 	Version string
 	// PatchVersions are the exact supported patch releases, e.g. "1.31.1".
 	PatchVersions []string
-	// MinSchemaSQL is the minimum SQL schema version required.
+	// MinSchemaSQL is the SQL schema version the server requires for the
+	// default store (upstream schema/postgresql/v12/version.go Version).
 	MinSchemaSQL string
-	// MinSchemaCassandra is the minimum Cassandra schema version required.
+	// MinSchemaSQLVisibility is the SQL schema version the server requires for
+	// the visibility store (upstream VisibilityVersion). The two stores have
+	// independent version lines, e.g. 1.19 vs 1.14 on 1.32.
+	MinSchemaSQLVisibility string
+	// MinSchemaCassandra is the Cassandra schema version the server requires
+	// (upstream schema/cassandra/version.go Version).
 	MinSchemaCassandra string
 	// MinSchemaES is the minimum Elasticsearch schema/index template version.
 	MinSchemaES string

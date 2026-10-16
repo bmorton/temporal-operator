@@ -50,7 +50,7 @@ var _ = Describe("TemporalCluster upgrade reconciler", func() {
 		return &TemporalClusterReconciler{
 			Client:         k8sClient,
 			Scheme:         k8sClient.Scheme(),
-			BackendFactory: fakeBackendFactory(nil, map[string]string{"temporal": "1.12", "temporal_visibility": "1.12"}),
+			BackendFactory: fakeBackendFactory(nil, map[string]string{"temporal": "1.19", "temporal_visibility": "1.14"}),
 		}
 	}
 

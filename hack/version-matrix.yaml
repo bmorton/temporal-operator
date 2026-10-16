@@ -6,11 +6,24 @@
 #     make gen-version-matrix
 #
 # Source: https://github.com/temporalio/temporal/releases
+#
+# minSchema* are the schema versions a server release refuses to start without
+# (temporal/fx.go verifyPersistenceCompatibleVersion). The operator runs
+# update-schema until each store reaches its value, so a value that is too low
+# silently skips migrations on upgrade (#222). Read them from upstream at the
+# release tag, never copy them forward:
+#
+#   schema/postgresql/v12/version.go  Version -> minSchemaSQL
+#                                     VisibilityVersion -> minSchemaSQLVisibility
+#   schema/cassandra/version.go       Version -> minSchemaCassandra
+#
+#   gh api 'repos/temporalio/temporal/contents/schema/postgresql/v12/version.go?ref=v<ver>' --jq .content | base64 -d
 versions:
   - version: "1.27"
     patchVersions: ["1.27.0"]
-    minSchemaSQL: "v1.12"
-    minSchemaCassandra: "v1.9"
+    minSchemaSQL: "v1.15"
+    minSchemaSQLVisibility: "v1.9"
+    minSchemaCassandra: "v1.11"
     minSchemaES: "v7"
     allowedFromVersions: ["1.26"]
     uiSeries: "2.31"
@@ -20,8 +33,9 @@ versions:
 
   - version: "1.28"
     patchVersions: ["1.28.3", "1.28.4"]
-    minSchemaSQL: "v1.12"
-    minSchemaCassandra: "v1.9"
+    minSchemaSQL: "v1.17"
+    minSchemaSQLVisibility: "v1.9"
+    minSchemaCassandra: "v1.12"
     minSchemaES: "v7"
     allowedFromVersions: ["1.27"]
     uiSeries: "2.32"
@@ -31,8 +45,9 @@ versions:
 
   - version: "1.29"
     patchVersions: ["1.29.6", "1.29.7"]
-    minSchemaSQL: "v1.12"
-    minSchemaCassandra: "v1.9"
+    minSchemaSQL: "v1.18"
+    minSchemaSQLVisibility: "v1.9"
+    minSchemaCassandra: "v1.13"
     minSchemaES: "v7"
     allowedFromVersions: ["1.28"]
     uiSeries: "2.33"
@@ -42,8 +57,9 @@ versions:
 
   - version: "1.30"
     patchVersions: ["1.30.4", "1.30.5", "1.30.6", "1.30.8"]
-    minSchemaSQL: "v1.12"
-    minSchemaCassandra: "v1.9"
+    minSchemaSQL: "v1.18"
+    minSchemaSQLVisibility: "v1.13"
+    minSchemaCassandra: "v1.13"
     minSchemaES: "v7"
     allowedFromVersions: ["1.29"]
     uiSeries: "2.34"
@@ -53,8 +69,9 @@ versions:
 
   - version: "1.31"
     patchVersions: ["1.31.0", "1.31.1", "1.31.2", "1.31.4"]
-    minSchemaSQL: "v1.12"
-    minSchemaCassandra: "v1.9"
+    minSchemaSQL: "v1.19"
+    minSchemaSQLVisibility: "v1.14"
+    minSchemaCassandra: "v1.13"
     minSchemaES: "v7"
     allowedFromVersions: ["1.30"]
     uiSeries: "2.52"
@@ -64,8 +81,9 @@ versions:
 
   - version: "1.32"
     patchVersions: ["1.32.0", "1.32.1"]
-    minSchemaSQL: "v1.12"
-    minSchemaCassandra: "v1.9"
+    minSchemaSQL: "v1.19"
+    minSchemaSQLVisibility: "v1.14"
+    minSchemaCassandra: "v1.13"
     minSchemaES: "v7"
     allowedFromVersions: ["1.31"]
     uiSeries: "2.56"
