@@ -95,12 +95,26 @@ docs: document mTLS configuration
 ```
 
 Common types are `feat`, `fix`, `docs`, `style`, `refactor`, `perf`,
-`test`, `build`, `ci`, `chore`, and `revert`. CI checks commit messages and
-reports suggestions, but **the check is non-blocking** — it will not fail your
-PR. The leading `type:` matters most: while the project is pre-1.0,
+`test`, `build`, `ci`, `chore`, and `revert`.
+
+PRs are squash-merged and **the PR title becomes the commit message on `main`**,
+so the PR title must follow the convention; the `PR title` status check
+enforces this and is required to merge. Individual commit messages are also
+linted, but **that check is non-blocking** — it will not fail your PR. The
+leading `type:` matters most: while the project is pre-1.0,
 [release-please](https://github.com/googleapis/release-please) uses it to build
 the changelog and choose the next version, so `feat:` and `fix:` are
 especially helpful.
+
+### Merge requirements
+
+`main` is protected by a ruleset: changes land only through a squash-merged
+pull request with a linear history, and these checks must pass: `Lint`, `Test`,
+`Build image`, `govulncheck`, `Verify generated chart`, `DCO check`,
+`E2E result`, and `PR title`. Checks skipped because a PR cannot affect them
+(see `hack/ci-changes.sh`) count as passing. Dependabot PRs for non-major
+updates are auto-merged once those checks pass
+(`.github/workflows/dependabot-auto-merge.yml`).
 
 ## Developer Certificate of Origin (DCO)
 

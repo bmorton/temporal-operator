@@ -20,7 +20,7 @@ Thanks for contributing! Please ensure your PR meets the checklist below.
 
 ## Checklist
 
-- [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
+- [ ] PR title is a [Conventional Commit](https://www.conventionalcommits.org/) (it becomes the squash commit message).
 - [ ] Commits are signed off (DCO): `git commit -s`.
 - [ ] `make test lint` pass locally.
 - [ ] `make manifests generate` produces no diff.

@@ -9,10 +9,12 @@ should read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full guide.
 
 ## Commit messages
 
-Use [Conventional Commits](https://www.conventionalcommits.org/). The CI check
-is **non-blocking** (it reports but never fails the build), but you should still
-follow the convention because `release-please` derives the changelog and the
-next version from commit types.
+Use [Conventional Commits](https://www.conventionalcommits.org/). PRs are
+squash-merged and **the PR title becomes the commit message on `main`**, so the
+PR title must be a Conventional Commit. The `PR title` check enforces this and
+is required to merge. Individual commit messages are linted too, but that check
+is **non-blocking**. `release-please` derives the changelog and the next
+version from the merged commit types.
 
 Format:
 
