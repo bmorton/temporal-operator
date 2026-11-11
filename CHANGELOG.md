@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.14.0](https://github.com/bmorton/temporal-operator/compare/v0.13.0...v0.14.0) (2026-11-11)
+
+
+### Features
+
+* **versions:** support Temporal 1.30.9, 1.31.5, 1.32.2, UI 2.58.1, CLI 1.10.0 ([#251](https://github.com/bmorton/temporal-operator/issues/251)) ([81f7682](https://github.com/bmorton/temporal-operator/commit/81f7682036c06559e5037c76ad2740d3a5e223b5))
+
+
+### Bug Fixes
+
+* **persistence:** require the schema versions each Temporal release needs ([#227](https://github.com/bmorton/temporal-operator/issues/227)) ([c3752b0](https://github.com/bmorton/temporal-operator/commit/c3752b00e1bdc7c08288bb513c30c5edd9bdb487))
+* **upgrade:** make the server image follow spec.version ([#224](https://github.com/bmorton/temporal-operator/issues/224)) ([2e598b8](https://github.com/bmorton/temporal-operator/commit/2e598b851cbf009bd5e910ae335f03def19db5d1)), closes [#223](https://github.com/bmorton/temporal-operator/issues/223)
+
 ## [0.13.0](https://github.com/bmorton/temporal-operator/compare/v0.12.0...v0.13.0) (2026-10-16)
 
 
