@@ -26,11 +26,11 @@ jobs:
           - from: "1.28.3"
             to: "1.29.6"
           - from: "1.29.6"
-            to: "1.30.8"
-          - from: "1.30.8"
-            to: "1.31.4"
-          - from: "1.31.4"
-            to: "1.32.1"
+            to: "1.30.9"
+          - from: "1.30.9"
+            to: "1.31.5"
+          - from: "1.31.5"
+            to: "1.32.2"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -52,7 +52,7 @@ var supportedVersions = []VersionInfo{
 	},
 	{
 		Version:                      "1.30",
-		PatchVersions:                []string{"1.30.4", "1.30.5", "1.30.6", "1.30.8"},
+		PatchVersions:                []string{"1.30.4", "1.30.5", "1.30.6", "1.30.8", "1.30.9"},
 		MinSchemaSQL:                 "v1.18",
 		MinSchemaSQLVisibility:       "v1.13",
 		MinSchemaCassandra:           "v1.13",
@@ -67,7 +67,7 @@ var supportedVersions = []VersionInfo{
 	},
 	{
 		Version:                      "1.31",
-		PatchVersions:                []string{"1.31.0", "1.31.1", "1.31.2", "1.31.4"},
+		PatchVersions:                []string{"1.31.0", "1.31.1", "1.31.2", "1.31.4", "1.31.5"},
 		MinSchemaSQL:                 "v1.19",
 		MinSchemaSQLVisibility:       "v1.14",
 		MinSchemaCassandra:           "v1.13",
@@ -82,7 +82,7 @@ var supportedVersions = []VersionInfo{
 	},
 	{
 		Version:                      "1.32",
-		PatchVersions:                []string{"1.32.0", "1.32.1"},
+		PatchVersions:                []string{"1.32.0", "1.32.1", "1.32.2"},
 		MinSchemaSQL:                 "v1.19",
 		MinSchemaSQLVisibility:       "v1.14",
 		MinSchemaCassandra:           "v1.13",
@@ -90,7 +90,7 @@ var supportedVersions = []VersionInfo{
 		AllowedFromVersions:          []string{"1.31"},
 		UISeries:                     "2.56",
 		DefaultUIVersion:             "2.56.0",
-		DevServerCLIVersion:          "1.9.1",
+		DevServerCLIVersion:          "1.10.0",
 		CassandraVisibilitySupported: false,
 		RemovedDynamicConfig:         []string{"matching.enableMigration", "nexusoperation.useSystemCallbackURL", "component.nexusoperations.useSystemCallbackURL", "component.callbacks.allowedAddresses"},
 		AddedDynamicConfig:           nil,

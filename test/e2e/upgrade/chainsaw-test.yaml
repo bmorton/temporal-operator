@@ -20,9 +20,9 @@ spec:
     exec: 5m
   bindings:
     - name: from
-      value: (env('UPGRADE_FROM') || '1.30.8')
+      value: (env('UPGRADE_FROM') || '1.30.9')
     - name: to
-      value: (env('UPGRADE_TO') || '1.31.4')
+      value: (env('UPGRADE_TO') || '1.31.5')
   steps:
     - name: provision-postgres
       try:
