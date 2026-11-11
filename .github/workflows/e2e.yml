@@ -52,7 +52,7 @@ jobs:
           devserver='{"suite":"devserver"}'
           workflowrun='{"suite":"workflowrun"}'
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
-          upgrade='{"from":"1.30.8","to":"1.31.4","persistence":"upgrade","suite":"upgrade"}'
+          upgrade='{"from":"1.30.9","to":"1.31.5","persistence":"upgrade","suite":"upgrade"}'
           opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
           cassandra='{"temporal":"1.31.1","persistence":"cassandra","suite":"cassandra"}'
           multicluster='{"temporal":"1.31.1","persistence":"multicluster","suite":"multicluster"}'
