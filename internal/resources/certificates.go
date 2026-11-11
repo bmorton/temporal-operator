@@ -78,7 +78,7 @@ func serviceDNSNames(cluster *temporalv1alpha1.TemporalCluster, component string
 // every service's membership DNS names. It is used by all services for both
 // server and client auth within the cluster.
 func BuildInternodeCertificate(cluster *temporalv1alpha1.TemporalCluster) *certmanagerv1.Certificate {
-	var dnsNames []string
+	var dnsNames []string //nolint:prealloc // total length is not known before the appends
 	// Stable serverName used by internode TLS clients; pod IPs are dynamic and
 	// not in the cert, so clients verify against this name instead.
 	dnsNames = append(dnsNames, InternodeCertName(cluster.Name))
