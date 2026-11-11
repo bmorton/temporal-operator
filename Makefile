@@ -41,13 +41,15 @@ help: ## Display this help.
 
 ##@ Development
 
+# controller-gen gets explicit roots: with "./..." it also loads the tool
+# modules under hack/tools, which can need a newer Go than this project.
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./api/...;./cmd/...;./internal/..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
 generate: controller-gen ui-generate ## Generate DeepCopy methods and templ Go code.
-	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./api/...;./cmd/...;./internal/..."
 
 .PHONY: gen-version-matrix
 gen-version-matrix: ## Regenerate internal/temporal/versions_gen.go from hack/version-matrix.yaml.
