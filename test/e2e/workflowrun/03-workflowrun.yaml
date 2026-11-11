@@ -1,0 +1,13 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalWorkflowRun
+metadata:
+  name: greet-once
+spec:
+  clusterRef:
+    name: wfr
+    kind: TemporalDevServer
+  namespace: orders
+  ttlSecondsAfterFinished: 30
+  workflow:
+    workflowType: GreetingWorkflow
+    taskQueue: greeting-tq

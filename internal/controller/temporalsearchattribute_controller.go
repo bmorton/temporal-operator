@@ -25,10 +25,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/temporal"
@@ -95,6 +99,11 @@ func (r *TemporalSearchAttributeReconciler) Reconcile(ctx context.Context, req c
 
 	registered, err := r.ensureRegistered(ctx, &sa, sac)
 	if err != nil {
+		if isTransientClusterErr(err) {
+			r.setReady(&sa, metav1.ConditionFalse, temporalv1alpha1.ReasonFrontendUnavailable,
+				"waiting for the Temporal frontend to become available")
+			return ctrl.Result{RequeueAfter: clusterUnavailableRequeue}, r.statusUpdate(ctx, &sa)
+		}
 		return ctrl.Result{}, err
 	}
 	if !registered {
@@ -196,10 +205,37 @@ func (r *TemporalSearchAttributeReconciler) statusUpdate(ctx context.Context, sa
 	return client.IgnoreNotFound(r.Status().Update(ctx, sa))
 }
 
+// mapClusterToSearchAttributes enqueues every TemporalSearchAttribute in the
+// changed target's namespace whose ClusterRef points at it.
+func (r *TemporalSearchAttributeReconciler) mapClusterToSearchAttributes(kind string) handler.MapFunc {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		var list temporalv1alpha1.TemporalSearchAttributeList
+		if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
+			return nil
+		}
+		var reqs []reconcile.Request
+		for i := range list.Items {
+			item := &list.Items[i]
+			if refTargets(item.Spec.ClusterRef, kind, obj.GetName()) {
+				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+					Namespace: item.Namespace, Name: item.Name,
+				}})
+			}
+		}
+		return reqs
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *TemporalSearchAttributeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&temporalv1alpha1.TemporalSearchAttribute{}).
+		Watches(&temporalv1alpha1.TemporalCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToSearchAttributes(temporalv1alpha1.ClusterKindTemporalCluster)),
+			builder.WithPredicates(clusterReadinessChanged)).
+		Watches(&temporalv1alpha1.TemporalDevServer{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToSearchAttributes(temporalv1alpha1.ClusterKindTemporalDevServer)),
+			builder.WithPredicates(clusterReadinessChanged)).
 		Named("temporalsearchattribute").
 		Complete(r)
 }

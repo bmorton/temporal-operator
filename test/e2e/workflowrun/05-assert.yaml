@@ -1,0 +1,7 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalWorkflowRun
+metadata:
+  name: denied-run
+status:
+  (conditions[?type == 'Ready'].status | [0]): "False"
+  (conditions[?type == 'Ready'].reason | [0]): WorkflowRunNotPermitted

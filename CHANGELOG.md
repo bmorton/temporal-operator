@@ -1,5 +1,78 @@
 # Changelog
 
+## [0.13.0](https://github.com/bmorton/temporal-operator/compare/v0.12.0...v0.13.0) (2026-10-16)
+
+
+### Features
+
+* **versions:** support Temporal 1.30.8, 1.31.4, 1.32.1, UI 2.56.0, CLI 1.9.1 ([#217](https://github.com/bmorton/temporal-operator/issues/217)) ([f7f5a55](https://github.com/bmorton/temporal-operator/commit/f7f5a55de395120f7682ea1cdf14ad5dd2c52ebc))
+
+
+### Bug Fixes
+
+* **deps:** patch Go 1.26.9, x/net, and otel vulnerabilities ([#207](https://github.com/bmorton/temporal-operator/issues/207)) ([eb403f7](https://github.com/bmorton/temporal-operator/commit/eb403f73469f7fcce28b5695bceaf96c8cf62ae1))
+
+## [0.12.0](https://github.com/bmorton/temporal-operator/compare/v0.11.2...v0.12.0) (2026-09-14)
+
+
+### Features
+
+* add Temporal 1.32 upgrade path ([#185](https://github.com/bmorton/temporal-operator/issues/185)) ([9252008](https://github.com/bmorton/temporal-operator/commit/9252008cb0e86f39a5dd0939a66ffafa824bc7b8))
+
+## [0.11.2](https://github.com/bmorton/temporal-operator/compare/v0.11.1...v0.11.2) (2026-08-16)
+
+
+### Bug Fixes
+
+* bump Go to 1.26.6 for govulncheck ([#164](https://github.com/bmorton/temporal-operator/issues/164)) ([467f798](https://github.com/bmorton/temporal-operator/commit/467f798ef140335d7e65735127a9ffff44823404))
+
+## [0.11.1](https://github.com/bmorton/temporal-operator/compare/v0.11.0...v0.11.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* stop the schema inspector stalling a cluster forever ([#154](https://github.com/bmorton/temporal-operator/issues/154)) ([c58e2fe](https://github.com/bmorton/temporal-operator/commit/c58e2fe3775f7720b02f487b14cb7a453bf19dfd))
+
+## [0.11.0](https://github.com/bmorton/temporal-operator/compare/v0.10.1...v0.11.0) (2026-07-24)
+
+
+### Features
+
+* **controller:** reconcile dependents when their cluster becomes ready ([#138](https://github.com/bmorton/temporal-operator/issues/138)) ([6c5f3f5](https://github.com/bmorton/temporal-operator/commit/6c5f3f52335582839d254f67f2b50930dd039d12))
+* **controller:** restart services when dynamicConfig changes ([#135](https://github.com/bmorton/temporal-operator/issues/135)) ([b42edb4](https://github.com/bmorton/temporal-operator/commit/b42edb4c11c0447dfe6815e3b2209a8d9fe5219e))
+
+
+### Bug Fixes
+
+* **docs:** serve site from temporal-operator.bmorton.dev custom domain ([#137](https://github.com/bmorton/temporal-operator/issues/137)) ([1f3a57e](https://github.com/bmorton/temporal-operator/commit/1f3a57e6a33747ca577435bc8c0c230e33a1b932))
+* **docs:** use hx: prefix for landing-page hero spacing ([#140](https://github.com/bmorton/temporal-operator/issues/140)) ([fd54c29](https://github.com/bmorton/temporal-operator/commit/fd54c2937fb3bc76ed95dca56ad715e469ad8730))
+
+## [0.10.1](https://github.com/bmorton/temporal-operator/compare/v0.10.0...v0.10.1) (2026-07-24)
+
+
+### Bug Fixes
+
+* **api:** accept scalar dynamicConfig values ([#133](https://github.com/bmorton/temporal-operator/issues/133)) ([d959157](https://github.com/bmorton/temporal-operator/commit/d959157630b862fcc7e311a5bc7e52a2b1d778fb))
+
+## [0.10.0](https://github.com/bmorton/temporal-operator/compare/v0.9.0...v0.10.0) (2026-07-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* spec.ui.auth is now a typed object, not raw YAML.
+
+### Features
+
+* add TemporalWorkflowRun CRD for one-off workflow runs ([#100](https://github.com/bmorton/temporal-operator/issues/100)) ([b03268d](https://github.com/bmorton/temporal-operator/commit/b03268dbb830261aab5be6f0c69122fee8374c73))
+* Microsoft Entra authentication for Temporal (server JWT + UI OIDC) ([#89](https://github.com/bmorton/temporal-operator/issues/89)) ([d674939](https://github.com/bmorton/temporal-operator/commit/d67493934706cab29c9787785714f0ab680a5f5b))
+* **versions:** add latest Temporal server patches and UI 2.52.1 ([#131](https://github.com/bmorton/temporal-operator/issues/131)) ([9c616b0](https://github.com/bmorton/temporal-operator/commit/9c616b0599f6bc681ab3dd5b022639a1b7d90ce4))
+* **versions:** default to Temporal UI v2.51.1 for latest server ([#108](https://github.com/bmorton/temporal-operator/issues/108)) ([a604c94](https://github.com/bmorton/temporal-operator/commit/a604c94c08acf61c2fa88fc75ac66651b9bb6662))
+
+
+### Bug Fixes
+
+* **deps:** bump go to 1.26.5 and x/text to v0.39.0 (govulncheck) ([#117](https://github.com/bmorton/temporal-operator/issues/117)) ([0aa5437](https://github.com/bmorton/temporal-operator/commit/0aa543786c43348f4196aff007fd3eadc11804fd))
+
 ## [0.9.0](https://github.com/bmorton/temporal-operator/compare/v0.8.0...v0.9.0) (2026-06-24)
 
 

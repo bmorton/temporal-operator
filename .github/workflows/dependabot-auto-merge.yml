@@ -1,0 +1,53 @@
+name: Dependabot auto-merge
+
+# Enables GitHub auto-merge on Dependabot PRs so they land on their own once
+# every required status check on main passes (see the "main" ruleset). Major
+# version bumps are left for a human: they are the ones that change inputs or
+# behavior, and release.yml's actions never run on a PR, so CI can't vouch for
+# them.
+#
+# Token note: enabling auto-merge with GITHUB_TOKEN means the eventual merge is
+# performed by github-actions[bot], and pushes made by that token do not start
+# `push` workflows (CI on main, Release Please, Docs deploy). That is harmless
+# for Dependabot's `build(deps)`/`ci(deps)` commits, which release-please does
+# not release on their own, and the next human merge picks them up. To get the
+# push workflows anyway, add a fine-grained PAT with contents:write and
+# pull-requests:write as the *Dependabot* secret DEPENDABOT_AUTOMERGE_TOKEN
+# (Dependabot-triggered workflows only see Dependabot secrets).
+on: pull_request
+
+permissions: {}
+
+jobs:
+  auto-merge:
+    name: Enable auto-merge
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'bmorton/temporal-operator'
+    runs-on: namespace-profile-temporal-operator
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge (squash)
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN || secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+        run: |
+          echo "update type: $UPDATE_TYPE"
+          gh pr merge --auto --squash "$PR_URL"
+
+      - name: Leave major bumps for a human
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr comment "$PR_URL" --body "Major version bump: not auto-merged. Review the upstream changelog and merge by hand." \
+            --edit-last --create-if-none 2>/dev/null || gh pr comment "$PR_URL" --body "Major version bump: not auto-merged. Review the upstream changelog and merge by hand."

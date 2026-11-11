@@ -1,0 +1,42 @@
+name: PR title
+
+# PRs are squash-merged and the PR title becomes the commit message on main,
+# which release-please reads to pick the next version and write the changelog.
+# Individual commit messages are only linted advisorily (conventional-commits
+# workflow); the title is the one that has to be right, so this check blocks.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: ["main"]
+
+permissions: {}
+
+jobs:
+  title:
+    name: PR title
+    runs-on: namespace-profile-temporal-operator
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Keep in sync with commitlint.config.mjs.
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          requireScope: false
+          # Dependabot and release-please titles start with a capital
+          # ("Bump ...", "release 0.x"); don't police subject case.
+          subjectPattern: ^.+$
+          validateSingleCommit: false

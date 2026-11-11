@@ -25,10 +25,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/resources"
@@ -101,6 +105,11 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	info, failover, err := r.ensureRegistered(ctx, &ns, tc)
 	if err != nil {
+		if isTransientClusterErr(err) {
+			r.setReady(&ns, metav1.ConditionFalse, temporalv1alpha1.ReasonFrontendUnavailable,
+				"waiting for the Temporal frontend to become available")
+			return ctrl.Result{RequeueAfter: clusterUnavailableRequeue}, r.statusUpdate(ctx, &ns)
+		}
 		return ctrl.Result{}, err
 	}
 
@@ -301,10 +310,38 @@ func (r *TemporalNamespaceReconciler) statusUpdate(ctx context.Context, ns *temp
 	return client.IgnoreNotFound(r.Status().Update(ctx, ns))
 }
 
+// mapClusterToNamespaces enqueues every TemporalNamespace in the changed
+// target's namespace whose ClusterRef points at it, so a namespace reconciles
+// immediately when its cluster becomes Ready instead of waiting for a requeue.
+func (r *TemporalNamespaceReconciler) mapClusterToNamespaces(kind string) handler.MapFunc {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		var list temporalv1alpha1.TemporalNamespaceList
+		if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
+			return nil
+		}
+		var reqs []reconcile.Request
+		for i := range list.Items {
+			item := &list.Items[i]
+			if refTargets(item.Spec.ClusterRef, kind, obj.GetName()) {
+				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+					Namespace: item.Namespace, Name: item.Name,
+				}})
+			}
+		}
+		return reqs
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *TemporalNamespaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&temporalv1alpha1.TemporalNamespace{}).
+		Watches(&temporalv1alpha1.TemporalCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToNamespaces(temporalv1alpha1.ClusterKindTemporalCluster)),
+			builder.WithPredicates(clusterReadinessChanged)).
+		Watches(&temporalv1alpha1.TemporalDevServer{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClusterToNamespaces(temporalv1alpha1.ClusterKindTemporalDevServer)),
+			builder.WithPredicates(clusterReadinessChanged)).
 		Named("temporalnamespace").
 		Complete(r)
 }

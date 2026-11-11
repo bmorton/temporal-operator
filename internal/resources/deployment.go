@@ -37,6 +37,10 @@ const (
 )
 
 // DeploymentName returns the Deployment name for a service.
+// ServerContainerName is the name of the Temporal server container in every
+// service Deployment.
+const ServerContainerName = "temporal"
+
 func DeploymentName(clusterName, component string) string {
 	return clusterName + "-" + component
 }
@@ -48,9 +52,14 @@ func int32OrDefault(p *int32, def int32) int32 {
 	return *p
 }
 
-func serverImage(cluster *temporalv1alpha1.TemporalCluster, version string) string {
-	if cluster.Spec.Image != "" {
-		return cluster.Spec.Image
+// ServerImage returns the server image a service Deployment should run. An
+// explicit custom spec.image wins; otherwise the image is derived from version
+// (or spec.version when version is empty). A spec.image that merely spells out
+// the default (temporalio/server:<semver>) is ignored so that a value persisted
+// by an older defaulting webhook cannot pin the cluster to a stale version.
+func ServerImage(cluster *temporalv1alpha1.TemporalCluster, version string) string {
+	if img := cluster.Spec.Image; img != "" && !temporal.IsDefaultServerImage(img) {
+		return img
 	}
 	if version == "" {
 		version = cluster.Spec.Version
@@ -128,7 +137,7 @@ type MTLSMounts struct {
 // BuildDeployment builds the Deployment for a single Temporal service. The
 // version overrides the server image tag (used for per-service rollout during
 // upgrades); when empty the cluster's spec version is used.
-func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash, version string, mtls *MTLSMounts) (*appsv1.Deployment, error) {
+func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo, configHash, dynamicConfigHash, version string, mtls *MTLSMounts) (*appsv1.Deployment, error) {
 	replicas := int32(1)
 	var resources corev1.ResourceRequirements
 	var nodeSelector map[string]string
@@ -156,8 +165,8 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 	// use a shell wrapper: copy config to a writable emptyDir, substitute
 	// ${POD_IP} with the real pod IP, then exec the server binary.
 	container := corev1.Container{
-		Name:    "temporal",
-		Image:   serverImage(cluster, version),
+		Name:    ServerContainerName,
+		Image:   ServerImage(cluster, version),
 		Command: []string{"/bin/sh", "-c"},
 		Args: []string{
 			`cp -r /etc/temporal/config /tmp/temporal/temporal-config && ` +
@@ -224,7 +233,10 @@ func BuildDeployment(cluster *temporalv1alpha1.TemporalCluster, svc ServiceInfo,
 		},
 	}
 
-	podAnnotations := map[string]string{ConfigHashAnnotation: configHash}
+	podAnnotations := map[string]string{
+		ConfigHashAnnotation:        configHash,
+		DynamicConfigHashAnnotation: dynamicConfigHash,
+	}
 
 	if mtls != nil && mtls.Enabled {
 		if mtls.CertHash != "" {

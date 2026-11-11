@@ -72,7 +72,7 @@ func TestSelectorLabelsStableAcrossVersion(t *testing.T) {
 func TestBuildDeployment(t *testing.T) {
 	c := builderCluster()
 	svc := EnabledServices(c)[0] // frontend
-	dep, err := BuildDeployment(c, svc, "abc123", "", nil)
+	dep, err := BuildDeployment(c, svc, "abc123", "dyn456", "", nil)
 	if err != nil {
 		t.Fatalf("BuildDeployment error: %v", err)
 	}
@@ -95,6 +95,9 @@ func TestBuildDeployment(t *testing.T) {
 	}
 	if dep.Spec.Template.Annotations[ConfigHashAnnotation] != "abc123" {
 		t.Errorf("expected config-hash annotation")
+	}
+	if dep.Spec.Template.Annotations[DynamicConfigHashAnnotation] != "dyn456" {
+		t.Errorf("expected dynamicconfig-hash annotation")
 	}
 	if ctr.StartupProbe == nil || ctr.StartupProbe.GRPC == nil {
 		t.Errorf("expected gRPC startup probe")
@@ -130,7 +133,7 @@ func TestBuildDeploymentAppliesSharedAndPerServicePodTemplate(t *testing.T) {
 		}
 	}
 
-	dep, err := BuildDeployment(c, frontend, "abc123", "", nil)
+	dep, err := BuildDeployment(c, frontend, "abc123", "dyn456", "", nil)
 	if err != nil {
 		t.Fatalf("BuildDeployment error: %v", err)
 	}
@@ -170,7 +173,7 @@ func TestBuildDeploymentPodTemplateMergesSidecarIntoGeneratedSpec(t *testing.T) 
 		}
 	}
 
-	dep, err := BuildDeployment(c, frontend, "abc123", "", nil)
+	dep, err := BuildDeployment(c, frontend, "abc123", "dyn456", "", nil)
 	if err != nil {
 		t.Fatalf("BuildDeployment error: %v", err)
 	}
@@ -239,7 +242,7 @@ func TestBuildDeploymentInvalidPodTemplateSpecErrors(t *testing.T) {
 			worker = s
 		}
 	}
-	if _, err := BuildDeployment(c, worker, "abc123", "", nil); err == nil {
+	if _, err := BuildDeployment(c, worker, "abc123", "dyn456", "", nil); err == nil {
 		t.Errorf("expected error for invalid podTemplate spec patch")
 	}
 }
@@ -256,7 +259,7 @@ func TestBuildDeploymentWorkerHasNoProbes(t *testing.T) {
 		t.Fatalf("worker service not found in EnabledServices")
 	}
 
-	dep, err := BuildDeployment(c, worker, "abc123", "", nil)
+	dep, err := BuildDeployment(c, worker, "abc123", "dyn456", "", nil)
 	if err != nil {
 		t.Fatalf("BuildDeployment error: %v", err)
 	}
@@ -274,7 +277,7 @@ func TestBuildDeploymentMTLSUsesTCPProbes(t *testing.T) {
 	c := builderCluster()
 	svc := EnabledServices(c)[0] // frontend
 	mtls := &MTLSMounts{Enabled: true, InternodeSecret: "tc-internode", FrontendSecret: "tc-frontend-tls"}
-	dep, err := BuildDeployment(c, svc, "abc123", "", mtls)
+	dep, err := BuildDeployment(c, svc, "abc123", "dyn456", "", mtls)
 	if err != nil {
 		t.Fatalf("BuildDeployment error: %v", err)
 	}
@@ -594,5 +597,29 @@ func TestBuildServiceMonitor(t *testing.T) {
 	}
 	if sm.GroupVersionKind() != ServiceMonitorGVK {
 		t.Errorf("unexpected GVK %v", sm.GroupVersionKind())
+	}
+}
+
+func TestServerImage(t *testing.T) {
+	c := builderCluster() // spec.version 1.31.1
+
+	cases := []struct {
+		name, specImage, version, want string
+	}{
+		{"derived from spec.version", "", "", "temporalio/server:1.31.1"},
+		{"per-service rollout version wins over spec.version", "", "1.31.0", "temporalio/server:1.31.0"},
+		{"custom image wins", "registry.example.com/temporal:x", "1.31.0", "registry.example.com/temporal:x"},
+		// A default-shaped spec.image left behind by an older defaulting
+		// webhook must not pin the cluster to the version it was created at.
+		{"stale default image is ignored", "temporalio/server:1.30.4", "", "temporalio/server:1.31.1"},
+		{"stale default image is ignored during rollout", "temporalio/server:1.30.4", "1.31.1", "temporalio/server:1.31.1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c.Spec.Image = tc.specImage
+			if got := ServerImage(c, tc.version); got != tc.want {
+				t.Errorf("ServerImage(%q, %q) = %q, want %q", tc.specImage, tc.version, got, tc.want)
+			}
+		})
 	}
 }

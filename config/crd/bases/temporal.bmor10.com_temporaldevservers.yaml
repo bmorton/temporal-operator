@@ -1161,6 +1161,30 @@ spec:
                   version matrix. When empty, the latest supported server version is used.
                   Use Image to pin a specific CLI image directly.
                 type: string
+              workflowRunPolicy:
+                description: |-
+                  WorkflowRunPolicy gates operator-initiated TemporalWorkflowRun executions
+                  against this dev server. Absent means enabled with no allowlist.
+                properties:
+                  allowedNamespaces:
+                    description: |-
+                      AllowedNamespaces optionally restricts which Temporal namespaces runs may
+                      target. Empty means any namespace is allowed.
+                    items:
+                      type: string
+                    type: array
+                  allowedTaskQueues:
+                    description: |-
+                      AllowedTaskQueues optionally restricts which task queues runs may use.
+                      Empty means any task queue is allowed.
+                    items:
+                      type: string
+                    type: array
+                  enabled:
+                    description: Enabled permits operator-initiated workflow runs
+                      against this target.
+                    type: boolean
+                type: object
             type: object
           status:
             description: status defines the observed state of TemporalDevServer

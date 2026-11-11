@@ -108,8 +108,8 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 	It("reports SchemaReady=True when the schema already satisfies the minimum", func() {
 		c := newCluster()
 		reconcileWith(c, nil, map[string]string{
-			"temporal":            "1.12",
-			"temporal_visibility": "1.12",
+			"temporal":            "1.19",
+			"temporal_visibility": "1.14",
 		})
 
 		cond := conditionStatus(c.Name, temporalv1alpha1.ConditionSchemaReady)
@@ -120,6 +120,100 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 		jobName := resources.SchemaJobName(c.Name, resources.StoreDefault, resources.ActionSetup)
 		err := k8sClient.Get(ctx, types.NamespacedName{Name: jobName, Namespace: "default"}, &batchv1.Job{})
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("runs update-schema for the visibility store alone when only it is behind", func() {
+		c := newCluster() // 1.31.1 requires default 1.19 / visibility 1.14
+		reconcileWith(c, nil, map[string]string{
+			"temporal":            "1.19",
+			"temporal_visibility": "1.13",
+		})
+
+		cond := conditionStatus(c.Name, temporalv1alpha1.ConditionSchemaReady)
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(temporalv1alpha1.ReasonSchemaMigrating))
+
+		By("creating only the visibility update-schema job")
+		job := &batchv1.Job{}
+		visUpdate := resources.SchemaJobName(c.Name, resources.StoreVisibility, resources.ActionUpdate)
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: visUpdate, Namespace: "default"}, job)).To(Succeed())
+		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("update-schema"))
+		for _, name := range []string{
+			resources.SchemaJobName(c.Name, resources.StoreVisibility, resources.ActionSetup),
+			resources.SchemaJobName(c.Name, resources.StoreDefault, resources.ActionSetup),
+			resources.SchemaJobName(c.Name, resources.StoreDefault, resources.ActionUpdate),
+		} {
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, &batchv1.Job{})
+			Expect(apierrors.IsNotFound(err)).To(BeTrue(), "unexpected job %s", name)
+		}
+	})
+
+	It("uses the per-store requirement so a 1.27 visibility schema at its ceiling is ready", func() {
+		// 1.27 images ship visibility migrations up to 1.9 only. With a single
+		// SQL minimum this store could never satisfy it and the cluster never
+		// became Ready (#222).
+		counter++
+		c := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pg-%d", counter), Namespace: "default"},
+			Spec:       validClusterSpec("1.27.0"),
+		}
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, c) })
+
+		reconcileWith(c, nil, map[string]string{
+			"temporal":            "1.15",
+			"temporal_visibility": "1.9",
+		})
+		Expect(conditionStatus(c.Name, temporalv1alpha1.ConditionSchemaReady).Status).To(Equal(metav1.ConditionTrue))
+	})
+
+	It("replaces an update-schema job left behind by the previous version", func() {
+		c := newCluster() // spec.version 1.31.1
+		name := resources.SchemaJobName(c.Name, resources.StoreDefault, resources.ActionUpdate)
+
+		By("leaving a succeeded 1.30.8 update job in place, as after an upgrade within the Job TTL")
+		stale := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+			Spec: batchv1.JobSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						RestartPolicy: corev1.RestartPolicyNever,
+						Containers:    []corev1.Container{{Name: resources.SchemaContainerName, Image: "temporalio/admin-tools:1.30.8"}},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, stale)).To(Succeed())
+		now := metav1.Now()
+		stale.Status.StartTime = &now
+		stale.Status.CompletionTime = &now
+		stale.Status.Conditions = []batchv1.JobCondition{
+			{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue},
+			{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+		}
+		Expect(k8sClient.Status().Update(ctx, stale)).To(Succeed())
+
+		By("reconciling with the default store one version behind")
+		reconcileWith(c, nil, map[string]string{
+			"temporal":            "1.18",
+			"temporal_visibility": "1.14",
+		})
+		cond := conditionStatus(c.Name, temporalv1alpha1.ConditionSchemaReady)
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse), "a stale succeeded job must not count as this version's migration")
+
+		By("deleting the stale job and creating one with the current admin-tools image")
+		Eventually(func() bool {
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, &batchv1.Job{})
+			return apierrors.IsNotFound(err)
+		}).Should(BeTrue())
+		reconcileWith(c, nil, map[string]string{
+			"temporal":            "1.18",
+			"temporal_visibility": "1.14",
+		})
+		job := &batchv1.Job{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, job)).To(Succeed())
+		Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("temporalio/admin-tools:1.31.1"))
+		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("update-schema"))
 	})
 
 	It("reports SchemaReady=False when a schema job fails", func() {
@@ -159,7 +253,10 @@ var _ = Describe("TemporalCluster persistence reconciler", func() {
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							RestartPolicy: corev1.RestartPolicyNever,
-							Containers:    []corev1.Container{{Name: "schema", Image: "x"}},
+							// The image must be the one spec.version resolves to, or
+							// ensureSchemaJob treats the Job as a previous version's and
+							// replaces it.
+							Containers: []corev1.Container{{Name: resources.SchemaContainerName, Image: "temporalio/admin-tools:1.31.1"}},
 						},
 					},
 				},
@@ -269,8 +366,9 @@ var _ = Describe("TemporalCluster Cassandra and Elasticsearch backends", func() 
 
 	It("applies the Elasticsearch visibility schema inline without a Job", func() {
 		c := cassandraESCluster()
-		// Mark the cassandra default store satisfied so only the ES path is exercised.
-		reconcileWith(c, map[string]string{"temporal": "1.9"})
+		// Mark the cassandra default store satisfied (1.31 requires v1.13) so only
+		// the ES path is exercised.
+		reconcileWith(c, map[string]string{"temporal": "1.13"})
 
 		By("not creating a visibility schema Job for Elasticsearch")
 		jobName := resources.SchemaJobName(c.Name, resources.StoreVisibility, resources.ActionSetup)

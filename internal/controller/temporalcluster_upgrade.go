@@ -219,6 +219,12 @@ func (r *TemporalClusterReconciler) serviceRolledOut(ctx context.Context, cluste
 	if dep.Spec.Template.Labels[resources.LabelVersion] != version {
 		return false
 	}
+	// The label alone is not proof: a Deployment can carry the new version
+	// label while its container still runs the old image (#223). Require the
+	// server container to be templated at the image this version resolves to.
+	if !deploymentRunsImage(&dep, resources.ServerImage(cluster, version)) {
+		return false
+	}
 	if dep.Generation != dep.Status.ObservedGeneration {
 		return false
 	}
@@ -227,6 +233,17 @@ func (r *TemporalClusterReconciler) serviceRolledOut(ctx context.Context, cluste
 		desired = *dep.Spec.Replicas
 	}
 	return dep.Status.UpdatedReplicas == desired && dep.Status.ReadyReplicas == desired
+}
+
+// deploymentRunsImage reports whether the Deployment's server container is
+// templated at image.
+func deploymentRunsImage(dep *appsv1.Deployment, image string) bool {
+	for _, c := range dep.Spec.Template.Spec.Containers {
+		if c.Name == resources.ServerContainerName {
+			return c.Image == image
+		}
+	}
+	return false
 }
 
 func (r *TemporalClusterReconciler) event(cluster *temporalv1alpha1.TemporalCluster, reason, message string) {

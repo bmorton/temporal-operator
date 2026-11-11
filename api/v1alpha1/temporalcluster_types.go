@@ -36,7 +36,10 @@ type TemporalClusterSpec struct {
 	// +kubebuilder:default=512
 	NumHistoryShards int32 `json:"numHistoryShards"`
 
-	// Image is the Temporal server image. Default: temporalio/server:<Version>.
+	// Image overrides the Temporal server image, e.g. to pull from a private
+	// registry or run a custom build. When unset, temporalio/server:<Version>
+	// is used and follows spec.version across upgrades. Setting it to a
+	// temporalio/server:<semver> tag is equivalent to leaving it unset.
 	// +optional
 	Image string `json:"image,omitempty"`
 
@@ -83,6 +86,11 @@ type TemporalClusterSpec struct {
 	// validating webhook as a safety measure.
 	// +optional
 	PreventDeletion bool `json:"preventDeletion,omitempty"`
+
+	// WorkflowRunPolicy gates operator-initiated TemporalWorkflowRun executions
+	// against this cluster. Absent means disabled (closed by default).
+	// +optional
+	WorkflowRunPolicy *WorkflowRunPolicy `json:"workflowRunPolicy,omitempty"`
 }
 
 // ServicesSpec configures each Temporal service plus shared overrides.

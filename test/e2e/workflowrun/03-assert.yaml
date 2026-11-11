@@ -1,0 +1,9 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalWorkflowRun
+metadata:
+  name: greet-once
+status:
+  phase: Running
+  (workflowID != null && workflowID != ''): true
+  (runID != null && runID != ''): true
+  (conditions[?type == 'Ready'].status | [0]): "True"

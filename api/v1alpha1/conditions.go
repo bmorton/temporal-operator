@@ -83,10 +83,21 @@ const (
 	ReasonProxyNotReady = "ProxyNotReady"
 	// ReasonProxyReady indicates the s2s-proxy Deployment is available.
 	ReasonProxyReady = "ProxyReady"
-	// ReasonClusterNotReady indicates the referenced cluster is not yet ready.
-	ReasonClusterNotReady = "ClusterNotReady"
 	// ReasonMTLSNotReady indicates mTLS material is not yet provisioned.
 	ReasonMTLSNotReady = "MTLSNotReady"
 	// ReasonRegistrationFailed indicates remote cluster registration failed.
 	ReasonRegistrationFailed = "RegistrationFailed"
+	// ReasonWorkflowRunNotPermitted indicates the target's WorkflowRunPolicy denied the run.
+	ReasonWorkflowRunNotPermitted = "WorkflowRunNotPermitted"
+	// ReasonWorkflowRunning indicates the workflow is currently running.
+	ReasonWorkflowRunning = "WorkflowRunning"
+	// ReasonWorkflowFinished indicates the workflow reached a terminal state.
+	ReasonWorkflowFinished = "WorkflowFinished"
+	// ReasonClusterNotFound indicates the referenced Temporal target was not found.
+	ReasonClusterNotFound = "ClusterNotFound"
+	// ReasonClusterNotReady indicates the referenced Temporal target is not ready.
+	ReasonClusterNotReady = "ClusterNotReady"
+	// ReasonFrontendUnavailable indicates the Temporal frontend is reachable
+	// but not yet accepting RPCs (transient startup window).
+	ReasonFrontendUnavailable = "FrontendUnavailable"
 )

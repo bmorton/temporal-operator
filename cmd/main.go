@@ -256,6 +256,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "TemporalClusterProxy")
 		os.Exit(1)
 	}
+	if err := (&controller.TemporalWorkflowRunReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TemporalWorkflowRun")
+		os.Exit(1)
+	}
 	webhooksEnabled := os.Getenv("ENABLE_WEBHOOKS") != "false"
 	if webhooksEnabled {
 		if err := webhookv1alpha1.SetupTemporalClusterWebhookWithManager(mgr); err != nil {
@@ -290,6 +297,10 @@ func main() {
 	if webhooksEnabled {
 		if err := webhookv1alpha1.SetupTemporalClusterProxyWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "TemporalClusterProxy")
+			os.Exit(1)
+		}
+		if err := webhookv1alpha1.SetupTemporalWorkflowRunWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "TemporalWorkflowRun")
 			os.Exit(1)
 		}
 	}

@@ -19,7 +19,10 @@ package plan
 import (
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
+
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/resources"
 )
 
 func TestPlanServicesObjects(t *testing.T) {
@@ -28,6 +31,7 @@ func TestPlanServicesObjects(t *testing.T) {
 		RenderedConfig:        "config: yes",
 		RenderedDynamicConfig: "{}\n",
 		ConfigHash:            "deadbeef",
+		DynamicConfigHash:     "cafef00d",
 		ServiceVersions:       nil,
 		MTLS:                  nil,
 	}
@@ -88,5 +92,34 @@ func TestPlanFromSpecCoversAllPhases(t *testing.T) {
 		if !seen[p] {
 			t.Errorf("expected objects for phase %s", p)
 		}
+	}
+}
+
+func TestPlanServicesStampsDynamicConfigHash(t *testing.T) {
+	c := testCluster()
+	in := ServicesInput{
+		RenderedConfig:        "config: yes",
+		RenderedDynamicConfig: "{}\n",
+		ConfigHash:            "deadbeef",
+		DynamicConfigHash:     "cafef00d",
+	}
+	got, err := PlanServices(c, in)
+	if err != nil {
+		t.Fatalf("PlanServices error: %v", err)
+	}
+	found := false
+	for _, o := range got {
+		dep, ok := o.Object.(*appsv1.Deployment)
+		if !ok {
+			continue
+		}
+		found = true
+		if dep.Spec.Template.Annotations[resources.DynamicConfigHashAnnotation] != "cafef00d" {
+			t.Errorf("expected dynamicconfig-hash annotation on %s, got %q",
+				dep.Name, dep.Spec.Template.Annotations[resources.DynamicConfigHashAnnotation])
+		}
+	}
+	if !found {
+		t.Fatalf("no Deployment found in planned objects")
 	}
 }

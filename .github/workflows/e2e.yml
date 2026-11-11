@@ -4,13 +4,13 @@ on:
   pull_request:
     branches: ["main"]
   schedule:
-    - cron: "0 4 * * *"
+    - cron: "0 4 * * 1"
   workflow_dispatch:
     inputs:
       suite:
         description: Which suite(s) to run
         type: choice
-        options: [default, devserver, mtls, upgrade, opensearch, cassandra, multicluster, all]
+        options: [default, devserver, workflowrun, mtls, upgrade, opensearch, cassandra, multicluster, all]
         default: default
 
 permissions:
@@ -18,36 +18,56 @@ permissions:
 
 jobs:
   # Determine the test matrix: a single fast combo on PRs, the full matrix on
-  # the nightly schedule.
+  # the nightly schedule, and nothing on PRs that can't affect e2e (see
+  # hack/ci-changes.sh).
   matrix:
     name: Compute matrix
     runs-on: namespace-profile-temporal-operator
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       combos: ${{ steps.set.outputs.combos }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: set
         env:
           EVENT: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
           SUITE: ${{ github.event.inputs.suite }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
+          if [ "$EVENT" = "pull_request" ] &&
+            files="$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')" &&
+            hack/ci-changes.sh <<<"$files" | grep -qx 'e2e=false'; then
+            echo "No changes affect e2e; skipping."
+            echo "combos=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           postgres='{"temporal":"1.31.1","persistence":"postgres","suite":"postgres/lifecycle"}'
           devserver='{"suite":"devserver"}'
+          workflowrun='{"suite":"workflowrun"}'
           mtls='{"temporal":"1.31.1","persistence":"mtls","suite":"mtls"}'
-          upgrade='{"temporal":"1.30.0","persistence":"upgrade","suite":"upgrade"}'
+          upgrade='{"from":"1.30.9","to":"1.31.5","persistence":"upgrade","suite":"upgrade"}'
           opensearch='{"temporal":"1.31.1","persistence":"opensearch","suite":"opensearch"}'
           cassandra='{"temporal":"1.31.1","persistence":"cassandra","suite":"cassandra"}'
           multicluster='{"temporal":"1.31.1","persistence":"multicluster","suite":"multicluster"}'
           if [ "$EVENT" = "schedule" ]; then
-            echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT"
+            echo "combos=[$postgres,$devserver,$workflowrun,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             case "$SUITE" in
               devserver)    echo "combos=[$devserver]" >> "$GITHUB_OUTPUT" ;;
+              workflowrun)  echo "combos=[$workflowrun]" >> "$GITHUB_OUTPUT" ;;
               mtls)         echo "combos=[$mtls]" >> "$GITHUB_OUTPUT" ;;
               upgrade)      echo "combos=[$upgrade]" >> "$GITHUB_OUTPUT" ;;
               opensearch)   echo "combos=[$opensearch]" >> "$GITHUB_OUTPUT" ;;
               cassandra)    echo "combos=[$cassandra]" >> "$GITHUB_OUTPUT" ;;
               multicluster) echo "combos=[$multicluster]" >> "$GITHUB_OUTPUT" ;;
-              all)          echo "combos=[$postgres,$devserver,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT" ;;
+              all)          echo "combos=[$postgres,$devserver,$workflowrun,$mtls,$upgrade,$opensearch,$cassandra,$multicluster]" >> "$GITHUB_OUTPUT" ;;
               *)            echo "combos=[$postgres,$devserver]" >> "$GITHUB_OUTPUT" ;;
             esac
           else
@@ -57,16 +77,17 @@ jobs:
   e2e:
     name: e2e (${{ matrix.combo.suite }})
     needs: matrix
+    if: needs.matrix.outputs.combos != '[]'
     runs-on: namespace-profile-temporal-operator
     strategy:
       fail-fast: false
       matrix:
         combo: ${{ fromJSON(needs.matrix.outputs.combos) }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -117,9 +138,12 @@ jobs:
           # turned into bogus temporalio/server:<x> pulls.
           versions=$( { grep -rhoE 'version: *"?1\.[0-9]+\.[0-9]+' "$root" || true; } \
             | grep -oE '1\.[0-9]+\.[0-9]+' | sort -u || true)
+          # The upgrade suite takes its versions from UPGRADE_FROM/UPGRADE_TO
+          # instead of literal "version:" fields.
+          versions="$versions ${{ matrix.combo.from }} ${{ matrix.combo.to }}"
           images=""
           for v in $versions; do
-            if echo "${{ matrix.combo.suite }}" | grep -q "^devserver"; then
+            if echo "${{ matrix.combo.suite }}" | grep -qE "^(devserver|workflowrun)"; then
               # The dev server's spec.version is a Temporal *server* version, but
               # it runs the temporalio/temporal *CLI* image, which is versioned
               # independently (its tags are CLI releases, e.g. 1.7.x, not server
@@ -159,6 +183,10 @@ jobs:
           done
 
       - name: Run Chainsaw suite
+        env:
+          # Only the upgrade suite reads these; empty for every other combo.
+          UPGRADE_FROM: ${{ matrix.combo.from }}
+          UPGRADE_TO: ${{ matrix.combo.to }}
         run: ./bin/chainsaw test --test-dir test/e2e/${{ matrix.combo.suite }} --config .chainsaw.yaml
 
       - name: Collect diagnostics
@@ -172,7 +200,7 @@ jobs:
 
       - name: Upload diagnostics
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-diagnostics-${{ strategy.job-index }}
           path: artifacts/
@@ -185,13 +213,19 @@ jobs:
   e2e-result:
     name: E2E result
     if: always()
-    needs: e2e
+    needs: [matrix, e2e]
     runs-on: namespace-profile-temporal-operator
     steps:
       - name: Check matrix result
         env:
+          MATRIX_RESULT: ${{ needs.matrix.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
+          COMBOS: ${{ needs.matrix.outputs.combos }}
         run: |
+          if [ "$MATRIX_RESULT" = "success" ] && [ "$COMBOS" = "[]" ]; then
+            echo "e2e not needed for this change"
+            exit 0
+          fi
           if [ "$E2E_RESULT" != "success" ]; then
             echo "e2e matrix failed"
             exit 1

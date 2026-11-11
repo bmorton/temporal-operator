@@ -156,8 +156,9 @@ spec:
                                                                 type: string
                                                         type: object
                                                     value:
-                                                        description: Value is an arbitrary JSON value for the dynamic config key.
-                                                        type: object
+                                                        description: |-
+                                                            Value is an arbitrary JSON value for the dynamic config key. It may be a
+                                                            scalar (bool, number, string), object, or array.
                                                         x-kubernetes-preserve-unknown-fields: true
                                                 required:
                                                     - value
@@ -167,7 +168,11 @@ spec:
                                         type: object
                                 type: object
                             image:
-                                description: 'Image is the Temporal server image. Default: temporalio/server:<Version>.'
+                                description: |-
+                                    Image overrides the Temporal server image, e.g. to pull from a private
+                                    registry or run a custom build. When unset, temporalio/server:<Version>
+                                    is used and follows spec.version across upgrades. Setting it to a
+                                    temporalio/server:<semver> tag is equivalent to leaving it unset.
                                 type: string
                             imagePullSecrets:
                                 description: ImagePullSecrets references secrets for pulling the server image.
@@ -5902,6 +5907,29 @@ spec:
                                 description: Version is the Temporal server version, e.g. "1.31.1".
                                 pattern: ^\d+\.\d+\.\d+$
                                 type: string
+                            workflowRunPolicy:
+                                description: |-
+                                    WorkflowRunPolicy gates operator-initiated TemporalWorkflowRun executions
+                                    against this cluster. Absent means disabled (closed by default).
+                                properties:
+                                    allowedNamespaces:
+                                        description: |-
+                                            AllowedNamespaces optionally restricts which Temporal namespaces runs may
+                                            target. Empty means any namespace is allowed.
+                                        items:
+                                            type: string
+                                        type: array
+                                    allowedTaskQueues:
+                                        description: |-
+                                            AllowedTaskQueues optionally restricts which task queues runs may use.
+                                            Empty means any task queue is allowed.
+                                        items:
+                                            type: string
+                                        type: array
+                                    enabled:
+                                        description: Enabled permits operator-initiated workflow runs against this target.
+                                        type: boolean
+                                type: object
                         required:
                             - numHistoryShards
                             - persistence

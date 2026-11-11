@@ -2,6 +2,6 @@
 title: "Resource Preview"
 type: "preview"
 layout: "list"
-_build:
+build:
   list: "never"
 ---

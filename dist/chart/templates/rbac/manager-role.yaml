@@ -126,6 +126,7 @@ rules:
         - temporalnamespaces
         - temporalschedules
         - temporalsearchattributes
+        - temporalworkflowruns
       verbs:
         - create
         - delete
@@ -145,6 +146,7 @@ rules:
         - temporalnamespaces/finalizers
         - temporalschedules/finalizers
         - temporalsearchattributes/finalizers
+        - temporalworkflowruns/finalizers
       verbs:
         - update
     - apiGroups:
@@ -158,6 +160,7 @@ rules:
         - temporalnamespaces/status
         - temporalschedules/status
         - temporalsearchattributes/status
+        - temporalworkflowruns/status
       verbs:
         - get
         - patch

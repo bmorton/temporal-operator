@@ -15,16 +15,14 @@ spec:
             file: ../postgres/01-fixtures-cnpg.yaml
         - apply:
             file: ../postgres/02-secrets.yaml
-    - name: cluster
+    - name: cluster-and-namespace
       try:
         - apply:
             file: ../postgres/lifecycle/01-temporalcluster.yaml
-        - assert:
-            file: ../postgres/lifecycle/01-assert.yaml
-    - name: register-namespace
-      try:
         - apply:
             file: 01-namespace.yaml
+        - assert:
+            file: ../postgres/lifecycle/01-assert.yaml
         - assert:
             file: 01-assert.yaml
         - script:

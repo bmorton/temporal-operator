@@ -10,14 +10,47 @@ permissions:
   contents: read
 
 jobs:
-  lint:
-    name: Lint
+  # Decide which suites this PR needs (see hack/ci-changes.sh). Pushes to main
+  # and anything that fails to resolve run everything.
+  changes:
+    name: Detect changes
     runs-on: namespace-profile-temporal-operator
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      go: ${{ steps.classify.outputs.go }}
+      e2e: ${{ steps.classify.outputs.e2e }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENT" = "pull_request" ] &&
+            files="$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')"; then
+            printf '%s\n' "$files"
+            hack/ci-changes.sh <<<"$files" | tee -a "$GITHUB_OUTPUT"
+          else
+            printf 'go=true\ne2e=true\n' | tee -a "$GITHUB_OUTPUT"
+          fi
+
+  lint:
+    name: Lint
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: namespace-profile-temporal-operator
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -32,18 +65,16 @@ jobs:
 
   test:
     name: Test
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: namespace-profile-temporal-operator
-    strategy:
-      fail-fast: false
-      matrix:
-        go-version: ["1.26.x"]
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: go.mod
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -57,12 +88,14 @@ jobs:
 
   build:
     name: Build image
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: namespace-profile-temporal-operator
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -77,14 +110,16 @@ jobs:
 
   govulncheck:
     name: govulncheck
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: namespace-profile-temporal-operator
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.x"
+          go-version-file: go.mod
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -92,12 +127,14 @@ jobs:
 
   verify-chart:
     name: Verify generated chart
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: namespace-profile-temporal-operator
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
