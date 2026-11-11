@@ -86,8 +86,8 @@ versions:
     minSchemaCassandra: "v1.13"
     minSchemaES: "v7"
     allowedFromVersions: ["1.31"]
-    uiSeries: "2.56"
-    defaultUIVersion: "2.56.0"
+    uiSeries: "2.58"
+    defaultUIVersion: "2.58.1"
     devServerCLIVersion: "1.10.0"
     cassandraVisibilitySupported: false
     removedDynamicConfig:
