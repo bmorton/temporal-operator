@@ -1,0 +1,31 @@
+# A single CloudNativePG (CNPG) Postgres instance that backs BOTH Temporal
+# clusters in this multi-cluster suite. Each TemporalCluster gets its own pair of
+# databases so the two clusters are independent persistence-wise (only Temporal's
+# own cross-cluster replication moves data between them).
+#
+#   cluster-a default store : temporal_a
+#   cluster-a visibility    : temporal_a_visibility
+#   cluster-b default store : temporal_b
+#   cluster-b visibility    : temporal_b_visibility
+#
+# Prerequisite: the CNPG operator must be installed in the cluster (the e2e
+# workflow installs it). initdb creates the "temporal" login role with CREATEDB
+# (granted via postInitSQL) and a generated "temporal-pg-app" Secret holding its
+# password, referenced by both TemporalClusters.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: temporal-pg
+spec:
+  instances: 1
+  storage:
+    size: 1Gi
+  postgresql:
+    parameters:
+      max_connections: "300"
+  bootstrap:
+    initdb:
+      database: temporal
+      owner: temporal
+      postInitSQL:
+        - ALTER ROLE temporal WITH CREATEDB;

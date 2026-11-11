@@ -1,0 +1,39 @@
+# Client-side TemporalClusterProxy: deployed next to cluster-a, dials out to the
+# mux address published by cluster-b's server proxy. The operator deploys an
+# s2s-proxy instance, mints a cert-manager TLS certificate signed by temporal-ca,
+# and registers cluster-b as a remote cluster on cluster-a's frontend.
+#
+# Prerequisites:
+#   - cluster-a (TemporalCluster) in the same namespace
+#   - cert-manager installed with a temporal-ca Issuer in the same namespace
+#   - cluster-b's server proxy LoadBalancer address known (set in serverAddress)
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterProxy
+metadata:
+  name: to-cluster-b
+  namespace: temporal-system
+spec:
+  # Reference to the local TemporalCluster this proxy fronts (cluster-a).
+  localClusterRef:
+    name: cluster-a
+  # Must match cluster-a's clusterMetadata.currentClusterName.
+  localClusterName: cluster-a
+  # The remote replication cluster on the far side of the mux.
+  peer:
+    name: cluster-b
+  mux:
+    # Client role: dials out to cluster-b's server proxy mux address.
+    role: client
+    client:
+      # Set this to the LoadBalancer address published by cluster-b's server proxy
+      # (see server.yaml). In a single-network setup use the in-cluster Service DNS:
+      #   <proxy-svc>.<namespace>.svc.cluster.local:6334
+      serverAddress: cluster-b-proxy.example.com:6334
+    tls:
+      provider: cert-manager
+      issuerRef:
+        name: temporal-ca
+      # Optional: supply cluster-b's CA separately when cluster-a and cluster-b
+      # use different cert-manager issuers. Omit when both use the same CA.
+      peerCARef:
+        name: cluster-b-mux-ca

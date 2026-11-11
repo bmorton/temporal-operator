@@ -1,0 +1,38 @@
+# cert-manager issuer chain for the mux mTLS certificates.
+#
+# Both proxy CRs reference the mux-ca-issuer. Because both use the same CA the
+# TLS handshake succeeds without a separate peerCARef: each proxy trusts the CA
+# bundle embedded in its own cert-manager Certificate secret (which includes the
+# CA cert), so client auth and server auth are validated by the shared CA.
+#
+# Step 1 — SelfSigned issuer: used only to mint the CA certificate itself.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: mux-selfsigned
+spec:
+  selfSigned: {}
+---
+# Step 2 — CA certificate: a locally-trusted CA whose secret is referenced by the
+# CA issuer below. isCA: true ensures cert-manager embeds it as a CA in the chain.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mux-ca
+spec:
+  isCA: true
+  commonName: mux-ca
+  secretName: mux-ca-secret
+  duration: 87600h  # 10 years
+  issuerRef:
+    name: mux-selfsigned
+    kind: Issuer
+---
+# Step 3 — CA-backed issuer: referenced by both TemporalClusterProxy CRs.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: mux-ca-issuer
+spec:
+  ca:
+    secretName: mux-ca-secret

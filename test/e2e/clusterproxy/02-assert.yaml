@@ -1,0 +1,7 @@
+# The CA-backed Issuer must be Ready before the proxy Certificates can be minted.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: mux-ca-issuer
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"

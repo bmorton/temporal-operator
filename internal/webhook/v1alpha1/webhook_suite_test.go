@@ -124,6 +124,9 @@ var _ = BeforeSuite(func() {
 	err = SetupTemporalClusterConnectionWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = SetupTemporalClusterProxyWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:webhook
 
 	go func() {

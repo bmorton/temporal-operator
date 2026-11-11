@@ -121,6 +121,7 @@ rules:
   resources:
   - temporalclusterclients
   - temporalclusterconnections
+  - temporalclusterproxies
   - temporalclusters
   - temporaldevservers
   - temporalnamespaces
@@ -140,6 +141,7 @@ rules:
   resources:
   - temporalclusterclients/finalizers
   - temporalclusterconnections/finalizers
+  - temporalclusterproxies/finalizers
   - temporalclusters/finalizers
   - temporaldevservers/finalizers
   - temporalnamespaces/finalizers
@@ -153,6 +155,7 @@ rules:
   resources:
   - temporalclusterclients/status
   - temporalclusterconnections/status
+  - temporalclusterproxies/status
   - temporalclusters/status
   - temporaldevservers/status
   - temporalnamespaces/status

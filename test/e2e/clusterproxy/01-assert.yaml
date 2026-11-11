@@ -1,0 +1,31 @@
+# Both clusters must reconcile to Ready=True with their frontends available
+# before replication can be wired up.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-cluster-a
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"
+  phase: Ready
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-cluster-a-frontend
+status:
+  (readyReplicas > `0`): true
+---
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-cluster-b
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"
+  phase: Ready
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-cluster-b-frontend
+status:
+  (readyReplicas > `0`): true

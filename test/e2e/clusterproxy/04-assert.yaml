@@ -1,0 +1,8 @@
+# The namespace is registered and ready.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalNamespace
+metadata:
+  name: orders
+status:
+  registered: true
+  (conditions[?type == 'Ready'].status | [0]): "True"

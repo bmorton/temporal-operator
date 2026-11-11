@@ -27,3 +27,23 @@ webhooks:
           resources:
             - temporalclusters
       sideEffects: None
+    - admissionReviewVersions:
+        - v1
+      clientConfig:
+        service:
+            name: temporal-operator-webhook-service
+            namespace: {{ .Release.Namespace }}
+            path: /mutate-temporal-bmor10-com-v1alpha1-temporalclusterproxy
+      failurePolicy: Fail
+      name: mtemporalclusterproxy-v1alpha1.kb.io
+      rules:
+        - apiGroups:
+            - temporal.bmor10.com
+          apiVersions:
+            - v1alpha1
+          operations:
+            - CREATE
+            - UPDATE
+          resources:
+            - temporalclusterproxies
+      sideEffects: None

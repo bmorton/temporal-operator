@@ -1,0 +1,23 @@
+# Both TemporalClusterProxy CRs must reach Ready=True.
+#
+# Ready=True is only set by the controller when:
+#   1. The s2s-proxy Deployment has at least one available replica.
+#   2. The local TemporalCluster frontend is ready.
+#   3. UpsertRemoteCluster succeeded on the local cluster (peer registered).
+#
+# Reaching Ready=True on both sides proves: the proxy Deployments came up, the
+# cert-manager Certificates were issued, and each cluster's frontend accepted the
+# remote-cluster registration via the proxy tcpServer address.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterProxy
+metadata:
+  name: proxy-server
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"
+---
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalClusterProxy
+metadata:
+  name: proxy-client
+status:
+  (conditions[?type == 'Ready'].status | [0]): "True"

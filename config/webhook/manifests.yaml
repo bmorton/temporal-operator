@@ -24,6 +24,26 @@ webhooks:
     resources:
     - temporalclusters
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-temporal-bmor10-com-v1alpha1-temporalclusterproxy
+  failurePolicy: Fail
+  name: mtemporalclusterproxy-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - temporal.bmor10.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - temporalclusterproxies
+  sideEffects: None
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
@@ -70,6 +90,26 @@ webhooks:
     - UPDATE
     resources:
     - temporalclusterconnections
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-temporal-bmor10-com-v1alpha1-temporalclusterproxy
+  failurePolicy: Fail
+  name: vtemporalclusterproxy-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - temporal.bmor10.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - temporalclusterproxies
   sideEffects: None
 - admissionReviewVersions:
   - v1

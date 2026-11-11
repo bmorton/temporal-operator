@@ -1,0 +1,46 @@
+# Cluster A: the initial ACTIVE cluster of the replication pair. Global namespaces
+# are enabled and a distinct currentClusterName/initialFailoverVersion is set. The
+# failoverVersionIncrement MUST match cluster B so failover versions are
+# coordinated; masterClusterName equals this cluster's own currentClusterName
+# (the operator renders only the local cluster into clusterInformation, and
+# Temporal requires masterClusterName to be present there). Runs plaintext (no
+# mTLS) so the in-cluster admin-tools proof pods can reach the frontend without
+# client certificates -- replication between the two frontends also flows
+# plaintext inside the kind network.
+#
+# Host is namespace-qualified via chainsaw's $namespace binding because the
+# operator dials Postgres from the temporal-system namespace.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: temporal-cluster-a
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  clusterMetadata:
+    enableGlobalNamespace: true
+    failoverVersionIncrement: 100
+    currentClusterName: "clusterA"
+    initialFailoverVersion: 1
+    masterClusterName: "clusterA"
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal_a
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal_a_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
