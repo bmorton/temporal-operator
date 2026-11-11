@@ -109,6 +109,7 @@ func (r *TemporalClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if err := r.Status().Update(ctx, &cluster); err != nil {
 		if apierrors.IsConflict(err) {
+			//nolint:staticcheck // SA1019: keep the rate-limited requeue until this moves to RequeueAfter.
 			return ctrl.Result{Requeue: true}, nil
 		}
 		return ctrl.Result{}, err

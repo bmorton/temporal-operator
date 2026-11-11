@@ -23,6 +23,8 @@ linters:
     - unparam
     - unused
   settings:
+    goconst:
+      min-occurrences: 6
     gocyclo:
       min-complexity: 15
     revive:
@@ -39,6 +41,11 @@ linters:
           - dupl
           - lll
         path: internal/*
+      # Repeated literals and slice growth in tests are not worth abstracting.
+      - linters:
+          - goconst
+          - prealloc
+        path: _test\.go
     paths:
       - third_party$
       - builtin$
