@@ -20,11 +20,15 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 Common types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
 `build`, `ci`, `chore`, `revert`.
 
-- The commitlint CI check is **non-blocking** — it reports suggestions but never
-  fails the build, so do not over-rotate on formatting.
-- Still follow the convention: `release-please` uses the `type:` prefix to build
-  the changelog and pick the next version (`feat:` → minor, `fix:` → patch;
-  breaking changes stay within `0.x` while pre-1.0).
+- **The PR title must be a Conventional Commit.** PRs are squash-merged and the
+  PR title becomes the commit message on `main`. The `PR title` check is
+  required to merge; a title without a type (e.g. "Fix zizmor reference")
+  blocks the PR.
+- The commitlint check on individual commits is **non-blocking** — it reports
+  suggestions but never fails the build, so do not over-rotate on formatting.
+- `release-please` uses the `type:` prefix to build the changelog and pick the
+  next version (`feat:` → minor, `fix:` → patch; breaking changes stay within
+  `0.x` while pre-1.0).
 
 ## Sign-off (DCO)
 
@@ -61,6 +65,15 @@ that must be hand-maintained live in `hack/helm/overrides/` (mirroring their
 `dist/chart`. The `Verify generated chart` CI job fails if `dist/chart` is stale,
 so always run `make helm-chart` and commit the result after changing API types,
 RBAC markers, or chart overrides. Because the manager Deployment template is hand-owned, changes to `config/manager/manager.yaml` (new args, env vars, probes, volumes, resources) are **not** picked up automatically — mirror them into `hack/helm/overrides/templates/manager/manager.yaml` by hand.
+
+## Temporal version bumps
+
+Adding support for a new Temporal server, UI, CLI (dev server), or s2s-proxy
+release is a recurring task with a dedicated playbook:
+[`.claude/skills/temporal-version-bump/SKILL.md`](../.claude/skills/temporal-version-bump/SKILL.md).
+Read it before editing `hack/version-matrix.yaml`. New upstream releases are
+tracked as checklist tasks on a single open `temporal-release` issue,
+maintained by `.github/workflows/temporal-releases.yml`.
 
 ## Releases
 

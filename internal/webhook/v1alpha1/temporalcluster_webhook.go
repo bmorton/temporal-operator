@@ -69,8 +69,15 @@ func defaultReplicas(svc **temporalv1alpha1.ServiceSpec, replicas int32) {
 func (d *TemporalClusterCustomDefaulter) Default(_ context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
 	temporalclusterlog.Info("Defaulting for TemporalCluster", "name", cluster.GetName())
 
-	if cluster.Spec.Image == "" {
-		cluster.Spec.Image = "temporalio/server:" + cluster.Spec.Version
+	// The server image is derived from spec.version at reconcile time and is
+	// intentionally NOT persisted here: a stored default would pin the image to
+	// the version at creation and silently survive later spec.version changes.
+	// Older operator releases did persist it, so clear any default-shaped value
+	// we find (including on update, which is exactly when an upgrade would
+	// otherwise be pinned). Custom images (other repositories, digests) are
+	// left alone.
+	if temporal.IsDefaultServerImage(cluster.Spec.Image) {
+		cluster.Spec.Image = ""
 	}
 
 	defaultReplicas(&cluster.Spec.Services.Frontend, 2)

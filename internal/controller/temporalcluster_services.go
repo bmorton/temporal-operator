@@ -70,7 +70,7 @@ func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, clust
 					&dep.Spec.Template.ObjectMeta,
 					&dep.Spec.Template.Spec,
 					cluster,
-					"temporal", // The server container is named "temporal".
+					resources.ServerContainerName,
 				)
 			}
 		}

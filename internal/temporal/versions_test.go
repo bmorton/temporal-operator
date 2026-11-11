@@ -19,8 +19,8 @@ package temporal
 import "testing"
 
 func TestIsSupported(t *testing.T) {
-	if !IsSupported("1.31.1") {
-		t.Errorf("expected 1.31.1 to be supported")
+	if !IsSupported("1.32.0") {
+		t.Errorf("expected 1.32.0 to be supported")
 	}
 	if IsSupported("9.9.9") {
 		t.Errorf("expected 9.9.9 to be unsupported")
@@ -38,8 +38,9 @@ func TestCanUpgrade(t *testing.T) {
 		{"patch bump", "1.31.0", "1.31.1", true, false},
 		{"same version", "1.31.1", "1.31.1", true, false},
 		{"adjacent minor", "1.30.4", "1.31.0", true, false},
-		{"minor skip", "1.29.6", "1.31.0", false, false},
-		{"downgrade minor", "1.31.0", "1.30.4", false, false},
+		{"adjacent minor to 1.32", "1.31.2", "1.32.0", true, false},
+		{"minor skip", "1.30.4", "1.32.0", false, false},
+		{"downgrade minor", "1.32.0", "1.31.2", false, false},
 		{"downgrade patch", "1.31.1", "1.31.0", false, false},
 		{"unsupported target", "1.31.0", "9.9.9", false, true},
 		{"bad from", "garbage", "1.31.1", false, true},
@@ -58,8 +59,8 @@ func TestCanUpgrade(t *testing.T) {
 }
 
 func TestDefaultUIVersion(t *testing.T) {
-	if got := DefaultUIVersion("1.31.1"); got == "" {
-		t.Errorf("expected a default UI version for 1.31.1")
+	if got := DefaultUIVersion("1.32.0"); got == "" {
+		t.Errorf("expected a default UI version for 1.32.0")
 	}
 	if got := DefaultUIVersion("9.9.9"); got != "" {
 		t.Errorf("expected empty default UI version for unknown server version, got %q", got)
@@ -70,8 +71,8 @@ func TestSupportedVersionsAndGet(t *testing.T) {
 	if len(SupportedVersions()) == 0 {
 		t.Fatalf("expected at least one supported version")
 	}
-	if _, ok := Get("1.31.1"); !ok {
-		t.Errorf("expected Get(1.31.1) to return info")
+	if _, ok := Get("1.32.0"); !ok {
+		t.Errorf("expected Get(1.32.0) to return info")
 	}
 	if _, ok := Get("nope"); ok {
 		t.Errorf("expected Get(nope) to return false")
@@ -80,6 +81,7 @@ func TestSupportedVersionsAndGet(t *testing.T) {
 
 func TestDevServerCLIVersion(t *testing.T) {
 	cases := map[string]string{
+		"1.32.0": "1.10.0",
 		"1.31.1": "1.7.2",
 		"1.31":   "1.7.2",
 		"1.30.4": "1.6.2",
@@ -111,5 +113,44 @@ func TestLatestSupportedVersion(t *testing.T) {
 	}
 	if !IsSupported(got) {
 		t.Fatalf("LatestSupportedVersion()=%q is not supported", got)
+	}
+}
+
+func TestIsDefaultServerImage(t *testing.T) {
+	cases := map[string]bool{
+		ServerImage("1.31.1"):      true,
+		"temporalio/server:1.26.2": true, // dropped from the matrix, still default-shaped
+		"":                         false,
+		"temporalio/server:latest": false,
+		"temporalio/server:1.31.1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": false,
+		"registry.example.com/temporalio/server:1.31.1":                                                    false,
+		"temporalio/admin-tools:1.31.1":                                                                    false,
+	}
+	for image, want := range cases {
+		if got := IsDefaultServerImage(image); got != want {
+			t.Errorf("IsDefaultServerImage(%q) = %v, want %v", image, got, want)
+		}
+	}
+}
+
+func TestSchemaRequirementsAreSetAndFromUpstream(t *testing.T) {
+	// Spot-check against upstream schema/postgresql/v12/version.go and
+	// schema/cassandra/version.go at the release tags (#222). The default and
+	// visibility SQL stores have independent version lines.
+	want := map[string][3]string{ // minor -> sql, sql visibility, cassandra
+		"1.27": {"v1.15", "v1.9", "v1.11"},
+		"1.30": {"v1.18", "v1.13", "v1.13"},
+		"1.32": {"v1.19", "v1.14", "v1.13"},
+	}
+	for _, v := range supportedVersions {
+		if v.MinSchemaSQL == "" || v.MinSchemaSQLVisibility == "" || v.MinSchemaCassandra == "" {
+			t.Errorf("%s: every minor must set minSchemaSQL, minSchemaSQLVisibility and minSchemaCassandra", v.Version)
+		}
+		if w, ok := want[v.Version]; ok {
+			got := [3]string{v.MinSchemaSQL, v.MinSchemaSQLVisibility, v.MinSchemaCassandra}
+			if got != w {
+				t.Errorf("%s: schema requirements = %v, want %v", v.Version, got, w)
+			}
+		}
 	}
 }

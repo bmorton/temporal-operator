@@ -72,15 +72,19 @@ func storeDBName(store temporalv1alpha1.DatastoreSpec) string {
 	}
 }
 
-// minSchemaFor returns the required minimum schema version for a store given the
-// backend kind.
-func minSchemaFor(info *temporal.VersionInfo, kind string) string {
+// minSchemaFor returns the schema version the server requires for a store given
+// the backend kind. The default and visibility SQL stores have independent
+// version lines, so the store matters for SQL.
+func minSchemaFor(info *temporal.VersionInfo, kind string, store resources.SchemaStore) string {
 	switch kind {
 	case kindCassandra:
 		return info.MinSchemaCassandra
 	case kindElasticsearch:
 		return info.MinSchemaES
 	default:
+		if store == resources.StoreVisibility {
+			return info.MinSchemaSQLVisibility
+		}
 		return info.MinSchemaSQL
 	}
 }
@@ -151,7 +155,7 @@ func (r *TemporalClusterReconciler) reconcilePersistence(ctx context.Context, cl
 	migrating := false
 	storeResults := make([]storeResult, 0, len(targets))
 	for _, t := range targets {
-		res, err := r.reconcileStoreSchema(ctx, cluster, t, minSchemaFor(info, t.backend.Kind()))
+		res, err := r.reconcileStoreSchema(ctx, cluster, t, minSchemaFor(info, t.backend.Kind(), t.store))
 		if err != nil {
 			// ErrInspecting during schema version lookup is transient; requeue.
 			if errors.Is(err, persistence.ErrInspecting) {
@@ -447,7 +451,33 @@ func (r *TemporalClusterReconciler) ensureSchemaJob(ctx context.Context, cluster
 	if err != nil {
 		return jobPending, err
 	}
+	// A Job being deleted cannot be waited on; the next pass recreates it.
+	if !job.DeletionTimestamp.IsZero() {
+		return jobPending, nil
+	}
+	// Job names carry no version, so after an upgrade the previous version's
+	// Job may still exist (it lives for ttlSecondsAfterFinished). Treating its
+	// success as this version's would skip the migration: replace any Job
+	// whose admin-tools image is not the one spec.version resolves to.
+	if !jobRunsImage(&job, temporal.AdminToolsImage(cluster.Spec.Version)) {
+		policy := metav1.DeletePropagationBackground
+		if err := r.Delete(ctx, &job, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil {
+			return jobPending, client.IgnoreNotFound(err)
+		}
+		return jobPending, nil
+	}
 	return classifyJob(&job), nil
+}
+
+// jobRunsImage reports whether the Job's schema-tool container is templated at
+// image.
+func jobRunsImage(job *batchv1.Job, image string) bool {
+	for _, c := range job.Spec.Template.Spec.Containers {
+		if c.Name == resources.SchemaContainerName {
+			return c.Image == image
+		}
+	}
+	return false
 }
 
 // ensureInspectorJob creates the inspector Job if absent and returns it.
@@ -465,13 +495,28 @@ func (r *TemporalClusterReconciler) ensureInspectorJob(ctx context.Context, clus
 		if err := controllerutil.SetControllerReference(cluster, built, r.Scheme); err != nil {
 			return nil, err
 		}
-		if err := r.Create(ctx, built); err != nil && !apierrors.IsAlreadyExists(err) {
-			return nil, err
+		if err := r.Create(ctx, built); err != nil {
+			if !apierrors.IsAlreadyExists(err) {
+				return nil, err
+			}
+			// The Job was absent to our read and present to our write, which is
+			// the window while a previous one is still being garbage-collected.
+			// Returning `built` here would hand back an object the API has never
+			// seen -- no UID, no status -- and the inspector would then wait on
+			// a Job that does not exist as far as the cluster is concerned.
+			// Requeue instead and read the real object next pass.
+			return nil, persistence.ErrInspecting
 		}
 		return built, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	// A Job on its way out cannot be waited on: it will not run again and its
+	// pods are being removed. Treating it as usable is one way the inspector
+	// ends up waiting for an answer that can never arrive.
+	if !job.DeletionTimestamp.IsZero() {
+		return nil, persistence.ErrInspecting
 	}
 	return &job, nil
 }

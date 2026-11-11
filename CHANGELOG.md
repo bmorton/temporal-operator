@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.13.0](https://github.com/bmorton/temporal-operator/compare/v0.12.0...v0.13.0) (2026-10-16)
+
+
+### Features
+
+* **versions:** support Temporal 1.30.8, 1.31.4, 1.32.1, UI 2.56.0, CLI 1.9.1 ([#217](https://github.com/bmorton/temporal-operator/issues/217)) ([f7f5a55](https://github.com/bmorton/temporal-operator/commit/f7f5a55de395120f7682ea1cdf14ad5dd2c52ebc))
+
+
+### Bug Fixes
+
+* **deps:** patch Go 1.26.9, x/net, and otel vulnerabilities ([#207](https://github.com/bmorton/temporal-operator/issues/207)) ([eb403f7](https://github.com/bmorton/temporal-operator/commit/eb403f73469f7fcce28b5695bceaf96c8cf62ae1))
+
+## [0.12.0](https://github.com/bmorton/temporal-operator/compare/v0.11.2...v0.12.0) (2026-09-14)
+
+
+### Features
+
+* add Temporal 1.32 upgrade path ([#185](https://github.com/bmorton/temporal-operator/issues/185)) ([9252008](https://github.com/bmorton/temporal-operator/commit/9252008cb0e86f39a5dd0939a66ffafa824bc7b8))
+
+## [0.11.2](https://github.com/bmorton/temporal-operator/compare/v0.11.1...v0.11.2) (2026-08-16)
+
+
+### Bug Fixes
+
+* bump Go to 1.26.6 for govulncheck ([#164](https://github.com/bmorton/temporal-operator/issues/164)) ([467f798](https://github.com/bmorton/temporal-operator/commit/467f798ef140335d7e65735127a9ffff44823404))
+
+## [0.11.1](https://github.com/bmorton/temporal-operator/compare/v0.11.0...v0.11.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* stop the schema inspector stalling a cluster forever ([#154](https://github.com/bmorton/temporal-operator/issues/154)) ([c58e2fe](https://github.com/bmorton/temporal-operator/commit/c58e2fe3775f7720b02f487b14cb7a453bf19dfd))
+
 ## [0.11.0](https://github.com/bmorton/temporal-operator/compare/v0.10.1...v0.11.0) (2026-07-24)
 
 

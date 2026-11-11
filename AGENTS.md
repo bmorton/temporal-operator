@@ -9,10 +9,12 @@ should read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full guide.
 
 ## Commit messages
 
-Use [Conventional Commits](https://www.conventionalcommits.org/). The CI check
-is **non-blocking** (it reports but never fails the build), but you should still
-follow the convention because `release-please` derives the changelog and the
-next version from commit types.
+Use [Conventional Commits](https://www.conventionalcommits.org/). PRs are
+squash-merged and **the PR title becomes the commit message on `main`**, so the
+PR title must be a Conventional Commit. The `PR title` check enforces this and
+is required to merge. Individual commit messages are linted too, but that check
+is **non-blocking**. `release-please` derives the changelog and the next
+version from the merged commit types.
 
 Format:
 
@@ -74,6 +76,15 @@ that must be hand-maintained live in `hack/helm/overrides/` (mirroring their
 `dist/chart`. The `Verify generated chart` CI job fails if `dist/chart` is stale,
 so always run `make helm-chart` and commit the result after changing API types,
 RBAC markers, or chart overrides. Because the manager Deployment template is hand-owned, changes to `config/manager/manager.yaml` (new args, env vars, probes, volumes, resources) are **not** picked up automatically — mirror them into `hack/helm/overrides/templates/manager/manager.yaml` by hand.
+
+## Temporal version bumps
+
+Adding support for a new Temporal server, UI, CLI (dev server), or s2s-proxy
+release is a recurring task with a dedicated playbook:
+[`.claude/skills/temporal-version-bump/SKILL.md`](./.claude/skills/temporal-version-bump/SKILL.md).
+Read it before editing `hack/version-matrix.yaml`. New upstream releases are
+tracked as checklist tasks on a single open `temporal-release` issue,
+maintained by `.github/workflows/temporal-releases.yml`.
 
 ## Releases
 

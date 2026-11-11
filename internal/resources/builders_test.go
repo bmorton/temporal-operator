@@ -599,3 +599,27 @@ func TestBuildServiceMonitor(t *testing.T) {
 		t.Errorf("unexpected GVK %v", sm.GroupVersionKind())
 	}
 }
+
+func TestServerImage(t *testing.T) {
+	c := builderCluster() // spec.version 1.31.1
+
+	cases := []struct {
+		name, specImage, version, want string
+	}{
+		{"derived from spec.version", "", "", "temporalio/server:1.31.1"},
+		{"per-service rollout version wins over spec.version", "", "1.31.0", "temporalio/server:1.31.0"},
+		{"custom image wins", "registry.example.com/temporal:x", "1.31.0", "registry.example.com/temporal:x"},
+		// A default-shaped spec.image left behind by an older defaulting
+		// webhook must not pin the cluster to the version it was created at.
+		{"stale default image is ignored", "temporalio/server:1.30.4", "", "temporalio/server:1.31.1"},
+		{"stale default image is ignored during rollout", "temporalio/server:1.30.4", "1.31.1", "temporalio/server:1.31.1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c.Spec.Image = tc.specImage
+			if got := ServerImage(c, tc.version); got != tc.want {
+				t.Errorf("ServerImage(%q, %q) = %q, want %q", tc.specImage, tc.version, got, tc.want)
+			}
+		})
+	}
+}

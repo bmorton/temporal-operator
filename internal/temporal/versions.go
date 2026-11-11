@@ -35,9 +35,15 @@ type VersionInfo struct {
 	Version string
 	// PatchVersions are the exact supported patch releases, e.g. "1.31.1".
 	PatchVersions []string
-	// MinSchemaSQL is the minimum SQL schema version required.
+	// MinSchemaSQL is the SQL schema version the server requires for the
+	// default store (upstream schema/postgresql/v12/version.go Version).
 	MinSchemaSQL string
-	// MinSchemaCassandra is the minimum Cassandra schema version required.
+	// MinSchemaSQLVisibility is the SQL schema version the server requires for
+	// the visibility store (upstream VisibilityVersion). The two stores have
+	// independent version lines, e.g. 1.19 vs 1.14 on 1.32.
+	MinSchemaSQLVisibility string
+	// MinSchemaCassandra is the Cassandra schema version the server requires
+	// (upstream schema/cassandra/version.go Version).
 	MinSchemaCassandra string
 	// MinSchemaES is the minimum Elasticsearch schema/index template version.
 	MinSchemaES string
@@ -253,7 +259,23 @@ func LatestSupportedVersion() string {
 
 // ServerImage returns the default Temporal server image for a version.
 func ServerImage(version string) string {
-	return "temporalio/server:" + version
+	return serverImageRepo + ":" + version
+}
+
+const serverImageRepo = "temporalio/server"
+
+// IsDefaultServerImage reports whether image is of the form ServerImage(v) for
+// some semver v, i.e. it spells out what the operator would derive from
+// spec.version anyway. v need not be in the support matrix: a value persisted
+// by an older operator may name a version that has since been dropped. Digest
+// pins and other repositories are never considered default.
+func IsDefaultServerImage(image string) bool {
+	tag, ok := strings.CutPrefix(image, serverImageRepo+":")
+	if !ok {
+		return false
+	}
+	_, err := parseSemver(tag)
+	return err == nil
 }
 
 // AdminToolsImage returns the Temporal admin-tools image for a version, used to

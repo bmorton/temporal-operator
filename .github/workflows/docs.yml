@@ -12,6 +12,7 @@ on:
       - "internal/webhook/**"
       - "cmd/preview-wasm/**"
       - "api/**"
+      - ".github/workflows/docs.yml"
   pull_request:
     branches: ["main"]
     paths:
@@ -23,6 +24,7 @@ on:
       - "internal/webhook/**"
       - "cmd/preview-wasm/**"
       - "api/**"
+      - ".github/workflows/docs.yml"
 
 permissions:
   contents: read
@@ -36,7 +38,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Lint Markdown
-        uses: DavidAnson/markdownlint-cli2-action@8de2aa07cae85fd17c0b35642db70cf5495f1d25 # v24.0.0
+        uses: DavidAnson/markdownlint-cli2-action@696eb3f2509270d7b882d2aa68347bc676e7af34 # v25.0.0
         with:
           globs: |
             docs/**/*.md
@@ -87,7 +89,7 @@ jobs:
       - name: Build preview WebAssembly
         run: make preview-wasm
       - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install docs CSS tooling
@@ -133,7 +135,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install docs CSS tooling
@@ -165,4 +167,4 @@ jobs:
           path: docs/public
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
