@@ -222,12 +222,16 @@ KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
 TEMPL ?= $(LOCALBIN)/templ
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v5.7.1
-CONTROLLER_TOOLS_VERSION ?= v0.19.0
-KIND_VERSION ?= v0.27.0
-CHAINSAW_VERSION ?= v0.2.15
-CRD_REF_DOCS_VERSION ?= v0.3.0
-TEMPL_VERSION ?= v0.3.1100
+# controller-gen, kustomize, kind, chainsaw, crd-ref-docs, golangci-lint and
+# kubebuilder are each pinned by a Go module in hack/tools/<tool>/go.mod, which
+# Dependabot keeps up to date. To change a version by hand:
+#   cd hack/tools/<tool> && go get <module>@<version> && go mod tidy
+
+# The templ generator must match the templ runtime the operator links against,
+# so its version follows go.mod.
+TEMPL_VERSION ?= $(shell v='$(call gomodver,github.com/a-h/templ)'; \
+  [ -n "$$v" ] || { echo "Set TEMPL_VERSION manually (templ replace has no tag)" >&2; exit 1; }; \
+  printf '%s\n' "$$v")
 
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell v='$(call gomodver,sigs.k8s.io/controller-runtime)'; \
@@ -239,16 +243,15 @@ ENVTEST_K8S_VERSION ?= $(shell v='$(call gomodver,k8s.io/api)'; \
   [ -n "$$v" ] || { echo "Set ENVTEST_K8S_VERSION manually (k8s.io/api replace has no tag)" >&2; exit 1; }; \
   printf '%s\n' "$$v" | sed -E 's/^v?[0-9]+\.([0-9]+).*/1.\1/')
 
-GOLANGCI_LINT_VERSION ?= v2.15.0
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
-$(KUSTOMIZE): $(LOCALBIN)
-	$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v5,$(KUSTOMIZE_VERSION))
+$(KUSTOMIZE): hack/tools/kustomize/go.mod hack/tools/kustomize/go.sum | $(LOCALBIN)
+	$(call go-build-tool,kustomize,sigs.k8s.io/kustomize/kustomize/v5)
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
-$(CONTROLLER_GEN): $(LOCALBIN)
-	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
+$(CONTROLLER_GEN): hack/tools/controller-gen/go.mod hack/tools/controller-gen/go.sum | $(LOCALBIN)
+	$(call go-build-tool,controller-gen,sigs.k8s.io/controller-tools/cmd/controller-gen)
 
 .PHONY: setup-envtest
 setup-envtest: envtest ## Download the binaries required for ENVTEST in the local bin directory.
@@ -265,13 +268,13 @@ $(ENVTEST): $(LOCALBIN)
 
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
-$(GOLANGCI_LINT): $(LOCALBIN)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+$(GOLANGCI_LINT): hack/tools/golangci-lint/go.mod hack/tools/golangci-lint/go.sum | $(LOCALBIN)
+	$(call go-build-tool,golangci-lint,github.com/golangci/golangci-lint/v2/cmd/golangci-lint)
 
 .PHONY: chainsaw
 chainsaw: $(CHAINSAW) ## Download chainsaw locally if necessary.
-$(CHAINSAW): $(LOCALBIN)
-	$(call go-install-tool,$(CHAINSAW),github.com/kyverno/chainsaw,$(CHAINSAW_VERSION))
+$(CHAINSAW): hack/tools/chainsaw/go.mod hack/tools/chainsaw/go.sum | $(LOCALBIN)
+	$(call go-build-tool,chainsaw,github.com/kyverno/chainsaw)
 
 .PHONY: chainsaw-test
 chainsaw-test: chainsaw ## Run Chainsaw e2e tests against the current kube context.
@@ -335,8 +338,8 @@ azure-e2e-clean: ## Delete ANY resource group tagged app=temporal-operator-e2e (
 
 .PHONY: crd-ref-docs
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
-$(CRD_REF_DOCS): $(LOCALBIN)
-	$(call go-install-tool,$(CRD_REF_DOCS),github.com/elastic/crd-ref-docs,$(CRD_REF_DOCS_VERSION))
+$(CRD_REF_DOCS): hack/tools/crd-ref-docs/go.mod hack/tools/crd-ref-docs/go.sum | $(LOCALBIN)
+	$(call go-build-tool,crd-ref-docs,github.com/elastic/crd-ref-docs)
 
 .PHONY: templ
 templ: $(TEMPL) ## Download templ locally if necessary.
@@ -374,13 +377,13 @@ docs-build: docs-examples ## Build the documentation site into docs/public (requ
 
 .PHONY: kind
 kind: $(KIND) ## Download kind locally if necessary.
-$(KIND): $(LOCALBIN)
-	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,$(KIND_VERSION))
+$(KIND): hack/tools/kind/go.mod hack/tools/kind/go.sum | $(LOCALBIN)
+	$(call go-build-tool,kind,sigs.k8s.io/kind)
 
 .PHONY: kubebuilder
-kubebuilder: $(KUBEBUILDER) ## Build kubebuilder (version pinned in hack/tools/go.mod) into ./bin.
-$(KUBEBUILDER): $(LOCALBIN) hack/tools/go.mod
-	cd hack/tools && GOBIN="$(LOCALBIN)" go install sigs.k8s.io/kubebuilder/v4
+kubebuilder: $(KUBEBUILDER) ## Build kubebuilder (version pinned in hack/tools/kubebuilder/go.mod) into ./bin.
+$(KUBEBUILDER): hack/tools/kubebuilder/go.mod hack/tools/kubebuilder/go.sum | $(LOCALBIN)
+	$(call go-build-tool,kubebuilder,sigs.k8s.io/kubebuilder/v4)
 
 .PHONY: install-tools
 install-tools: controller-gen kustomize envtest golangci-lint chainsaw crd-ref-docs kind kubebuilder templ ## Install all pinned developer tooling into ./bin.
@@ -400,6 +403,18 @@ kind-down: ## Delete the local kind cluster.
 .PHONY: kind-load
 kind-load: ## Load the operator image into the local kind cluster.
 	$(KIND) load docker-image ${IMG} --name $(KIND_CLUSTER)
+
+# go-build-tool builds a tool pinned by hack/tools/<tool>/go.mod into ./bin.
+# It rebuilds when that go.mod or go.sum changes. The tool's own module picks
+# the Go toolchain (GOTOOLCHAIN=auto), so a tool that needs a newer Go than
+# this project still builds.
+# $1 - directory under hack/tools, which is also the binary name
+# $2 - package to build
+define go-build-tool
+@echo "Building $(1) (pinned in hack/tools/$(1)/go.mod)"
+@cd "hack/tools/$(1)" && GOTOOLCHAIN=auto go build -o "$(LOCALBIN)/$(1).tmp" $(2)
+@mv -f "$(LOCALBIN)/$(1).tmp" "$(LOCALBIN)/$(1)"
+endef
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
