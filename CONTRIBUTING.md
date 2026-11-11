@@ -12,7 +12,7 @@ participating, you are expected to uphold this code.
 
 ### Prerequisites
 
-- Go **1.26.3** (see `go.mod` for the authoritative version).
+- Go **1.27** (see `go.mod` for the authoritative version).
 - `make`.
 - Docker (for building images and running kind).
 - [kind](https://kind.sigs.k8s.io/) for local clusters.
