@@ -227,7 +227,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.19.0
 KIND_VERSION ?= v0.27.0
 CHAINSAW_VERSION ?= v0.2.15
 CRD_REF_DOCS_VERSION ?= v0.3.0
-TEMPL_VERSION ?= v0.3.1020
+TEMPL_VERSION ?= v0.3.1100
 
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell v='$(call gomodver,sigs.k8s.io/controller-runtime)'; \
