@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 // Options configures a single deterministic chart-generation run.
@@ -19,8 +21,20 @@ type Options struct {
 	PreserveFiles []string
 	// RemoveFiles are deleted after generation if present.
 	RemoveFiles []string
+	// ResetDirs are deleted before generation, so a template the generator
+	// stops emitting does not linger in the chart.
+	ResetDirs []string
+	// Patches edit generated files after generation and before overrides are
+	// copied. A patch that cannot be applied fails the run.
+	Patches []Patch
 	// RunKubebuilder performs the upstream generation step.
 	RunKubebuilder func() error
+}
+
+// Patch rewrites one generated file. File is relative to Options.ChartDir.
+type Patch struct {
+	File  string
+	Apply func(content string) (string, error)
 }
 
 type snapshotEntry struct {
@@ -36,6 +50,12 @@ func Generate(opts Options) error {
 		return fmt.Errorf("snapshot: %w", err)
 	}
 
+	for _, rel := range opts.ResetDirs {
+		if err := os.RemoveAll(filepath.Join(opts.Root, rel)); err != nil {
+			return fmt.Errorf("reset %s: %w", rel, err)
+		}
+	}
+
 	if err := opts.RunKubebuilder(); err != nil {
 		_ = restore(snaps)
 		return fmt.Errorf("run kubebuilder: %w", err)
@@ -48,6 +68,12 @@ func Generate(opts Options) error {
 	for _, rel := range opts.RemoveFiles {
 		if err := os.Remove(filepath.Join(opts.Root, rel)); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("remove %s: %w", rel, err)
+		}
+	}
+
+	for _, p := range opts.Patches {
+		if err := applyPatch(opts.ChartDir, p); err != nil {
+			return fmt.Errorf("patch %s: %w", p.File, err)
 		}
 	}
 
@@ -125,4 +151,55 @@ func copyOverrides(overridesDir, chartDir string) error {
 		}
 		return os.WriteFile(dest, data, 0o644)
 	})
+}
+
+func applyPatch(chartDir string, p Patch) error {
+	path := filepath.Join(chartDir, p.File)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	out, err := p.Apply(string(data))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(out), 0o644)
+}
+
+// ReplaceOnce returns a patch function that replaces the single occurrence of
+// old with replacement. It fails when old is absent or ambiguous, so a change
+// in the generator's output is noticed instead of silently skipped.
+func ReplaceOnce(old, replacement string) func(string) (string, error) {
+	return func(content string) (string, error) {
+		if n := strings.Count(content, old); n != 1 {
+			return "", fmt.Errorf("expected exactly one occurrence of %q, found %d", old, n)
+		}
+		return strings.Replace(content, old, replacement, 1), nil
+	}
+}
+
+var managerImageLine = regexp.MustCompile(`(?m)^( +)image: (.+)\n`)
+
+// InjectManagerEnv adds an env block to the generated manager Deployment
+// template. OPERATOR_IMAGE repeats the container's own image expression, so
+// the operator can start Jobs from the image it is running. Entries from
+// .Values.manager.env follow it.
+func InjectManagerEnv(content string) (string, error) {
+	matches := managerImageLine.FindAllStringSubmatchIndex(content, -1)
+	if len(matches) != 1 {
+		return "", fmt.Errorf("expected exactly one container image line, found %d", len(matches))
+	}
+	m := matches[0]
+	indent := content[m[2]:m[3]]
+	if strings.Contains(content, "\n"+indent+"env:") {
+		return "", fmt.Errorf("generated template already has an env block; merge it with the injected one")
+	}
+	image := content[m[4]:m[5]]
+	env := indent + "env:\n" +
+		indent + "- name: OPERATOR_IMAGE\n" +
+		indent + "  value: " + image + "\n" +
+		indent + "{{- with .Values.manager.env }}\n" +
+		indent + "{{- toYaml . | nindent " + fmt.Sprint(len(indent)) + " }}\n" +
+		indent + "{{- end }}\n"
+	return content[:m[0]] + env + content[m[0]:], nil
 }

@@ -6,7 +6,7 @@ Next steps:
 
   1. Verify the controller is ready:
 
-       kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ .Release.Name }}-controller-manager
+       kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "temporal-operator.resourceName" (dict "suffix" "controller-manager" "context" $) }}
 
   2. Create a TemporalCluster (see examples in the project repository):
 
@@ -16,7 +16,7 @@ Next steps:
 
        kubectl get temporalcluster -w
 
-{{- if .Values.webhook.enable }}
+{{- if .Values.webhook.enabled }}
 
 Webhooks are enabled. cert-manager must be installed in the cluster.
 {{- end }}

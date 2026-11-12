@@ -1,22 +1,31 @@
-{{- if .Values.rbacHelpers.enable }}
+{{- if .Values.rbac.helpers.enabled }}
 apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.rbac.namespaced }}
+kind: Role
+{{- else }}
 kind: ClusterRole
+{{- end }}
 metadata:
-    labels:
-        app.kubernetes.io/managed-by: {{ .Release.Service }}
-        app.kubernetes.io/name: temporal-operator
-    name: temporal-operator-temporalcluster-admin-role
+{{- if .Values.rbac.namespaced }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "temporal-operator.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: {{ include "temporal-operator.resourceName" (dict "suffix" "temporalcluster-admin-role" "context" $) }}
 rules:
-    - apiGroups:
-        - temporal.bmor10.com
-      resources:
-        - temporalclusters
-      verbs:
-        - '*'
-    - apiGroups:
-        - temporal.bmor10.com
-      resources:
-        - temporalclusters/status
-      verbs:
-        - get
+- apiGroups:
+  - temporal.bmor10.com
+  resources:
+  - temporalclusters
+  verbs:
+  - '*'
+- apiGroups:
+  - temporal.bmor10.com
+  resources:
+  - temporalclusters/status
+  verbs:
+  - get
 {{- end }}

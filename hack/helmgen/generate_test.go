@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -49,6 +50,10 @@ func fixture(t *testing.T) (string, Options) {
 		ChartDir:      filepath.Join(root, "dist", "chart"),
 		PreserveFiles: []string{"config/manager/kustomization.yaml", "dist/install.yaml"},
 		RemoveFiles:   []string{".github/workflows/test-chart.yml"},
+		ResetDirs:     []string{"dist/chart/templates"},
+		Patches: []Patch{
+			{File: "templates/crd/example.yaml", Apply: ReplaceOnce("GENERATED", "PATCHED")},
+		},
 		RunKubebuilder: func() error {
 			// Simulate kubebuilder's destructive behavior.
 			writeFile(t, root, "config/manager/kustomization.yaml", "CLOBBERED-KUSTOMIZATION\n")
@@ -91,9 +96,73 @@ func TestGeneratePostProcessing(t *testing.T) {
 		t.Errorf("values.yaml not overridden: %q", got)
 	}
 
-	// Non-overridden generated files are left as kubebuilder produced them.
-	if got := readFile(t, root, "dist/chart/templates/crd/example.yaml"); got != "GENERATED-CRD\n" {
-		t.Errorf("generated CRD altered: %q", got)
+	// Patches are applied to generated files.
+	if got := readFile(t, root, "dist/chart/templates/crd/example.yaml"); got != "PATCHED-CRD\n" {
+		t.Errorf("generated CRD not patched: %q", got)
+	}
+}
+
+func TestGenerateRemovesStaleTemplates(t *testing.T) {
+	root, opts := fixture(t)
+	writeFile(t, root, "dist/chart/templates/monitoring/stale.yaml", "STALE\n")
+
+	if err := Generate(opts); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "dist/chart/templates/monitoring/stale.yaml")); !os.IsNotExist(err) {
+		t.Errorf("stale template should have been removed, stat err=%v", err)
+	}
+}
+
+func TestGenerateFailsWhenPatchDoesNotApply(t *testing.T) {
+	_, opts := fixture(t)
+	opts.Patches = []Patch{
+		{File: "values.yaml", Apply: ReplaceOnce("NOT-IN-THE-FILE", "x")},
+	}
+	if err := Generate(opts); err == nil {
+		t.Fatal("Generate should fail when a patch finds nothing to replace")
+	}
+}
+
+func TestReplaceOnceRejectsAmbiguousMatch(t *testing.T) {
+	if _, err := ReplaceOnce("a", "b")("a a"); err == nil {
+		t.Fatal("ReplaceOnce should fail on two occurrences")
+	}
+}
+
+func TestInjectManagerEnv(t *testing.T) {
+	in := "      containers:\n" +
+		"      - args:\n" +
+		"        command:\n" +
+		"        - /manager\n" +
+		"        image: \"{{ .Values.manager.image.repository }}\"\n" +
+		"        name: manager\n"
+	want := "      containers:\n" +
+		"      - args:\n" +
+		"        command:\n" +
+		"        - /manager\n" +
+		"        env:\n" +
+		"        - name: OPERATOR_IMAGE\n" +
+		"          value: \"{{ .Values.manager.image.repository }}\"\n" +
+		"        {{- with .Values.manager.env }}\n" +
+		"        {{- toYaml . | nindent 8 }}\n" +
+		"        {{- end }}\n" +
+		"        image: \"{{ .Values.manager.image.repository }}\"\n" +
+		"        name: manager\n"
+	got, err := InjectManagerEnv(in)
+	if err != nil {
+		t.Fatalf("InjectManagerEnv: %v", err)
+	}
+	if got != want {
+		t.Errorf("unexpected output:\n%s", got)
+	}
+
+	withEnv := strings.Replace(in, "        image:", "        env: []\n        image:", 1)
+	if _, err := InjectManagerEnv(withEnv); err == nil {
+		t.Error("InjectManagerEnv should refuse a template that already has an env block")
+	}
+	if _, err := InjectManagerEnv("no image here\n"); err == nil {
+		t.Error("InjectManagerEnv should fail without an image line")
 	}
 }
 

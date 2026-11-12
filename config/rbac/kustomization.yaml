@@ -34,4 +34,10 @@ resources:
 - temporalcluster_admin_role.yaml
 - temporalcluster_editor_role.yaml
 - temporalcluster_viewer_role.yaml
+- temporaldevserver_admin_role.yaml
+- temporaldevserver_editor_role.yaml
+- temporaldevserver_viewer_role.yaml
+- temporalschedule_admin_role.yaml
+- temporalschedule_editor_role.yaml
+- temporalschedule_viewer_role.yaml
 
