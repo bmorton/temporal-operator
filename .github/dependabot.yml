@@ -47,14 +47,6 @@ updates:
         applies-to: security-updates
         patterns:
           - "*"
-    ignore:
-      # kubebuilder 4.11+ generates a different Helm chart layout (renamed
-      # values keys, new template helpers) that hack/helmgen and
-      # hack/helm/overrides do not handle yet. Remove once the chart is
-      # migrated.
-      - dependency-name: "sigs.k8s.io/kubebuilder/v4"
-        update-types:
-          - "version-update:semver-minor"
     cooldown:
       default-days: 7
 
