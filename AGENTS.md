@@ -77,12 +77,25 @@ templ bump, run `make generate manifests helm-chart` and commit the result.
 make helm-chart   # regenerates dist/chart deterministically
 ```
 
-Generation is `kubebuilder edit` plus a post-processor (`hack/helmgen`). Files
-that must be hand-maintained live in `hack/helm/overrides/` (mirroring their
-`dist/chart/` paths) and are copied over the generated output; edit those, not
-`dist/chart`. The `Verify generated chart` CI job fails if `dist/chart` is stale,
-so always run `make helm-chart` and commit the result after changing API types,
-RBAC markers, or chart overrides. Because the manager Deployment template is hand-owned, changes to `config/manager/manager.yaml` (new args, env vars, probes, volumes, resources) are **not** picked up automatically — mirror them into `hack/helm/overrides/templates/manager/manager.yaml` by hand.
+Generation is `kubebuilder edit --force` plus a post-processor
+(`hack/helmgen`), so `values.yaml`, the helpers and every template follow the
+kubebuilder version pinned in `hack/tools/kubebuilder/go.mod`. Two things are
+ours:
+
+- **Patches** in `hack/helmgen/main.go` edit generated files (the default image
+  repository, `manager.env`, and the `OPERATOR_IMAGE` env var on the manager
+  container). A patch fails the run if the text it expects is gone.
+- **Overrides** in `hack/helm/overrides/` (mirroring their `dist/chart/` paths)
+  are copied over the generated output: `Chart.yaml`, `README.md`,
+  `artifacthub-pkg.yaml` and `templates/NOTES.txt`. Edit those, not `dist/chart`.
+
+The manager Deployment template is generated from `config/manager/manager.yaml`,
+so changes there (args, probes, volumes, resources) reach the chart on the next
+`make helm-chart`. The `Verify generated chart` CI job fails if `dist/chart` is
+stale, so always run `make helm-chart` and commit the result after changing API
+types, RBAC markers, `config/`, or chart overrides. Renaming or removing a chart
+value is a breaking change for chart users: say so with a `BREAKING CHANGE:`
+footer in the PR description.
 
 ## Temporal version bumps
 

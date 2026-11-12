@@ -1,18 +1,20 @@
-{{- if and .Values.certManager.enable .Values.metrics.enable }}
+{{- if and .Values.certManager.enabled .Values.metrics.enabled .Values.metrics.secure }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-    labels:
-        app.kubernetes.io/managed-by: {{ .Release.Service }}
-        app.kubernetes.io/name: temporal-operator
-    name: temporal-operator-metrics-certs
-    namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "temporal-operator.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: {{ include "temporal-operator.resourceName" (dict "suffix" "metrics-certs" "context" $) }}
+  namespace: {{ .Release.Namespace }}
 spec:
-    dnsNames:
-        - {{ include "chart.serviceName" (dict "suffix" "controller-manager-metrics-service" "context" .) }}.{{ include "chart.namespaceName" . }}.svc
-        - {{ include "chart.serviceName" (dict "suffix" "controller-manager-metrics-service" "context" .) }}.{{ include "chart.namespaceName" . }}.svc.cluster.local
-    issuerRef:
-        kind: Issuer
-        name: {{ include "chart.name" . }}-selfsigned-issuer
-    secretName: metrics-server-cert
+  dnsNames:
+  - {{ include "temporal-operator.resourceName" (dict "suffix" "controller-manager-metrics-service" "context" $) }}.{{ include "temporal-operator.namespaceName" $ }}.svc
+  - {{ include "temporal-operator.resourceName" (dict "suffix" "controller-manager-metrics-service" "context" $) }}.{{ include "temporal-operator.namespaceName" $ }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ include "temporal-operator.resourceName" (dict "suffix" "selfsigned-issuer" "context" $) }}
+  secretName: metrics-server-cert
 {{- end }}
