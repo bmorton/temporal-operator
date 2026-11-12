@@ -62,6 +62,13 @@ make lint                # golangci-lint
 Run `make generate manifests` after changing API types, and `make lint` before
 opening a PR. The project targets the Go version pinned in `go.mod`.
 
+Dev tools (controller-gen, kustomize, kind, chainsaw, crd-ref-docs,
+golangci-lint, kubebuilder) are each pinned by a Go module in
+`hack/tools/<tool>/go.mod` and bumped by Dependabot; the Makefile has no version
+variables for them. The templ generator follows the `github.com/a-h/templ`
+version in the root `go.mod`. After a controller-gen, kustomize, kubebuilder or
+templ bump, run `make generate manifests helm-chart` and commit the result.
+
 ## Helm chart
 
 `dist/chart` is generated — do **not** edit it by hand. Run:

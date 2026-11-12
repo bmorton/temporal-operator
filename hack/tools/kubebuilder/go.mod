@@ -1,8 +1,8 @@
-module github.com/bmorton/temporal-operator/hack/tools
+module github.com/bmorton/temporal-operator/hack/tools/kubebuilder
 
 go 1.26.4
 
-tool sigs.k8s.io/kubebuilder/v4
+require sigs.k8s.io/kubebuilder/v4 v4.10.1
 
 require (
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
@@ -30,7 +30,6 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
-	sigs.k8s.io/kubebuilder/v4 v4.10.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
