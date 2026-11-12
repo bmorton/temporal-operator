@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.15.0](https://github.com/bmorton/temporal-operator/compare/v0.14.0...v0.15.0) (2026-11-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **chart:** CRDs installed by the chart now carry `helm.sh/resource-policy: keep` when `crd.keep` is true (the default), so `helm uninstall` no longer deletes them.
+
+### Features
+
+* **chart:** regenerate the Helm chart with kubebuilder 4.16.0 ([c54e786](https://github.com/bmorton/temporal-operator/commit/c54e786d7ff3ade4ffdec8bb40ebc01bb854fd28))
+
 ## [0.14.0](https://github.com/bmorton/temporal-operator/compare/v0.13.0...v0.14.0) (2026-11-11)
 
 
