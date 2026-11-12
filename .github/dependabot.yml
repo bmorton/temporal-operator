@@ -15,9 +15,9 @@ updates:
     cooldown:
       default-days: 7
 
-  # Dev tools built by the Makefile, one Go module per tool. Not grouped: a
-  # controller-gen or kustomize bump needs `make manifests helm-chart` re-run
-  # by hand and should not hold back the others.
+  # Dev tools built by the Makefile, one Go module per tool. Grouped across
+  # all tool directories so a day's updates arrive as a few PRs, not one per
+  # dependency per tool. The first matching group wins.
   - package-ecosystem: "gomod"
     directories:
       - "/hack/tools/*"
@@ -27,6 +27,26 @@ updates:
     commit-message:
       prefix: "build"
       include: "scope"
+    groups:
+      # Tools whose output is committed. A bump here needs
+      # `make generate manifests helm-chart` re-run by hand, so it is kept
+      # apart and does not hold back the other tools.
+      tools-codegen:
+        applies-to: version-updates
+        patterns:
+          - "sigs.k8s.io/controller-tools"
+          - "sigs.k8s.io/kustomize/*"
+          - "sigs.k8s.io/kubebuilder/*"
+          - "github.com/elastic/crd-ref-docs"
+      tools:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      # Security fixes for the tools' transitive dependencies.
+      tools-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     cooldown:
       default-days: 7
 
