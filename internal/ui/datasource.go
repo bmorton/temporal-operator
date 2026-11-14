@@ -89,7 +89,7 @@ func (d *CachedDataSource) GetCluster(ctx context.Context, namespace, name strin
 		return nil, err
 	}
 
-	related := make([]RelatedResource, 0)
+	related := make([]RelatedResource, 0) //nolint:prealloc // total length is not known before the appends
 	related = append(related, relatedNamespaces(namespaces.Items, name)...)
 	related = append(related, relatedClients(clients.Items, name)...)
 	related = append(related, relatedSearchAttributes(attrs.Items, name)...)

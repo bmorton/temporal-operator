@@ -1,164 +1,171 @@
 apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.rbac.namespaced }}
+kind: Role
+{{- else }}
 kind: ClusterRole
+{{- end }}
 metadata:
-    name: temporal-operator-manager-role
+{{- if .Values.rbac.namespaced }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+  name: {{ include "temporal-operator.resourceName" (dict "suffix" "manager-role" "context" $) }}
 rules:
-    - apiGroups:
-        - ""
-      resources:
-        - configmaps
-        - persistentvolumeclaims
-        - secrets
-        - services
-      verbs:
-        - create
-        - delete
-        - get
-        - list
-        - patch
-        - update
-        - watch
-    - apiGroups:
-        - ""
-      resources:
-        - events
-      verbs:
-        - create
-        - patch
-    - apiGroups:
-        - ""
-      resources:
-        - pods
-      verbs:
-        - get
-        - list
-        - watch
-    - apiGroups:
-        - ""
-      resources:
-        - serviceaccounts
-      verbs:
-        - create
-        - get
-        - list
-        - watch
-    - apiGroups:
-        - apps
-      resources:
-        - deployments
-      verbs:
-        - create
-        - delete
-        - get
-        - list
-        - patch
-        - update
-        - watch
-    - apiGroups:
-        - batch
-      resources:
-        - jobs
-      verbs:
-        - create
-        - delete
-        - get
-        - list
-        - patch
-        - update
-        - watch
-    - apiGroups:
-        - cert-manager.io
-      resources:
-        - certificates
-        - issuers
-      verbs:
-        - create
-        - delete
-        - get
-        - list
-        - patch
-        - update
-        - watch
-    - apiGroups:
-        - monitoring.coreos.com
-      resources:
-        - servicemonitors
-      verbs:
-        - create
-        - delete
-        - get
-        - list
-        - patch
-        - update
-        - watch
-    - apiGroups:
-        - networking.k8s.io
-      resources:
-        - ingresses
-      verbs:
-        - create
-        - delete
-        - get
-        - list
-        - patch
-        - update
-        - watch
-    - apiGroups:
-        - policy
-      resources:
-        - poddisruptionbudgets
-      verbs:
-        - create
-        - delete
-        - get
-        - list
-        - patch
-        - update
-        - watch
-    - apiGroups:
-        - temporal.bmor10.com
-      resources:
-        - temporalclusterclients
-        - temporalclusterconnections
-        - temporalclusters
-        - temporaldevservers
-        - temporalnamespaces
-        - temporalschedules
-        - temporalsearchattributes
-        - temporalworkflowruns
-      verbs:
-        - create
-        - delete
-        - get
-        - list
-        - patch
-        - update
-        - watch
-    - apiGroups:
-        - temporal.bmor10.com
-      resources:
-        - temporalclusterclients/finalizers
-        - temporalclusterconnections/finalizers
-        - temporalclusters/finalizers
-        - temporaldevservers/finalizers
-        - temporalnamespaces/finalizers
-        - temporalschedules/finalizers
-        - temporalsearchattributes/finalizers
-        - temporalworkflowruns/finalizers
-      verbs:
-        - update
-    - apiGroups:
-        - temporal.bmor10.com
-      resources:
-        - temporalclusterclients/status
-        - temporalclusterconnections/status
-        - temporalclusters/status
-        - temporaldevservers/status
-        - temporalnamespaces/status
-        - temporalschedules/status
-        - temporalsearchattributes/status
-        - temporalworkflowruns/status
-      verbs:
-        - get
-        - patch
-        - update
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - persistentvolumeclaims
+  - secrets
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  - issuers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - temporal.bmor10.com
+  resources:
+  - temporalclusterclients
+  - temporalclusterconnections
+  - temporalclusters
+  - temporaldevservers
+  - temporalnamespaces
+  - temporalschedules
+  - temporalsearchattributes
+  - temporalworkflowruns
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - temporal.bmor10.com
+  resources:
+  - temporalclusterclients/finalizers
+  - temporalclusterconnections/finalizers
+  - temporalclusters/finalizers
+  - temporaldevservers/finalizers
+  - temporalnamespaces/finalizers
+  - temporalschedules/finalizers
+  - temporalsearchattributes/finalizers
+  - temporalworkflowruns/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - temporal.bmor10.com
+  resources:
+  - temporalclusterclients/status
+  - temporalclusterconnections/status
+  - temporalclusters/status
+  - temporaldevservers/status
+  - temporalnamespaces/status
+  - temporalschedules/status
+  - temporalsearchattributes/status
+  - temporalworkflowruns/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -39,9 +39,10 @@ go_self='^\.github/workflows/ci\.yml$'
 e2e_self='^\.github/workflows/e2e\.yml$'
 workflows='^\.github/workflows/'
 
-# Dev tooling (golangci-lint, controller-gen, ...) matters to the Go checks
-# but not to e2e, which builds the operator image from the main module.
-e2e_inert='^hack/tools/'
+# These dev tools matter to the Go checks but not to e2e. The other tools
+# under hack/tools (chainsaw, kind, kustomize, controller-gen) are used by the
+# e2e run itself, so a change to them runs e2e.
+e2e_inert='^hack/tools/(golangci-lint|crd-ref-docs|kubebuilder)/'
 
 go=false
 e2e=false

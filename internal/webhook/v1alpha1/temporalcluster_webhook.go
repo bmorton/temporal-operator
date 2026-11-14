@@ -172,7 +172,7 @@ func validateUIAuth(cluster *temporalv1alpha1.TemporalCluster) field.ErrorList {
 }
 
 func (v *TemporalClusterCustomValidator) validateSpec(cluster *temporalv1alpha1.TemporalCluster) field.ErrorList {
-	var errs field.ErrorList
+	var errs field.ErrorList //nolint:prealloc // total length is not known before the appends
 	specPath := field.NewPath("spec")
 
 	errs = append(errs, validateVersion(cluster, specPath)...)

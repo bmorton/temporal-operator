@@ -14,7 +14,7 @@ helm install temporal-operator oci://ghcr.io/bmorton/charts/temporal-operator \
 ```
 
 See the [chart values](https://github.com/bmorton/temporal-operator/blob/main/dist/chart/values.yaml)
-for configuration. Webhooks require cert-manager (`webhook.enable=true` by
+for configuration. Webhooks require cert-manager (`webhook.enabled=true` by
 default).
 
 ## Raw kustomize / single manifest

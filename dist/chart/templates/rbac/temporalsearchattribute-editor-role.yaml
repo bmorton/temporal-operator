@@ -1,28 +1,37 @@
-{{- if .Values.rbacHelpers.enable }}
+{{- if .Values.rbac.helpers.enabled }}
 apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.rbac.namespaced }}
+kind: Role
+{{- else }}
 kind: ClusterRole
+{{- end }}
 metadata:
-    labels:
-        app.kubernetes.io/managed-by: {{ .Release.Service }}
-        app.kubernetes.io/name: temporal-operator
-    name: temporal-operator-temporalsearchattribute-editor-role
+{{- if .Values.rbac.namespaced }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "temporal-operator.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: {{ include "temporal-operator.resourceName" (dict "suffix" "temporalsearchattribute-editor-role" "context" $) }}
 rules:
-    - apiGroups:
-        - temporal.bmor10.com
-      resources:
-        - temporalsearchattributes
-      verbs:
-        - create
-        - delete
-        - get
-        - list
-        - patch
-        - update
-        - watch
-    - apiGroups:
-        - temporal.bmor10.com
-      resources:
-        - temporalsearchattributes/status
-      verbs:
-        - get
+- apiGroups:
+  - temporal.bmor10.com
+  resources:
+  - temporalsearchattributes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - temporal.bmor10.com
+  resources:
+  - temporalsearchattributes/status
+  verbs:
+  - get
 {{- end }}

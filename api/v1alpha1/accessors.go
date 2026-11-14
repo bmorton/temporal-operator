@@ -29,6 +29,7 @@ func (t *TemporalClusterClient) GetConditions() *[]metav1.Condition { return &t.
 func (t *TemporalClusterClient) SetObservedGeneration(g int64)      { t.Status.ObservedGeneration = g }
 
 func (t *TemporalClusterConnection) GetConditions() *[]metav1.Condition { return &t.Status.Conditions }
+
 func (t *TemporalClusterConnection) SetObservedGeneration(g int64) {
 	t.Status.ObservedGeneration = g
 }
@@ -43,6 +44,7 @@ func (t *TemporalSchedule) GetConditions() *[]metav1.Condition { return &t.Statu
 func (t *TemporalSchedule) SetObservedGeneration(g int64)      { t.Status.ObservedGeneration = g }
 
 func (t *TemporalSearchAttribute) GetConditions() *[]metav1.Condition { return &t.Status.Conditions }
+
 func (t *TemporalSearchAttribute) SetObservedGeneration(g int64) {
 	t.Status.ObservedGeneration = g
 }
