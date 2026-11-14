@@ -1,0 +1,12 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: stall-test
+status:
+  upgrade:
+    fromVersion: "1.30.4"
+    toVersion: "1.31.1"
+    stalledService: frontend
+  (conditions[?type == 'UpgradeBlocked'].status | [0]): "True"
+  (conditions[?type == 'UpgradeBlocked'].reason | [0]): UpgradeStalled
+  (conditions[?type == 'Degraded'].status | [0]): "True"

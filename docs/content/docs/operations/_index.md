@@ -60,3 +60,36 @@ delegating mTLS to a service mesh (Linkerd, or Istio/Envoy) so Temporal serves
 plaintext behind the sidecar and standard gRPC probes apply. Until then, TCP
 probes are the supported behavior for mTLS clusters.
 {{< /callout >}}
+
+## Metrics and alerts
+
+Beyond controller-runtime's standard reconcile metrics, the operator exports:
+
+| Metric | Type | Meaning |
+| --- | --- | --- |
+| `temporal_operator_resource_condition` | gauge | Current status of each condition (see below). Labelled by `kind`, `namespace`, `name`, `type`, `status`, `reason`. Covers every condition on every Temporal resource. |
+| `temporal_operator_upgrade_phase_seconds` | gauge | Seconds the current upgrade phase has been active. Labelled by `namespace`, `name`, `phase`. |
+| `temporal_operator_schema_job_attempts` | gauge | Consecutive failed schema migration attempts per store. Labelled by `namespace`, `name`, `store`. |
+| `temporal_operator_cleanup_abandoned_total` | counter | Remote cleanups abandoned after the deadline. Any increase means an orphaned Temporal object. Labelled by `kind`, `namespace`. |
+| `temporal_operator_target_unreachable_total` | counter | Failures to reach a Temporal target believed to exist. Labelled by `kind`, `namespace`. |
+
+`temporal_operator_resource_condition` emits **one series per condition** with
+`status` as a label. The value is `1` when the condition is `True` and `0` when
+it is `False`. A `status="False"` series therefore always has value `0`, not
+`1`. Keep that semantic in mind when writing alert expressions — matching
+`status="True"` compares with `== 1`, and matching `status="False"` compares
+with `== 0`. For example, to find everything currently unhealthy:
+
+```promql
+temporal_operator_resource_condition{type="Degraded",status="True"} == 1
+```
+
+Because the metric is derived from resource status rather than written by hand,
+any condition the operator sets is queryable without further configuration.
+
+Alert rules ship in the chart and are enabled with the ServiceMonitor:
+
+```sh
+helm upgrade --install temporal-operator oci://ghcr.io/bmorton/charts/temporal-operator \
+  --set prometheus.enable=true
+```

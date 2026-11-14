@@ -636,6 +636,7 @@ _Appears in:_
 | `schemaVersions` _object (keys:string, values:string)_ | SchemaVersions maps a store name to its observed schema version. |  | Optional: \{\} <br /> |
 | `history` _[SchemaUpgradeRecord](#schemaupgraderecord) array_ | History records schema upgrades applied by the operator. |  | Optional: \{\} <br /> |
 | `reachable` _boolean_ | Reachable indicates whether the datastores were reachable at last reconcile. |  | Optional: \{\} <br /> |
+| `schemaAttempts` _object (keys:string, values:[SchemaAttemptStatus](#schemaattemptstatus))_ | SchemaAttempts records failed schema-migration attempts per store, so<br />recreation is bounded across operator restarts and leader-election<br />failover. Entries are removed when a store's migration succeeds. |  | Optional: \{\} <br /> |
 
 
 #### PodTemplateOverride
@@ -780,6 +781,25 @@ _Appears in:_
 | `notes` _string_ |  |  | Optional: \{\} <br /> |
 | `limitedActions` _boolean_ |  |  | Optional: \{\} <br /> |
 | `remainingActions` _integer_ |  |  | Optional: \{\} <br /> |
+
+
+#### SchemaAttemptStatus
+
+
+
+SchemaAttemptStatus counts consecutive failed schema-migration attempts for a
+single store.
+
+
+
+_Appears in:_
+- [PersistenceStatus](#persistencestatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `count` _integer_ | Count is the number of attempts that have failed. |  | Optional: \{\} <br /> |
+| `firstFailedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#time-v1-meta)_ | FirstFailedAt is when the first of the current run of failures occurred. |  | Optional: \{\} <br /> |
+| `lastError` _string_ | LastError is the failure reason reported by the most recent Job. |  | Optional: \{\} <br /> |
 
 
 #### SchemaJobSpec
@@ -1465,6 +1485,9 @@ _Appears in:_
 | `phase` _string_ |  |  | Optional: \{\} <br /> |
 | `rollbackable` _boolean_ | Rollbackable is true until schema migration begins, after which a<br />rollback is no longer safe. |  | Optional: \{\} <br /> |
 | `startedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#time-v1-meta)_ |  |  | Optional: \{\} <br /> |
+| `phaseStartedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#time-v1-meta)_ | PhaseStartedAt is when the current phase was entered. It is the basis for<br />stall detection. |  | Optional: \{\} <br /> |
+| `stalledService` _string_ | StalledService names the service whose rollout has exceeded the phase<br />timeout, or is empty when the upgrade is progressing normally. |  | Optional: \{\} <br /> |
+| `message` _string_ | Message explains why the upgrade is not progressing, when it is not. |  | Optional: \{\} <br /> |
 
 
 #### WorkflowRunFailure

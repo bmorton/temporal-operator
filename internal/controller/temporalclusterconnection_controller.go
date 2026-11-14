@@ -21,8 +21,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,6 +35,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
+	"github.com/bmorton/temporal-operator/internal/metrics"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -51,6 +54,8 @@ type TemporalClusterConnectionReconciler struct {
 
 	// ClientFactory builds the Temporal remote-cluster client; injectable for tests.
 	ClientFactory temporal.RemoteClusterClientFactory
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // resolvedPeer is a peer resolved to a connectable frontend.
@@ -96,7 +101,7 @@ func (r *TemporalClusterConnectionReconciler) Reconcile(ctx context.Context, req
 
 	// Handle deletion: best-effort de-registration, then unblock GC.
 	if !conn.DeletionTimestamp.IsZero() {
-		return ctrl.Result{}, r.reconcileDelete(ctx, &conn, peers)
+		return r.reconcileDelete(ctx, &conn, peers)
 	}
 
 	if !controllerutil.ContainsFinalizer(&conn, clusterConnectionFinalizer) {
@@ -355,16 +360,61 @@ func peerConnected(p resolvedPeer, peers []resolvedPeer, locals map[string]*loca
 	return others > 0
 }
 
+// localPeerErrors returns a joined error for every local peer that was expected
+// to participate in cleanup but could not be reached: either the peer's target
+// produced a non-NotFound resolve failure, or it resolved to a ready address
+// that dialLocals could not connect.
+//
+// ErrTargetNotFound peers are excluded: resolvePeers never sets resolveErr for
+// them and their empty address fails the ready+address gate, so they never
+// contribute an error here — preserving the issue #58 immediate-forget path.
+func localPeerErrors(peers []resolvedPeer, locals map[string]*localPeerState) error {
+	var err error
+	for _, p := range peers {
+		if !p.local {
+			continue
+		}
+		if p.resolveErr != nil {
+			// Non-NotFound resolve failure (e.g. TLS secret missing).
+			err = errors.Join(err, fmt.Errorf("peer %s: %w", p.name, p.resolveErr))
+			continue
+		}
+		// Peer resolved to a ready address but dialLocals could not connect it.
+		if p.ready && p.address != "" {
+			if _, ok := locals[p.name]; !ok {
+				err = errors.Join(err, fmt.Errorf("peer %s: could not dial frontend", p.name))
+			}
+		}
+	}
+	return err
+}
+
 // reconcileDelete best-effort removes this connection's peers as remote
-// clusters from every reachable local peer, then removes the finalizer. If
-// peers are unreachable, the finalizer is still removed to unblock GC.
-func (r *TemporalClusterConnectionReconciler) reconcileDelete(ctx context.Context, conn *temporalv1alpha1.TemporalClusterConnection, peers []resolvedPeer) error {
+// clusters from every reachable local peer, then removes the finalizer.
+//
+// If any local peer cannot be resolved (with a non-NotFound error) or dialed,
+// decideCleanup is consulted so that the finalizer is kept for a bounded retry
+// period rather than being removed immediately. After cleanupDeadline elapses a
+// CleanupAbandoned event is emitted and the finalizer is removed regardless, so
+// deletion always terminates.
+//
+// ErrTargetNotFound peers are excluded from the bounded-retry path: they have
+// no resolveErr and no address, so localPeerErrors contributes nothing for them
+// and the finalizer is removed at once (issue #58 guarantee).
+func (r *TemporalClusterConnectionReconciler) reconcileDelete(ctx context.Context, conn *temporalv1alpha1.TemporalClusterConnection, peers []resolvedPeer) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	if !controllerutil.ContainsFinalizer(conn, clusterConnectionFinalizer) {
-		return nil
+		return ctrl.Result{}, nil
 	}
 
 	locals := r.dialLocals(ctx, peers)
+	defer func() {
+		for _, l := range locals {
+			_ = l.client.Close()
+		}
+	}()
+
+	var removeErr error
 	for name, l := range locals {
 		for _, other := range peers {
 			if other.name == name {
@@ -372,13 +422,29 @@ func (r *TemporalClusterConnectionReconciler) reconcileDelete(ctx context.Contex
 			}
 			if err := l.client.RemoveRemoteCluster(ctx, other.name); err != nil {
 				log.Error(err, "removing remote cluster", "on", name, "remote", other.name)
+				removeErr = errors.Join(removeErr, fmt.Errorf("%s on %s: %w", other.name, name, err))
 			}
 		}
-		_ = l.client.Close()
+	}
+
+	if combinedErr := errors.Join(localPeerErrors(peers, locals), removeErr); combinedErr != nil {
+		action, after := decideCleanup(conn, combinedErr, time.Now())
+		switch action {
+		case cleanupRetry:
+			metrics.TargetUnreachable.WithLabelValues("TemporalClusterConnection", conn.Namespace).Inc()
+			status.Set(conn, temporalv1alpha1.ConditionProgressing, metav1.ConditionTrue,
+				temporalv1alpha1.ReasonCleanupPending,
+				fmt.Sprintf("waiting for the target to become reachable before cleaning up: %v", combinedErr))
+			return ctrl.Result{RequeueAfter: after}, r.statusUpdate(ctx, conn)
+		case cleanupAbandon:
+			message := fmt.Sprintf("abandoned removal of remote cluster registrations after %s: %v", cleanupDeadline, combinedErr)
+			r.Events.Warning(conn, temporalv1alpha1.ReasonCleanupAbandoned, message)
+			metrics.CleanupAbandoned.WithLabelValues("TemporalClusterConnection", conn.Namespace).Inc()
+		}
 	}
 
 	controllerutil.RemoveFinalizer(conn, clusterConnectionFinalizer)
-	return r.Update(ctx, conn)
+	return ctrl.Result{}, r.Update(ctx, conn)
 }
 
 func (r *TemporalClusterConnectionReconciler) clientFactory() temporal.RemoteClusterClientFactory {
@@ -413,19 +479,12 @@ func (r *TemporalClusterConnectionReconciler) mapClusterToConnections(kind strin
 	}
 }
 
-func (r *TemporalClusterConnectionReconciler) setReady(conn *temporalv1alpha1.TemporalClusterConnection, status metav1.ConditionStatus, reason, message string) {
-	conn.Status.ObservedGeneration = conn.Generation
-	meta.SetStatusCondition(&conn.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: conn.Generation,
-	})
+func (r *TemporalClusterConnectionReconciler) setReady(conn *temporalv1alpha1.TemporalClusterConnection, s metav1.ConditionStatus, reason, message string) {
+	status.Set(conn, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalClusterConnectionReconciler) statusUpdate(ctx context.Context, conn *temporalv1alpha1.TemporalClusterConnection) error {
-	return client.IgnoreNotFound(r.Status().Update(ctx, conn))
+	return status.Update(ctx, r.Client, conn)
 }
 
 // SetupWithManager sets up the controller with the Manager.

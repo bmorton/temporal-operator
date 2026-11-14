@@ -19,15 +19,20 @@ package controller
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -385,5 +390,64 @@ var _ = Describe("TemporalNamespace reconciler", func() {
 		cond := meta.FindStatusCondition(ns.Status.Conditions, temporalv1alpha1.ConditionReady)
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Reason).To(Equal(temporalv1alpha1.ReasonFrontendUnavailable))
+	})
+
+	It("retries cleanup while the cluster exists but is unreachable, then abandons", func() {
+		origDeadline := cleanupDeadline
+		origInterval := cleanupRetryInterval
+		// Use a generous deadline so the first reconcile is reliably within it.
+		// Kubernetes DeletionTimestamp has second-level granularity, so sub-second
+		// deadlines are unreliable in envtest.
+		cleanupDeadline = 5 * time.Minute
+		cleanupRetryInterval = 15 * time.Second
+		defer func() {
+			cleanupDeadline = origDeadline
+			cleanupRetryInterval = origInterval
+		}()
+
+		// A ready cluster exists, so resolveTarget succeeds, but the client
+		// factory fails: the target is present-but-unreachable.
+		clusterName := readyCluster()
+		nsName := fmt.Sprintf("unreachable-%d", counter)
+		ns := &temporalv1alpha1.TemporalNamespace{
+			ObjectMeta: metav1.ObjectMeta{Name: nsName, Namespace: "default"},
+			Spec: temporalv1alpha1.TemporalNamespaceSpec{
+				ClusterRef: temporalv1alpha1.ClusterReference{Name: clusterName},
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+
+		theReconciler := &TemporalNamespaceReconciler{
+			Client: k8sClient,
+			Scheme: k8sClient.Scheme(),
+			ClientFactory: func(_ context.Context, _ string, _ *tls.Config) (temporal.NamespaceClient, error) {
+				return nil, errors.New("connection refused")
+			},
+		}
+		key := client.ObjectKeyFromObject(ns)
+
+		// Add the finalizer directly (as the controller would on first reconcile).
+		Expect(k8sClient.Get(ctx, key, ns)).To(Succeed())
+		controllerutil.AddFinalizer(ns, namespaceFinalizer)
+		Expect(k8sClient.Update(ctx, ns)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+
+		// Within the deadline the finalizer is retained and a retry is scheduled.
+		res, err := theReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(BeNumerically(">", 0))
+		Expect(k8sClient.Get(ctx, key, ns)).To(Succeed())
+		Expect(ns.Finalizers).To(ContainElement(namespaceFinalizer))
+
+		// Shrink the deadline to zero so the next reconcile sees the deadline as
+		// exceeded (regardless of actual elapsed time). This avoids relying on
+		// time.Sleep with a Kubernetes DeletionTimestamp that has second-level
+		// granularity.
+		cleanupDeadline = 0
+		_, err = theReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() bool {
+			return apierrors.IsNotFound(k8sClient.Get(ctx, key, ns))
+		}, time.Second, 20*time.Millisecond).Should(BeTrue())
 	})
 })

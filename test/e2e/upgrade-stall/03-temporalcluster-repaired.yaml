@@ -1,0 +1,32 @@
+# Recovery fixture: revert spec.version to 1.30.4 and remove the bad image.
+# This exercises the webhook's revert escape hatch (Task 8): a spec.version
+# change mid-upgrade is normally rejected, but reverting to fromVersion is
+# the one permitted exception.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: stall-test
+spec:
+  version: "1.30.4"
+  numHistoryShards: 512
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: (join('.', ['temporal-pg-rw', $namespace, 'svc.cluster.local']))
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef:
+          name: temporal-pg-app
+          key: password

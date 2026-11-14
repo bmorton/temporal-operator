@@ -1,0 +1,7 @@
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: stall-test
+status:
+  version: "1.30.4"
+  (conditions[?type == 'Ready'].status | [0]): "True"

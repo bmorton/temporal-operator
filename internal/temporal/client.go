@@ -41,6 +41,19 @@ import (
 // ErrNamespaceNotFound is returned by Describe when the namespace does not exist.
 var ErrNamespaceNotFound = errors.New("namespace not found")
 
+// DialTimeout bounds how long any single Temporal RPC issued by a reconciler
+// may take. Without it a half-open connection blocks a reconcile indefinitely,
+// which -- at controller-runtime's default MaxConcurrentReconciles of 1 --
+// stalls that controller entirely. It is a var so tests can shorten it.
+var DialTimeout = 30 * time.Second
+
+// DialContext derives a bounded context for Temporal RPCs. A parent deadline
+// that is already sooner than DialTimeout wins, since context.WithTimeout keeps
+// the earlier of the two.
+func DialContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, DialTimeout)
+}
+
 // NamespaceParams describes the desired state of a Temporal namespace.
 type NamespaceParams struct {
 	Name            string
@@ -185,6 +198,8 @@ func failoverNamespaceRequest(name, activeCluster string) *workflowservice.Updat
 }
 
 func (c *grpcNamespaceClient) Describe(ctx context.Context, name string) (*NamespaceInfo, error) {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	resp, err := c.workflow.DescribeNamespace(ctx, &workflowservice.DescribeNamespaceRequest{Namespace: name})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
@@ -196,21 +211,29 @@ func (c *grpcNamespaceClient) Describe(ctx context.Context, name string) (*Names
 }
 
 func (c *grpcNamespaceClient) Register(ctx context.Context, params NamespaceParams) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.workflow.RegisterNamespace(ctx, registerNamespaceRequest(params))
 	return err
 }
 
 func (c *grpcNamespaceClient) Update(ctx context.Context, params NamespaceParams) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.workflow.UpdateNamespace(ctx, updateNamespaceRequest(params))
 	return err
 }
 
 func (c *grpcNamespaceClient) Failover(ctx context.Context, name, activeCluster string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.workflow.UpdateNamespace(ctx, failoverNamespaceRequest(name, activeCluster))
 	return err
 }
 
 func (c *grpcNamespaceClient) Delete(ctx context.Context, name string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.operator.DeleteNamespace(ctx, &operatorservice.DeleteNamespaceRequest{Namespace: name})
 	return err
 }
@@ -262,6 +285,8 @@ func NewSearchAttributeClient(ctx context.Context, address string, tlsConfig *tl
 }
 
 func (c *grpcNamespaceClient) List(ctx context.Context, namespace string) (map[string]string, error) {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	resp, err := c.operator.ListSearchAttributes(ctx, &operatorservice.ListSearchAttributesRequest{Namespace: namespace})
 	if err != nil {
 		return nil, err
@@ -274,6 +299,8 @@ func (c *grpcNamespaceClient) List(ctx context.Context, namespace string) (map[s
 }
 
 func (c *grpcNamespaceClient) Add(ctx context.Context, namespace, name, attrType string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	t, ok := searchAttributeTypes[attrType]
 	if !ok {
 		return fmt.Errorf("unknown search attribute type %q", attrType)
@@ -286,6 +313,8 @@ func (c *grpcNamespaceClient) Add(ctx context.Context, namespace, name, attrType
 }
 
 func (c *grpcNamespaceClient) Remove(ctx context.Context, namespace, name string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.operator.RemoveSearchAttributes(ctx, &operatorservice.RemoveSearchAttributesRequest{
 		Namespace:        namespace,
 		SearchAttributes: []string{name},
@@ -333,6 +362,8 @@ func remoteClusterInfoFromProto(m *operatorservice.ClusterMetadata) RemoteCluste
 }
 
 func (c *grpcNamespaceClient) ListRemoteClusters(ctx context.Context) ([]RemoteClusterInfo, error) {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	var out []RemoteClusterInfo
 	var pageToken []byte
 	for {
@@ -355,6 +386,8 @@ func (c *grpcNamespaceClient) ListRemoteClusters(ctx context.Context) ([]RemoteC
 }
 
 func (c *grpcNamespaceClient) UpsertRemoteCluster(ctx context.Context, frontendAddress string, enableConnection bool) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.operator.AddOrUpdateRemoteCluster(ctx, &operatorservice.AddOrUpdateRemoteClusterRequest{
 		FrontendAddress:               frontendAddress,
 		EnableRemoteClusterConnection: enableConnection,
@@ -363,6 +396,8 @@ func (c *grpcNamespaceClient) UpsertRemoteCluster(ctx context.Context, frontendA
 }
 
 func (c *grpcNamespaceClient) RemoveRemoteCluster(ctx context.Context, name string) error {
+	ctx, cancel := DialContext(ctx)
+	defer cancel()
 	_, err := c.operator.RemoveRemoteCluster(ctx, &operatorservice.RemoveRemoteClusterRequest{
 		ClusterName: name,
 	})

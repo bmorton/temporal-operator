@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,7 +34,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
+	"github.com/bmorton/temporal-operator/internal/events"
+	"github.com/bmorton/temporal-operator/internal/metrics"
 	"github.com/bmorton/temporal-operator/internal/resources"
+	"github.com/bmorton/temporal-operator/internal/status"
 	"github.com/bmorton/temporal-operator/internal/temporal"
 )
 
@@ -52,6 +54,8 @@ type TemporalNamespaceReconciler struct {
 
 	// ClientFactory builds the Temporal namespace client; injectable for tests.
 	ClientFactory temporal.NamespaceClientFactory
+	// Events emits deduplicated Kubernetes Events. A nil recorder drops events.
+	Events *events.Recorder
 }
 
 // +kubebuilder:rbac:groups=temporal.bmor10.com,resources=temporalnamespaces,verbs=get;list;watch;create;update;patch;delete
@@ -68,7 +72,7 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	target, err := resolveTarget(ctx, r.Client, ns.Namespace, ns.Spec.ClusterRef)
 	if err != nil {
 		if !ns.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &ns)
+			return r.cleanupUnreachable(ctx, &ns, err)
 		}
 		if errors.Is(err, ErrTargetNotFound) {
 			r.setReady(&ns, metav1.ConditionFalse, "ClusterNotFound", "referenced Temporal target not found")
@@ -80,7 +84,7 @@ func (r *TemporalNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	tc, err := r.clientFactory()(ctx, target.Address, target.TLSConfig)
 	if err != nil {
 		if !ns.DeletionTimestamp.IsZero() {
-			return ctrl.Result{}, r.removeFinalizerAndForget(ctx, &ns)
+			return r.cleanupUnreachable(ctx, &ns, err)
 		}
 		return ctrl.Result{}, fmt.Errorf("building temporal client: %w", err)
 	}
@@ -229,6 +233,28 @@ func (r *TemporalNamespaceReconciler) removeFinalizerAndForget(ctx context.Conte
 	return nil
 }
 
+// cleanupUnreachable applies the cleanup deadline when the target cannot be
+// reached during deletion.
+func (r *TemporalNamespaceReconciler) cleanupUnreachable(ctx context.Context, ns *temporalv1alpha1.TemporalNamespace, cause error) (ctrl.Result, error) {
+	action, after := decideCleanup(ns, cause, time.Now())
+	switch action {
+	case cleanupForget:
+		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, ns)
+	case cleanupRetry:
+		metrics.TargetUnreachable.WithLabelValues("TemporalNamespace", ns.Namespace).Inc()
+		status.Set(ns, temporalv1alpha1.ConditionProgressing, metav1.ConditionTrue,
+			temporalv1alpha1.ReasonCleanupPending,
+			fmt.Sprintf("waiting for the target to become reachable before cleaning up: %v", cause))
+		return ctrl.Result{RequeueAfter: after}, r.statusUpdate(ctx, ns)
+	default:
+		message := fmt.Sprintf("abandoned cleanup of temporal namespace %q after %s: %v",
+			namespaceParams(ns).Name, cleanupDeadline, cause)
+		r.Events.Warning(ns, temporalv1alpha1.ReasonCleanupAbandoned, message)
+		metrics.CleanupAbandoned.WithLabelValues("TemporalNamespace", ns.Namespace).Inc()
+		return ctrl.Result{}, r.removeFinalizerAndForget(ctx, ns)
+	}
+}
+
 func (r *TemporalNamespaceReconciler) clientFactory() temporal.NamespaceClientFactory {
 	if r.ClientFactory != nil {
 		return r.ClientFactory
@@ -295,19 +321,12 @@ func equalStringSets(a, b []string) bool {
 	return true
 }
 
-func (r *TemporalNamespaceReconciler) setReady(ns *temporalv1alpha1.TemporalNamespace, status metav1.ConditionStatus, reason, message string) {
-	ns.Status.ObservedGeneration = ns.Generation
-	meta.SetStatusCondition(&ns.Status.Conditions, metav1.Condition{
-		Type:               temporalv1alpha1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: ns.Generation,
-	})
+func (r *TemporalNamespaceReconciler) setReady(ns *temporalv1alpha1.TemporalNamespace, s metav1.ConditionStatus, reason, message string) {
+	status.Set(ns, temporalv1alpha1.ConditionReady, s, reason, message)
 }
 
 func (r *TemporalNamespaceReconciler) statusUpdate(ctx context.Context, ns *temporalv1alpha1.TemporalNamespace) error {
-	return client.IgnoreNotFound(r.Status().Update(ctx, ns))
+	return status.Update(ctx, r.Client, ns)
 }
 
 // mapClusterToNamespaces enqueues every TemporalNamespace in the changed
