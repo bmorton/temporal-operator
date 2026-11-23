@@ -414,8 +414,21 @@ kind-load: ## Load the operator image into the local kind cluster.
 # $2 - package to build
 define go-build-tool
 @echo "Building $(1) (pinned in hack/tools/$(1)/go.mod)"
-@cd "hack/tools/$(1)" && GOTOOLCHAIN=auto go build -o "$(LOCALBIN)/$(1).tmp" $(2)
+@cd "hack/tools/$(1)" && $(call go-retry,GOTOOLCHAIN=auto go build -o "$(LOCALBIN)/$(1).tmp" $(2))
 @mv -f "$(LOCALBIN)/$(1).tmp" "$(LOCALBIN)/$(1)"
+endef
+
+# go-retry runs a go command up to GO_RETRIES times. Building a tool downloads
+# its modules, and a dropped connection to the module proxy would otherwise
+# fail the whole run; modules already downloaded are kept between attempts.
+# $1 - command to run
+GO_RETRIES ?= 3
+define go-retry
+{ attempt=1; until $(1); do \
+	[ "$$attempt" -lt "$(GO_RETRIES)" ] || exit 1; \
+	echo "Attempt $$attempt of $(GO_RETRIES) failed, retrying in $$((attempt * 5))s..." >&2; \
+	sleep $$((attempt * 5)); attempt=$$((attempt + 1)); \
+done; }
 endef
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
@@ -428,7 +441,7 @@ set -e; \
 package=$(2)@$(3) ;\
 echo "Downloading $${package}" ;\
 rm -f "$(1)" ;\
-GOBIN="$(LOCALBIN)" go install $${package} ;\
+$(call go-retry,GOBIN="$(LOCALBIN)" go install $${package}) ;\
 mv "$(LOCALBIN)/$$(basename "$(1)")" "$(1)-$(3)" ;\
 } ;\
 ln -sf "$$(realpath "$(1)-$(3)")" "$(1)"
