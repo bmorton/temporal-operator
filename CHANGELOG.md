@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.1](https://github.com/bmorton/temporal-operator/compare/v0.15.0...v0.15.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **build:** retry tool builds when a module download fails ([#282](https://github.com/bmorton/temporal-operator/issues/282)) ([3beba96](https://github.com/bmorton/temporal-operator/commit/3beba96ff8416ec5af0a86da3904754cedc0e673))
+* **controller:** delete resources for features that are turned off ([#287](https://github.com/bmorton/temporal-operator/issues/287)) ([940aae4](https://github.com/bmorton/temporal-operator/commit/940aae4385f5c0fb5adf859cc10f78ee27c9088b))
+
 ## [0.15.0](https://github.com/bmorton/temporal-operator/compare/v0.14.0...v0.15.0) (2026-11-12)
 
 
