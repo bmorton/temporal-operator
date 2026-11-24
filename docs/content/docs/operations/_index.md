@@ -30,6 +30,23 @@ to the rendered config updates a `config-hash` pod annotation, triggering a
 rolling restart. Dynamic config lives in the `<cluster>-dynamicconfig` ConfigMap
 and is hot-reloaded by Temporal without a restart.
 
+## Turning features off
+
+Disabling an optional feature removes the objects the operator created for it:
+
+| Change | Removed |
+| --- | --- |
+| `ui.enabled: false` | UI Deployment, Service, Ingress, client Certificate |
+| `ui.ingress.enabled: false` | UI Ingress |
+| `services.internalFrontend.enabled: false` | internal-frontend Deployment, Service, PodDisruptionBudget |
+| `metrics.serviceMonitor.enabled: false` | ServiceMonitor |
+| `mtls` removed | internode, frontend and UI client Certificates |
+
+Removing the block entirely has the same effect as setting `enabled: false`.
+Only objects the operator created are deleted: an object with the same name
+that you made yourself is left alone. Secrets issued by cert-manager follow
+cert-manager's own cleanup settings.
+
 ## Certificate rotation
 
 cert-manager rotates the cert Secrets; the operator stamps a `cert-hash`
