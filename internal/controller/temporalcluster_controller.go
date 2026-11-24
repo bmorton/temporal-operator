@@ -96,6 +96,10 @@ func (r *TemporalClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
+	if err := r.pruneMTLS(ctx, &cluster); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if err := r.reconcileUI(ctx, &cluster); err != nil {
 		return ctrl.Result{}, err
 	}

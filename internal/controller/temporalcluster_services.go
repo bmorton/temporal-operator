@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -79,7 +81,41 @@ func (r *TemporalClusterReconciler) reconcileServices(ctx context.Context, clust
 		}
 	}
 
+	if err := r.pruneDisabledServices(ctx, cluster); err != nil {
+		return err
+	}
+
 	return r.rollupServiceStatus(ctx, cluster, resources.EnabledServices(cluster))
+}
+
+// pruneDisabledServices deletes the objects of optional services that the spec
+// no longer enables. internal-frontend is the only optional service; without
+// this its pods would keep running, and stay in the membership ring, after it
+// is turned off.
+func (r *TemporalClusterReconciler) pruneDisabledServices(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
+	for _, svc := range resources.EnabledServices(cluster) {
+		if svc.Name == resources.ServiceInternalFrontend {
+			return nil
+		}
+	}
+	component := resources.ServiceInternalFrontend
+	for _, obj := range []client.Object{
+		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
+			Name: resources.DeploymentName(cluster.Name, component), Namespace: cluster.Namespace,
+		}},
+		&corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: resources.HeadlessServiceName(cluster.Name, component), Namespace: cluster.Namespace,
+		}},
+		&policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{
+			Name: resources.PDBName(cluster.Name, component), Namespace: cluster.Namespace,
+		}},
+	} {
+		if err := r.prune(ctx, cluster, obj); err != nil {
+			return err
+		}
+	}
+	delete(cluster.Status.Services, component)
+	return nil
 }
 
 type renderedConfig struct {

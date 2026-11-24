@@ -65,6 +65,24 @@ func (r *TemporalClusterReconciler) reconcileMTLS(ctx context.Context, cluster *
 	return nil
 }
 
+// pruneMTLS deletes the internode and frontend Certificates and drops the
+// MTLSReady condition once mTLS is no longer requested. It runs after the
+// services have been re-applied without their certificate mounts. The issued
+// Secrets are cert-manager's to clean up, so pods still rolling keep theirs.
+func (r *TemporalClusterReconciler) pruneMTLS(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
+	if mTLSEnabled(cluster) {
+		return nil
+	}
+	for _, name := range []string{resources.InternodeCertName(cluster.Name), resources.FrontendCertName(cluster.Name)} {
+		cert := &certmanagerv1.Certificate{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: cluster.Namespace}}
+		if err := r.prune(ctx, cluster, cert); err != nil {
+			return err
+		}
+	}
+	meta.RemoveStatusCondition(&cluster.Status.Conditions, temporalv1alpha1.ConditionMTLSReady)
+	return nil
+}
+
 // certificatesStatus reports whether all named Certificates are Ready and
 // whether any are in a Failed state.
 func (r *TemporalClusterReconciler) certificatesStatus(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster, names ...string) (allReady, anyFailed bool) {

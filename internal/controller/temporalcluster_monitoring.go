@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -27,34 +28,34 @@ import (
 )
 
 // reconcileMonitoring creates a ServiceMonitor when requested and the Prometheus
-// Operator ServiceMonitor CRD is installed in the cluster.
+// Operator ServiceMonitor CRD is installed in the cluster, and deletes it again
+// when it is no longer requested.
 func (r *TemporalClusterReconciler) reconcileMonitoring(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
 	log := logf.FromContext(ctx)
 
-	if cluster.Spec.Metrics == nil || cluster.Spec.Metrics.ServiceMonitor == nil || !cluster.Spec.Metrics.ServiceMonitor.Enabled {
-		return nil
+	installed := r.kindInstalled(resources.ServiceMonitorGVK)
+	planned := plan.PlanMonitoring(cluster)
+
+	if len(planned) == 0 {
+		if !installed {
+			return nil
+		}
+		sm := &unstructured.Unstructured{}
+		sm.SetGroupVersionKind(resources.ServiceMonitorGVK)
+		sm.SetName(resources.ServiceMonitorName(cluster.Name))
+		sm.SetNamespace(cluster.Namespace)
+		return r.prune(ctx, cluster, sm)
 	}
 
-	if !r.serviceMonitorCRDInstalled() {
+	if !installed {
 		log.Info("ServiceMonitor CRD not installed; skipping ServiceMonitor creation")
 		return nil
 	}
 
-	for _, p := range plan.PlanMonitoring(cluster) {
+	for _, p := range planned {
 		if err := r.apply(ctx, cluster, p.Object); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// serviceMonitorCRDInstalled reports whether the ServiceMonitor kind is known to
-// the API server via the controller's RESTMapper.
-func (r *TemporalClusterReconciler) serviceMonitorCRDInstalled() bool {
-	mapper := r.RESTMapper()
-	if mapper == nil {
-		return false
-	}
-	_, err := mapper.RESTMapping(resources.ServiceMonitorGVK.GroupKind(), resources.ServiceMonitorGVK.Version)
-	return err == nil
 }
