@@ -84,4 +84,5 @@ kubectl -n temporal port-forward svc/temporal-ui 8080:8080
 
 Then browse to `http://localhost:8080`. To expose the UI through an Ingress
 instead, uncomment the `ui.ingress` block in
-`examples/cluster-cnpg-integrated/02-temporalcluster.yaml`.
+`examples/cluster-cnpg-integrated/02-temporalcluster.yaml`. For the Gateway API,
+set `ui.httpRoute` instead; see `examples/cluster-gateway-api`.

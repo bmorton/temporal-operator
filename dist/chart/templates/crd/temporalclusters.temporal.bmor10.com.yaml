@@ -6169,8 +6169,89 @@ spec:
                   enabled:
                     default: false
                     type: boolean
+                  httpRoute:
+                    description: |-
+                      HTTPRoute exposes temporal-ui through a Gateway API HTTPRoute attached to
+                      a Gateway you manage. It can be enabled alongside ingress, which lets you
+                      move traffic from one to the other before turning the Ingress off.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: Annotations are added to the HTTPRoute, e.g.
+                          for external-dns.
+                        type: object
+                      enabled:
+                        default: false
+                        type: boolean
+                      hostnames:
+                        description: |-
+                          Hostnames the route matches. When empty the route matches every hostname
+                          its parent listeners accept.
+                        items:
+                          maxLength: 253
+                          minLength: 1
+                          type: string
+                        maxItems: 16
+                        type: array
+                        x-kubernetes-list-type: set
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          Labels are added to the HTTPRoute, for Gateways that select routes by
+                          label.
+                        type: object
+                      parentRefs:
+                        description: |-
+                          ParentRefs lists the Gateways (optionally a single listener of each) the
+                          route attaches to. Required when enabled.
+                        items:
+                          description: |-
+                            GatewayParentReference identifies a gateway.networking.k8s.io Gateway, and
+                            optionally one of its listeners, that a route attaches to.
+                          properties:
+                            name:
+                              description: Name of the Gateway.
+                              maxLength: 253
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: |-
+                                Namespace of the Gateway. Defaults to the TemporalCluster's namespace.
+                                A Gateway in another namespace must allow routes from this one through
+                                its listeners' allowedRoutes.
+                              maxLength: 63
+                              type: string
+                            port:
+                              description: Port restricts the attachment to listeners
+                                on this port.
+                              format: int32
+                              maximum: 65535
+                              minimum: 1
+                              type: integer
+                            sectionName:
+                              description: SectionName restricts the attachment to
+                                the named listener.
+                              maxLength: 253
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        maxItems: 32
+                        type: array
+                        x-kubernetes-list-type: atomic
+                    required:
+                    - enabled
+                    type: object
+                    x-kubernetes-validations:
+                    - message: parentRefs must list at least one Gateway when httpRoute
+                        is enabled
+                      rule: '!self.enabled || (has(self.parentRefs) && size(self.parentRefs)
+                        > 0)'
                   ingress:
-                    description: UIIngressSpec configures ingress for temporal-ui.
+                    description: Ingress exposes temporal-ui through a networking.k8s.io
+                      Ingress.
                     properties:
                       annotations:
                         additionalProperties:

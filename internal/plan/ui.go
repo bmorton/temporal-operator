@@ -24,19 +24,23 @@ import (
 )
 
 // PlanUI returns the temporal-ui objects when the UI is enabled: an optional
-// client certificate (under mTLS), the Deployment, the Service, and an optional
-// Ingress. It mirrors the controller's reconcileUI ordering.
+// client certificate (under mTLS), the Deployment, the Service, an optional
+// Ingress and an optional Gateway API HTTPRoute. It mirrors the controller's
+// reconcileUI ordering.
 func PlanUI(cluster *temporalv1alpha1.TemporalCluster) []PlannedObject {
 	if cluster.Spec.UI == nil || !cluster.Spec.UI.Enabled {
 		return nil
 	}
-	objs := make([]client.Object, 0, 4)
+	objs := make([]client.Object, 0, 5)
 	if resources.MTLSEnabled(cluster) {
 		objs = append(objs, resources.BuildUIClientCertificate(cluster))
 	}
 	objs = append(objs, resources.BuildUIDeployment(cluster), resources.BuildUIService(cluster))
 	if ingress := resources.BuildUIIngress(cluster); ingress != nil {
 		objs = append(objs, ingress)
+	}
+	if route := resources.BuildUIHTTPRoute(cluster); route != nil {
+		objs = append(objs, route)
 	}
 	return tag(PhaseUI, objs...)
 }

@@ -123,8 +123,15 @@ type UISpec struct {
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty"`
 
+	// Ingress exposes temporal-ui through a networking.k8s.io Ingress.
 	// +optional
 	Ingress *UIIngressSpec `json:"ingress,omitempty"`
+
+	// HTTPRoute exposes temporal-ui through a Gateway API HTTPRoute attached to
+	// a Gateway you manage. It can be enabled alongside ingress, which lets you
+	// move traffic from one to the other before turning the Ingress off.
+	// +optional
+	HTTPRoute *UIHTTPRouteSpec `json:"httpRoute,omitempty"`
 
 	// Auth configures temporal-ui authentication (OIDC, e.g. Microsoft Entra).
 	// +optional
@@ -146,6 +153,67 @@ type UIIngressSpec struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 	// +optional
 	TLSSecretName string `json:"tlsSecretName,omitempty"`
+}
+
+// UIHTTPRouteSpec configures a Gateway API HTTPRoute for temporal-ui. The
+// operator owns only the route; the Gateway and its listeners (including TLS
+// termination) belong to whoever runs the Gateway.
+// +kubebuilder:validation:XValidation:rule="!self.enabled || (has(self.parentRefs) && size(self.parentRefs) > 0)",message="parentRefs must list at least one Gateway when httpRoute is enabled"
+type UIHTTPRouteSpec struct {
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// ParentRefs lists the Gateways (optionally a single listener of each) the
+	// route attaches to. Required when enabled.
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=atomic
+	// +optional
+	ParentRefs []GatewayParentReference `json:"parentRefs,omitempty"`
+
+	// Hostnames the route matches. When empty the route matches every hostname
+	// its parent listeners accept.
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:items:MinLength=1
+	// +kubebuilder:validation:items:MaxLength=253
+	// +listType=set
+	// +optional
+	Hostnames []string `json:"hostnames,omitempty"`
+
+	// Labels are added to the HTTPRoute, for Gateways that select routes by
+	// label.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations are added to the HTTPRoute, e.g. for external-dns.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// GatewayParentReference identifies a gateway.networking.k8s.io Gateway, and
+// optionally one of its listeners, that a route attaches to.
+type GatewayParentReference struct {
+	// Name of the Gateway.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	Name string `json:"name"`
+
+	// Namespace of the Gateway. Defaults to the TemporalCluster's namespace.
+	// A Gateway in another namespace must allow routes from this one through
+	// its listeners' allowedRoutes.
+	// +kubebuilder:validation:MaxLength=63
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// SectionName restricts the attachment to the named listener.
+	// +kubebuilder:validation:MaxLength=253
+	// +optional
+	SectionName string `json:"sectionName,omitempty"`
+
+	// Port restricts the attachment to listeners on this port.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port *int32 `json:"port,omitempty"`
 }
 
 // UICodecServerSpec configures the temporal-ui codec server.
