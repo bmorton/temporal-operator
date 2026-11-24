@@ -1,0 +1,27 @@
+# An example Gateway for the route to attach to. You (or your platform team)
+# own this object; the operator never creates or changes a Gateway.
+# Replace gatewayClassName with the class your implementation installs.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: public
+  namespace: gateways
+spec:
+  gatewayClassName: example
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: temporal.example.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: temporal-example-com-tls
+      allowedRoutes:
+        namespaces:
+          # Let routes in the "temporal" namespace attach. Without this a
+          # Gateway only accepts routes from its own namespace.
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: temporal

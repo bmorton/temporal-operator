@@ -8,6 +8,7 @@ services/secrets exist.
 | --- | --- |
 | [`cluster-postgres-minimal`](./cluster-postgres-minimal) | Smallest viable Postgres-backed cluster. |
 | [`cluster-postgres-full`](./cluster-postgres-full) | Production-leaning sizing, UI, ingress, metrics. |
+| [`cluster-gateway-api`](./cluster-gateway-api) | Temporal UI through a Gateway API `HTTPRoute`, and moving off an Ingress. |
 | [`cluster-cassandra`](./cluster-cassandra) | Cassandra default + visibility store. |
 | [`cluster-mtls-cert-manager`](./cluster-mtls-cert-manager) | mTLS via a cert-manager CA issuer. |
 | [`cluster-client`](./cluster-client) | mTLS cluster plus a `TemporalClusterClient` that issues client credentials. |

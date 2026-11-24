@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
@@ -268,4 +269,76 @@ func BuildUIIngress(cluster *temporalv1alpha1.TemporalCluster) *networkingv1.Ing
 		}
 	}
 	return ingress
+}
+
+// BuildUIHTTPRoute builds a Gateway API HTTPRoute for the UI when configured.
+// It returns nil when the route is not enabled. The route only attaches to
+// Gateways the user names; the operator never creates a Gateway.
+func BuildUIHTTPRoute(cluster *temporalv1alpha1.TemporalCluster) *gatewayv1.HTTPRoute {
+	if cluster.Spec.UI == nil || cluster.Spec.UI.HTTPRoute == nil || !cluster.Spec.UI.HTTPRoute.Enabled {
+		return nil
+	}
+	spec := cluster.Spec.UI.HTTPRoute
+
+	labels := map[string]string{}
+	for k, v := range spec.Labels {
+		labels[k] = v
+	}
+	// Standard labels win so the route stays selectable as part of the cluster.
+	for k, v := range StandardLabels(cluster, uiComponent) {
+		labels[k] = v
+	}
+
+	parents := make([]gatewayv1.ParentReference, 0, len(spec.ParentRefs))
+	for _, ref := range spec.ParentRefs {
+		parent := gatewayv1.ParentReference{Name: gatewayv1.ObjectName(ref.Name)}
+		if ref.Namespace != "" {
+			ns := gatewayv1.Namespace(ref.Namespace)
+			parent.Namespace = &ns
+		}
+		if ref.SectionName != "" {
+			section := gatewayv1.SectionName(ref.SectionName)
+			parent.SectionName = &section
+		}
+		if ref.Port != nil {
+			port := *ref.Port
+			parent.Port = &port
+		}
+		parents = append(parents, parent)
+	}
+
+	hostnames := make([]gatewayv1.Hostname, 0, len(spec.Hostnames))
+	for _, h := range spec.Hostnames {
+		hostnames = append(hostnames, gatewayv1.Hostname(h))
+	}
+
+	pathType := gatewayv1.PathMatchPathPrefix
+	path := "/"
+	port := gatewayv1.PortNumber(uiPort)
+	return &gatewayv1.HTTPRoute{
+		TypeMeta: metav1.TypeMeta{APIVersion: gatewayv1.GroupVersion.String(), Kind: "HTTPRoute"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        UIName(cluster.Name),
+			Namespace:   cluster.Namespace,
+			Labels:      labels,
+			Annotations: spec.Annotations,
+		},
+		Spec: gatewayv1.HTTPRouteSpec{
+			CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: parents},
+			Hostnames:       hostnames,
+			Rules: []gatewayv1.HTTPRouteRule{{
+				Matches: []gatewayv1.HTTPRouteMatch{{
+					Path: &gatewayv1.HTTPPathMatch{Type: &pathType, Value: &path},
+				}},
+				BackendRefs: []gatewayv1.HTTPBackendRef{{
+					BackendRef: gatewayv1.BackendRef{
+						BackendObjectReference: gatewayv1.BackendObjectReference{
+							Name: gatewayv1.ObjectName(UIName(cluster.Name)),
+							Port: &port,
+						},
+					},
+				}},
+			}},
+		},
+	}
 }

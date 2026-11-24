@@ -30,14 +30,52 @@ to the rendered config updates a `config-hash` pod annotation, triggering a
 rolling restart. Dynamic config lives in the `<cluster>-dynamicconfig` ConfigMap
 and is hot-reloaded by Temporal without a restart.
 
+## Exposing the Temporal UI
+
+`spec.ui` can publish temporal-ui in two ways. Both are optional and can be on
+at the same time.
+
+| Field | Creates | You provide |
+| --- | --- | --- |
+| `ui.ingress` | an `Ingress` named `<cluster>-ui` | an ingress controller |
+| `ui.httpRoute` | a Gateway API `HTTPRoute` named `<cluster>-ui` | a `Gateway` and its listeners |
+
+With the Gateway API the operator owns only the route. The `Gateway`, its
+listeners and TLS termination stay with whoever runs the Gateway:
+
+```yaml
+spec:
+  ui:
+    enabled: true
+    httpRoute:
+      enabled: true
+      parentRefs:
+        - name: public
+          namespace: gateways   # defaults to the cluster's namespace
+          sectionName: https    # optional: one listener only
+      hostnames:
+        - temporal.example.com
+```
+
+A Gateway in another namespace must allow routes from the cluster's namespace
+through its listeners' `allowedRoutes`. The Gateway API CRDs must be installed;
+if they are not, the operator skips the route and records a
+`GatewayAPINotInstalled` warning event. Install them before the operator starts,
+or restart it afterwards, so it watches the routes it creates.
+
+To move from an Ingress to a Gateway, enable `ui.httpRoute` alongside
+`ui.ingress`, switch traffic over, then disable `ui.ingress`. See the
+`cluster-gateway-api` example for a full walkthrough.
+
 ## Turning features off
 
 Disabling an optional feature removes the objects the operator created for it:
 
 | Change | Removed |
 | --- | --- |
-| `ui.enabled: false` | UI Deployment, Service, Ingress, client Certificate |
+| `ui.enabled: false` | UI Deployment, Service, Ingress, HTTPRoute, client Certificate |
 | `ui.ingress.enabled: false` | UI Ingress |
+| `ui.httpRoute.enabled: false` | UI HTTPRoute |
 | `services.internalFrontend.enabled: false` | internal-frontend Deployment, Service, PodDisruptionBudget |
 | `metrics.serviceMonitor.enabled: false` | ServiceMonitor |
 | `mtls` removed | internode, frontend and UI client Certificates |

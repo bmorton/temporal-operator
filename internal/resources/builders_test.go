@@ -17,6 +17,7 @@ limitations under the License.
 package resources
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -24,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 )
@@ -558,6 +560,71 @@ func TestBuildUI(t *testing.T) {
 	}
 	if ing.Spec.IngressClassName == nil || *ing.Spec.IngressClassName != "nginx" {
 		t.Errorf("expected ingress class nginx")
+	}
+}
+
+func TestBuildUIHTTPRoute(t *testing.T) {
+	c := builderCluster()
+	c.Spec.UI = &temporalv1alpha1.UISpec{Enabled: true}
+	if BuildUIHTTPRoute(c) != nil {
+		t.Fatalf("expected no HTTPRoute when unset")
+	}
+	c.Spec.UI.HTTPRoute = &temporalv1alpha1.UIHTTPRouteSpec{
+		ParentRefs: []temporalv1alpha1.GatewayParentReference{{Name: "public"}},
+	}
+	if BuildUIHTTPRoute(c) != nil {
+		t.Fatalf("expected no HTTPRoute when disabled")
+	}
+
+	port := int32(443)
+	c.Spec.UI.HTTPRoute = &temporalv1alpha1.UIHTTPRouteSpec{
+		Enabled: true,
+		ParentRefs: []temporalv1alpha1.GatewayParentReference{
+			{Name: "public", Namespace: "gateways", SectionName: "https", Port: &port},
+			{Name: "internal"},
+		},
+		Hostnames:   []string{"ui.example.com"},
+		Labels:      map[string]string{"exposure": "public", LabelInstance: "spoofed"},
+		Annotations: map[string]string{"external-dns.alpha.kubernetes.io/ttl": "60"},
+	}
+	route := BuildUIHTTPRoute(c)
+	if route == nil {
+		t.Fatalf("expected an HTTPRoute")
+	}
+
+	// Standard labels win over user labels; unset parentRef fields stay nil so
+	// the Gateway API defaults (same namespace, every listener) apply.
+	wantLabels := StandardLabels(c, uiComponent)
+	wantLabels["exposure"] = "public"
+	wantMeta := metav1.ObjectMeta{
+		Name:        UIName(c.Name),
+		Namespace:   c.Namespace,
+		Labels:      wantLabels,
+		Annotations: map[string]string{"external-dns.alpha.kubernetes.io/ttl": "60"},
+	}
+	if !reflect.DeepEqual(route.ObjectMeta, wantMeta) {
+		t.Errorf("unexpected metadata:\n got %+v\nwant %+v", route.ObjectMeta, wantMeta)
+	}
+
+	ns, section := gatewayv1.Namespace("gateways"), gatewayv1.SectionName("https")
+	pathType, path, backendPort := gatewayv1.PathMatchPathPrefix, "/", int32(8080)
+	wantSpec := gatewayv1.HTTPRouteSpec{
+		CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{
+			{Name: "public", Namespace: &ns, SectionName: &section, Port: &port},
+			{Name: "internal"},
+		}},
+		Hostnames: []gatewayv1.Hostname{"ui.example.com"},
+		Rules: []gatewayv1.HTTPRouteRule{{
+			Matches: []gatewayv1.HTTPRouteMatch{{Path: &gatewayv1.HTTPPathMatch{Type: &pathType, Value: &path}}},
+			BackendRefs: []gatewayv1.HTTPBackendRef{{BackendRef: gatewayv1.BackendRef{
+				BackendObjectReference: gatewayv1.BackendObjectReference{
+					Name: gatewayv1.ObjectName(UIName(c.Name)), Port: &backendPort,
+				},
+			}}},
+		}},
+	}
+	if !reflect.DeepEqual(route.Spec, wantSpec) {
+		t.Errorf("unexpected spec:\n got %+v\nwant %+v", route.Spec, wantSpec)
 	}
 }
 

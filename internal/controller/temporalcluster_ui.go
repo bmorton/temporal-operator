@@ -28,19 +28,30 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/plan"
 	"github.com/bmorton/temporal-operator/internal/resources"
 )
 
+var httpRouteGVK = schema.GroupVersionKind{Group: gatewayv1.GroupName, Version: "v1", Kind: "HTTPRoute"}
+
 // reconcileUI applies the temporal-ui objects the spec asks for and deletes the
 // ones it no longer asks for: everything when the UI is disabled, or just the
-// Ingress or client Certificate when that part is turned off.
+// Ingress, HTTPRoute or client Certificate when that part is turned off.
 func (r *TemporalClusterReconciler) reconcileUI(ctx context.Context, cluster *temporalv1alpha1.TemporalCluster) error {
+	routeInstalled := r.kindInstalled(httpRouteGVK)
+
 	desired := map[schema.GroupKind]bool{}
 	for _, p := range plan.PlanUI(cluster) {
 		gk := p.Object.GetObjectKind().GroupVersionKind().GroupKind()
+		if gk == httpRouteGVK.GroupKind() && !routeInstalled {
+			logf.FromContext(ctx).Info("Gateway API HTTPRoute CRD not installed; skipping UI HTTPRoute")
+			r.warn(cluster, "GatewayAPINotInstalled",
+				"spec.ui.httpRoute is enabled but the gateway.networking.k8s.io/v1 HTTPRoute CRD is not installed; no route was created")
+			continue
+		}
 		if err := r.apply(ctx, cluster, p.Object); err != nil {
 			return err
 		}
@@ -55,6 +66,9 @@ func (r *TemporalClusterReconciler) reconcileUI(ctx context.Context, cluster *te
 		&certmanagerv1.Certificate{ObjectMeta: metav1.ObjectMeta{
 			Name: resources.UIClientCertName(cluster.Name), Namespace: cluster.Namespace,
 		}},
+	}
+	if routeInstalled {
+		candidates = append(candidates, &gatewayv1.HTTPRoute{ObjectMeta: meta})
 	}
 	for _, obj := range candidates {
 		gvk, err := apiutil.GVKForObject(obj, r.Scheme)
@@ -91,8 +105,8 @@ func (r *TemporalClusterReconciler) prune(ctx context.Context, cluster *temporal
 }
 
 // kindInstalled reports whether the API server serves gvk, according to the
-// controller's RESTMapper. It is how optional APIs (such as the Prometheus
-// Operator's) are detected.
+// controller's RESTMapper. It is how optional APIs (Gateway API, Prometheus
+// Operator) are detected.
 func (r *TemporalClusterReconciler) kindInstalled(gvk schema.GroupVersionKind) bool {
 	mapper := r.RESTMapper()
 	if mapper == nil {
@@ -100,4 +114,11 @@ func (r *TemporalClusterReconciler) kindInstalled(gvk schema.GroupVersionKind) b
 	}
 	_, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	return err == nil
+}
+
+// warn records a Warning event on the cluster.
+func (r *TemporalClusterReconciler) warn(cluster *temporalv1alpha1.TemporalCluster, reason, message string) {
+	if r.Recorder != nil {
+		r.Recorder.Eventf(cluster, nil, corev1.EventTypeWarning, reason, reason, message)
+	}
 }

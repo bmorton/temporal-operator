@@ -453,6 +453,26 @@ _Appears in:_
 | `dnsNames` _string array_ |  |  | Optional: \{\} <br /> |
 
 
+#### GatewayParentReference
+
+
+
+GatewayParentReference identifies a gateway.networking.k8s.io Gateway, and
+optionally one of its listeners, that a route attaches to.
+
+
+
+_Appears in:_
+- [UIHTTPRouteSpec](#uihttproutespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name of the Gateway. |  | MaxLength: 253 <br />MinLength: 1 <br /> |
+| `namespace` _string_ | Namespace of the Gateway. Defaults to the TemporalCluster's namespace.<br />A Gateway in another namespace must allow routes from this one through<br />its listeners' allowedRoutes. |  | MaxLength: 63 <br />Optional: \{\} <br /> |
+| `sectionName` _string_ | SectionName restricts the attachment to the named listener. |  | MaxLength: 253 <br />Optional: \{\} <br /> |
+| `port` _integer_ | Port restricts the attachment to listeners on this port. |  | Maximum: 65535 <br />Minimum: 1 <br />Optional: \{\} <br /> |
+
+
 #### InternalFrontendSpec
 
 
@@ -1406,6 +1426,28 @@ _Appears in:_
 | `includeCredentials` _boolean_ |  |  | Optional: \{\} <br /> |
 
 
+#### UIHTTPRouteSpec
+
+
+
+UIHTTPRouteSpec configures a Gateway API HTTPRoute for temporal-ui. The
+operator owns only the route; the Gateway and its listeners (including TLS
+termination) belong to whoever runs the Gateway.
+
+
+
+_Appears in:_
+- [UISpec](#uispec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ |  | false |  |
+| `parentRefs` _[GatewayParentReference](#gatewayparentreference) array_ | ParentRefs lists the Gateways (optionally a single listener of each) the<br />route attaches to. Required when enabled. |  | MaxItems: 32 <br />Optional: \{\} <br /> |
+| `hostnames` _string array_ | Hostnames the route matches. When empty the route matches every hostname<br />its parent listeners accept. |  | MaxItems: 16 <br />items:MaxLength: 253 <br />items:MinLength: 1 <br />Optional: \{\} <br /> |
+| `labels` _object (keys:string, values:string)_ | Labels are added to the HTTPRoute, for Gateways that select routes by<br />label. |  | Optional: \{\} <br /> |
+| `annotations` _object (keys:string, values:string)_ | Annotations are added to the HTTPRoute, e.g. for external-dns. |  | Optional: \{\} <br /> |
+
+
 #### UIIngressSpec
 
 
@@ -1442,7 +1484,8 @@ _Appears in:_
 | `enabled` _boolean_ |  | false |  |
 | `version` _string_ |  |  | Optional: \{\} <br /> |
 | `replicas` _integer_ |  | 1 | Minimum: 1 <br />Optional: \{\} <br /> |
-| `ingress` _[UIIngressSpec](#uiingressspec)_ |  |  | Optional: \{\} <br /> |
+| `ingress` _[UIIngressSpec](#uiingressspec)_ | Ingress exposes temporal-ui through a networking.k8s.io Ingress. |  | Optional: \{\} <br /> |
+| `httpRoute` _[UIHTTPRouteSpec](#uihttproutespec)_ | HTTPRoute exposes temporal-ui through a Gateway API HTTPRoute attached to<br />a Gateway you manage. It can be enabled alongside ingress, which lets you<br />move traffic from one to the other before turning the Ingress off. |  | Optional: \{\} <br /> |
 | `auth` _[UIAuthSpec](#uiauthspec)_ | Auth configures temporal-ui authentication (OIDC, e.g. Microsoft Entra). |  | Optional: \{\} <br /> |
 | `codecServer` _[UICodecServerSpec](#uicodecserverspec)_ |  |  | Optional: \{\} <br /> |
 

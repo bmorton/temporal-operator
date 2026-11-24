@@ -1,0 +1,37 @@
+# Temporal UI exposed through the Gateway API. The operator creates an
+# HTTPRoute named <cluster>-ui and attaches it to a Gateway you manage.
+apiVersion: temporal.bmor10.com/v1alpha1
+kind: TemporalCluster
+metadata:
+  name: gateway
+  namespace: temporal
+spec:
+  version: "1.31.1"
+  numHistoryShards: 512
+  ui:
+    enabled: true
+    httpRoute:
+      enabled: true
+      parentRefs:
+        - name: public          # the Gateway
+          namespace: gateways   # omit when it lives in this namespace
+          sectionName: https    # optional: attach to this listener only
+      hostnames:
+        - temporal.example.com
+  persistence:
+    defaultStore:
+      sql:
+        pluginName: postgres12
+        host: postgres-rw.default.svc
+        port: 5432
+        database: temporal
+        user: temporal
+        passwordSecretRef: { name: temporal-store, key: password }
+    visibilityStore:
+      sql:
+        pluginName: postgres12
+        host: postgres-rw.default.svc
+        port: 5432
+        database: temporal_visibility
+        user: temporal
+        passwordSecretRef: { name: temporal-store, key: password }

@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	temporalv1alpha1 "github.com/bmorton/temporal-operator/api/v1alpha1"
 	"github.com/bmorton/temporal-operator/internal/resources"
@@ -161,9 +162,14 @@ var _ = Describe("TemporalCluster UI and monitoring", func() {
 			c.Spec.UI = &temporalv1alpha1.UISpec{
 				Enabled: true,
 				Ingress: &temporalv1alpha1.UIIngressSpec{Enabled: true, Host: "temporal.example.com"},
+				HTTPRoute: &temporalv1alpha1.UIHTTPRouteSpec{
+					Enabled:    true,
+					ParentRefs: []temporalv1alpha1.GatewayParentReference{{Name: "public"}},
+				},
 			}
 		})
 		reconcileFor(name)
+		Expect(k8sClient.Get(ctx, uiKey(name), &gatewayv1.HTTPRoute{})).To(Succeed())
 
 		updateSpec(name, func(c *temporalv1alpha1.TemporalCluster) { c.Spec.UI.Enabled = false })
 		reconcileFor(name)
@@ -171,6 +177,7 @@ var _ = Describe("TemporalCluster UI and monitoring", func() {
 		expectGone(uiKey(name), &appsv1.Deployment{})
 		expectGone(uiKey(name), &corev1.Service{})
 		expectGone(uiKey(name), &networkingv1.Ingress{})
+		expectGone(uiKey(name), &gatewayv1.HTTPRoute{})
 	})
 
 	It("leaves an Ingress it does not own alone", func() {
@@ -198,6 +205,52 @@ var _ = Describe("TemporalCluster UI and monitoring", func() {
 		reconcileFor(name)
 
 		Expect(k8sClient.Get(ctx, uiKey(name), &networkingv1.Ingress{})).To(Succeed())
+	})
+
+	It("creates an HTTPRoute attached to the named Gateway, and removes it when disabled", func() {
+		name := create(func(c *temporalv1alpha1.TemporalCluster) {
+			c.Spec.UI = &temporalv1alpha1.UISpec{
+				Enabled: true,
+				HTTPRoute: &temporalv1alpha1.UIHTTPRouteSpec{
+					Enabled:    true,
+					ParentRefs: []temporalv1alpha1.GatewayParentReference{{Name: "public", Namespace: "gateways", SectionName: "https"}},
+					Hostnames:  []string{"temporal.example.com"},
+				},
+			}
+		})
+		reconcileFor(name)
+
+		route := &gatewayv1.HTTPRoute{}
+		Expect(k8sClient.Get(ctx, uiKey(name), route)).To(Succeed())
+		Expect(route.Spec.ParentRefs).To(HaveLen(1))
+		Expect(string(route.Spec.ParentRefs[0].Name)).To(Equal("public"))
+		Expect(string(*route.Spec.ParentRefs[0].Namespace)).To(Equal("gateways"))
+		Expect(string(*route.Spec.ParentRefs[0].SectionName)).To(Equal("https"))
+		Expect(route.Spec.Hostnames).To(ConsistOf(gatewayv1.Hostname("temporal.example.com")))
+		Expect(string(route.Spec.Rules[0].BackendRefs[0].Name)).To(Equal(resources.UIName(name)))
+		Expect(metav1.IsControlledBy(route, clusterFor(name))).To(BeTrue())
+		// No Ingress was asked for, so none exists.
+		expectGone(uiKey(name), &networkingv1.Ingress{})
+
+		updateSpec(name, func(c *temporalv1alpha1.TemporalCluster) { c.Spec.UI.HTTPRoute.Enabled = false })
+		reconcileFor(name)
+
+		expectGone(uiKey(name), &gatewayv1.HTTPRoute{})
+		Expect(k8sClient.Get(ctx, uiKey(name), &appsv1.Deployment{})).To(Succeed())
+	})
+
+	It("rejects an enabled httpRoute without parentRefs", func() {
+		c := &temporalv1alpha1.TemporalCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "ui-route-invalid", Namespace: "default"},
+			Spec:       validClusterSpec("1.31.1"),
+		}
+		c.Spec.UI = &temporalv1alpha1.UISpec{
+			Enabled:   true,
+			HTTPRoute: &temporalv1alpha1.UIHTTPRouteSpec{Enabled: true},
+		}
+		err := k8sClient.Create(ctx, c)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("parentRefs must list at least one Gateway"))
 	})
 
 	It("removes internal-frontend when it is disabled", func() {

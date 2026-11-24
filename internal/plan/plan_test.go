@@ -75,6 +75,14 @@ func TestPlanUIDisabledAndEnabled(t *testing.T) {
 	if len(got) != 4 {
 		t.Fatalf("expected cert+deployment+service+ingress, got %d (%v)", len(got), kinds(got))
 	}
+	c.Spec.UI.HTTPRoute = &temporalv1alpha1.UIHTTPRouteSpec{
+		Enabled:    true,
+		ParentRefs: []temporalv1alpha1.GatewayParentReference{{Name: "public"}},
+	}
+	got = PlanUI(c)
+	if k := kinds(got); len(k) != 5 || k[4] != "HTTPRoute" {
+		t.Fatalf("expected cert+deployment+service+ingress+httproute, got %v", k)
+	}
 }
 
 func TestPlanMonitoring(t *testing.T) {
